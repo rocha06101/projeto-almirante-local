@@ -1,0 +1,80 @@
+.upload-foto-root {
+  width: 17vw;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.upload-foto-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  min-height: 240px;
+  background: #ffffff;
+  border-radius: 24px;
+  cursor: pointer;
+  text-align: center;
+  outline: none;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect x='1' y='1' width='98%25' height='98%25' rx='22' ry='22' fill='none' stroke='%234A90E2' stroke-width='2' stroke-dasharray='16%2C12'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+}
+
+.upload-foto-container.drag-over {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect x='1' y='1' width='98%25' height='98%25' rx='22' ry='22' fill='none' stroke='%231D4FBD' stroke-width='2' stroke-dasharray='16%2C12'/%3E%3C/svg%3E");
+}
+
+.upload-foto-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.upload-foto-icon {
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-foto-label {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: #4a90e2;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.upload-foto-action {
+  color: #4a90e2;
+  font-weight: 700;
+}
+
+.upload-foto-or {
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.upload-foto-help {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.upload-foto-error {
+  margin: 0;
+  color: #dc2626;
+  font-size: 0.9rem;
+  text-align: center;
+}

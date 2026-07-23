@@ -1,0 +1,13 @@
+
+.primary-input{
+    margin: 0.8rem 2rem ;    
+    display: flex;
+    flex-direction: column;
+    width: 90%;
+    input{
+        padding: 0.5rem;
+        border: 2px solid #EAEBED;
+        border-radius: 10px;
+        font-size: 1rem;
+    }
+}

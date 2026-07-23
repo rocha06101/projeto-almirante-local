@@ -1,0 +1,76 @@
+<aside class="sidebar" [class.expanded]="isExpanded()">
+  <div class="sidebar-header">
+    <div class="logo-container">
+      <img src="/icons/anchor.svg" alt="Logo" class="logo" />
+      @if (isExpanded()) {
+        <span class="app-name">Desbravadores</span>
+      }
+    </div>
+    <button class="toggle-btn" (click)="toggleSidebar()" aria-label="Toggle sidebar">
+      @if (isExpanded()) {
+        <span>&lsaquo;</span>
+      } @else {
+        <span>&rsaquo;</span>
+      }
+    </button>
+  </div>
+
+  <nav class="sidebar-nav">
+    <ul>
+      @for (item of menuItems(); track item.route) {
+        <li>
+          <a
+            [routerLink]="item.route"
+            [routerLinkActive]="'active'"
+            class="nav-item"
+            [title]="item.label"
+          >
+            <svg class="icon-svg" [attr.data-icon]="item.icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <ng-container [ngSwitch]="item.icon">
+                <ng-container *ngSwitchCase="'dashboard'">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </ng-container>
+                <ng-container *ngSwitchCase="'users'">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </ng-container>
+                <ng-container *ngSwitchCase="'clipboard'">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                </ng-container>
+                <ng-container *ngSwitchCase="'chart'">
+                  <line x1="12" y1="2" x2="12" y2="22"></line>
+                  <path d="M17 5H9.5a1.5 1.5 0 0 0-1.5 1.5v12a1.5 1.5 0 0 0 1.5 1.5H17"></path>
+                  <path d="M5 9v4"></path>
+                </ng-container>
+                <ng-container *ngSwitchCase="'settings'">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m4.24-4.24l4.24-4.24"></path>
+                </ng-container>
+              </ng-container>
+            </svg>
+            @if (isExpanded()) {
+              <span class="label">{{ item.label }}</span>
+              @if (item.badge && item.badge > 0) {
+                <span class="badge">{{ item.badge }}</span>
+              }
+            }
+          </a>
+        </li>
+      }
+    </ul>
+  </nav>
+
+  <div class="sidebar-footer">
+    @if (isExpanded()) {
+      <div class="footer-text">
+        <small>v1.0.0</small>
+      </div>
+    }
+  </div>
+</aside>

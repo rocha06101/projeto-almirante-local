@@ -1,0 +1,54 @@
+<div class="select-container">
+  @if (icon) {
+    <span class="icon-left">
+      <img [src]="'icons/position.svg'" />
+    </span>
+  }
+
+  <select
+    (pointerdown)="openArrow()"
+    (blur)="closeArrow()"
+    (change)="closeArrow()"
+  >
+    <option value="" disabled selected>{{ label }}</option>
+
+    @for (option of options; track option.value) {
+      <option [value]="option.value">
+        {{ option.label }}
+      </option>
+    }
+  </select>
+
+  @if (arrow) {
+    <span class="icon-right" [class.focused]="arrowOpen">
+      <img src="/icons/arrow-down.svg" />
+    </span>
+  }
+</div>
+
+
+
+<!-- <div class="select-container">
+  @if (icon) {
+    <span class="icon-left">
+      <img [src]="'icons/position.svg'" />
+    </span>
+  }
+
+  <select>
+    <option value="" disabled selected>{{ label }}</option>
+
+    @for (option of options; track option.value) {
+      <option [value]="option.value">
+        {{ option.label }}
+      </option>
+    }
+  </select>
+
+  @if (arrow) {
+    <span class="icon-right">
+      <img src="/icons/arrow-down.svg" />
+    </span>
+  }
+</div> -->
+

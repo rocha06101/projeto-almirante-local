@@ -1,0 +1,116 @@
+<section class="desbravadores-page">
+  <header class="page-header">
+    <div>
+      <span class="eyebrow">Gestao de usuarios</span>
+      <h1>Desbravadores</h1>
+      <p>Preencha os campos abaixo para cadastrar um novo membro.</p>
+    </div>
+
+    <div class="header-actions">
+      <button type="button" class="refresh-button">
+        <img src="/icons/save-icon.svg" alt="Ícone de salvar" width="24" height="24">
+        Salvar Cadastro
+      </button>
+
+      <button type="button" class="button-cancel">
+        <img src="/icons/cancel-icon.svg" alt="Ícone de salvar" width="24" height="24">
+        Cancelar
+      </button>
+    </div>
+  </header>
+
+  <div class="container-center">
+
+        <div class="header-actions-down">
+    <button type="button" class="refresh-button">
+      <img src="/icons/save-icon.svg" alt="Ícone de salvar" width="24" height="24">
+      Salvar Cadastro
+    </button>
+
+    <button type="button" class="button-cancel">
+      <img src="/icons/cancel-icon.svg" alt="Ícone de salvar" width="24" height="24">
+      Cancelar
+    </button>
+  </div>
+
+    <div class="container-form">
+      <div class="form-container-left">
+        <form>
+          <app-primary-input
+            label="Nome Completo"
+          ></app-primary-input>
+          <app-primary-input
+            label="CPF"
+            placeholder="000.000.000-00"
+            type="number"
+          >
+          </app-primary-input>
+          <app-primary-input
+            label="Data de Nascimento"
+            placeholder="dd/mm/aaaa"
+            type="date"
+          ></app-primary-input>
+          <app-primary-input
+            label="Telefone"
+            placeholder="(00) 00000-0000"
+            type="number"
+          ></app-primary-input>
+          <app-primary-input
+            label="Email"
+            placeholder=""
+            type="email"
+          ></app-primary-input>
+          <app-primary-input
+            label="Senha"
+            placeholder=""
+            type="password"
+          >
+          </app-primary-input>
+          <app-primary-input
+            label="Confirmar Senha"
+            placeholder=""
+            type="password"
+          >
+          </app-primary-input>  
+        </form>
+      </div>
+
+      <div class="form-container-right">
+        <form>
+          <app-primary-input
+            label="Nome do responsável"
+          ></app-primary-input>
+          <app-primary-input
+            label="Telefone do responsável"
+            placeholder="(00) 00000-0000"
+            type="number"
+          ></app-primary-input>
+          <app-primary-input
+            label="Email do responsável"
+            placeholder=""
+            type="email"
+          ></app-primary-input>
+          <app-primary-select
+            label="cargo/ Função"
+            placeholder="Selecione o cargo"
+            [options]="cargoOptions"
+            >
+          </app-primary-select>
+        </form>
+      </div>
+
+      
+    </div>
+
+    <div class="container-image">
+        <strong>Foto do Membro</strong>
+        <div class="container-image-center">
+          <div>
+            <img src="/icons/camera-icon.svg" alt="Ícone de salvar" width="50" height="50">
+          </div>
+        </div>
+        <button class="add-image refresh-button">Adicionar Foto</button>
+        <app-upload-foto (fotoSelecionada)="onFotoSelecionada($event)"></app-upload-foto>
+      </div>
+    </div>
+</section>

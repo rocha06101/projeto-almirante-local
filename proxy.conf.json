@@ -1,0 +1,11 @@
+{
+  "/api": {
+    "target": "https://desbravadores-gestao.onrender.com",
+    "secure": true,
+    "changeOrigin": true,
+    "logLevel": "debug",
+    "headers": {
+      "x-tenant-id": "0b7f1f70-e9b1-4f0f-aed8-9109f6c967f8"
+    }
+  }
+}

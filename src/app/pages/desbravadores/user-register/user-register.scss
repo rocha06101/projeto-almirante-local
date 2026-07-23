@@ -1,0 +1,263 @@
+.desbravadores-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  animation: fadeIn 0.45s ease;
+  width: 100%;
+  min-width: 0;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+
+  .header-actions {
+    margin-top: 1.5rem;
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  h1 {
+    margin: 0.25rem 0 0;
+    color: #111827;
+    font-size: 2rem;
+    font-weight: 700;
+  }
+
+  p {
+    margin: 0.5rem 0 0;
+    color: #6b7280;
+  }
+
+  @media (max-width: 640px) {
+    flex-direction: column;
+    align-items: stretch;
+
+    .header-actions {
+      justify-content: flex-start;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .header-actions button {
+      width: 100%;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+    }
+  }
+}
+
+.eyebrow {
+  color: #2563eb;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.refresh-button,
+.state-card button {
+  align-self: flex-start;
+  border: none;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 700;
+  padding: 0.75rem 1rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+
+  &:hover:not(:disabled) {
+    box-shadow: 0 10px 20px rgba(37, 99, 235, 0.22);
+    transform: translateY(-2px);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+  }
+}
+
+.button-cancel {
+  align-self: flex-start;
+  border: solid 2px #DFE3E8;
+  border-radius: 10px;
+  background-color: #FEFDFD;
+  color: #3E4757;
+  font-weight: 700;
+  padding: 0.75rem 1rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+
+  &:hover:not(:disabled) {
+    background-color: #f4f6f9;
+    border-color: #cfd7e0;
+    box-shadow: 0 10px 20px rgba(37, 99, 235, 0.12);
+    transform: translateY(-2px);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+  }
+}
+
+.container-center {
+  display: flex;
+  gap: 2rem;
+
+  .header-actions-down {
+    display: none;
+  }
+
+  .container-form {
+    display: flex;
+    flex-direction: row;
+    background: #FEFDFD;
+    border: solid 2px #DFE3E8;
+    border-radius: 12px;
+    height: 70vh;
+    width: 90vw;
+    margin-top: 2rem;
+
+    .form-container-left {
+      width: 50%;
+      height: auto;
+    }
+
+    .form-container-right {
+      width: 50%;
+      height: auto;
+    }
+
+  }
+
+  .container-image {
+    background: #FEFDFD;
+    border: solid 2px #DFE3E8;
+    border-radius: 12px;
+    height: 70vh;
+    width: 30vw;
+    margin-top: 2rem;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    flex-direction: column;
+    .container-image-center{
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 23vh;
+      width: 11vw;
+      background: #FEFDFD;
+      border: solid 2px #E5E4E9;
+      border-radius: 100%;
+      div{
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 21vh;
+        width: 10vw;
+        background: #E5E4E9;
+        border-radius: 100%;
+      }
+    }
+    .add-image{
+      display: none;
+      align-self: center;
+      justify-content: center;
+      align-items: center;
+      width: min(100%, 16rem);
+      height: 3rem;
+    }
+  }
+}
+
+
+@media (max-width: 768px){
+  .desbravadores-page {
+    padding: 0 1rem 1.5rem;
+  }
+
+  .page-header {
+    .header-actions {
+      display: none;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+    }
+
+  }
+
+  .container-center {
+    flex-direction: column-reverse;
+    align-items: center;
+    width: 100%;
+    gap: 1rem;
+
+    .header-actions-down {
+      display: flex;
+      width: 100%;
+      gap: 0.75rem;
+      justify-content: center;
+      flex-wrap: wrap;
+
+      .refresh-button,
+      .button-cancel {
+        display: flex;
+        flex: 1 1 10rem;
+        justify-content: center;
+        align-items: center;
+        min-height: 3rem;
+      }
+    }
+
+    .container-form {
+      width: 100%;
+      height: auto;
+      flex-direction: column;
+      margin-top: 0;
+      padding: 1rem;
+
+      .form-container-left,
+      .form-container-right {
+        width: 100%;
+        height: auto;
+      }
+    }
+
+    .container-image {
+      width: 100%;
+      min-height: 18rem;
+      height: auto;
+      margin-top: 1rem;
+      padding: 1rem;
+      gap: 1rem;
+
+      .container-image-center {
+        cursor: pointer;
+        width: clamp(9rem, 45vw, 12rem);
+        height: clamp(9rem, 45vw, 12rem);
+
+        div {
+          width: calc(100% - 0.75rem);
+          height: calc(100% - 0.75rem);
+        }
+      }
+
+      .add-image{
+        display: flex;
+      }
+    }
+
+    app-upload-foto{
+      display: none;
+    }
+
+  }
+}
+
+

@@ -1,0 +1,11 @@
+<div class="container-input">
+  <div class="primary-select">
+    <label [for]="id">{{ label }}</label>
+    <select [id]="id">
+      <option value="" disabled selected>{{ placeholder || 'Selecione' }}</option>
+      <option *ngFor="let option of options" [value]="option.value">
+        {{ option.label }}
+      </option>
+    </select>
+  </div>
+</div>

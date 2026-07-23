@@ -1,0 +1,82 @@
+.relative {
+  position: relative;
+}
+
+.input-wrapper{
+  display: flex;
+  align-items: center;
+}
+
+.input-icon{
+  position: absolute;
+  left: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+
+  img{
+    width: 40px;
+    height: 40px;
+  }
+
+}
+
+
+.input-wrapper:focus-within .input-icon {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-6px) scale(0.95);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+}
+
+
+.input-wrapper:has(.input-field:not(:placeholder-shown)) .input-icon,
+.has-value .input-icon {
+  transform: translateX(-6px) scale(0.95);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.input-field {
+  transition: outline 0.2s ease;
+  font-size: 1rem;
+  outline: unset;
+  border: 1px solid #bbbbbb;
+  padding: 17px 1rem 10px 3.75rem;
+  width: 100%;
+  color: #0B1C2D;
+}
+
+.label-input {
+  display: flex;
+  transition: all 0.1s ease-in-out;
+  color: #2c2c54;
+  position: absolute;
+  top: 23%;
+  left: 60px;
+  transform: scale(0.95);
+  pointer-events: none;
+  font-size: 1.05rem;
+}
+
+.input-base {
+  border-radius: 5px;
+}
+
+.input-field:focus ~ .label-input,
+.input-field:not(:placeholder-shown) ~ .label-input {
+  top: -40% !important;
+  left: 10px !important;
+  transform: scale(0.8);
+  background: var(--primary-color);
+  color: var(--primary-button-color);
+
+  padding: 0 6px;
+  opacity: 1;
+}
+
+.input-field:focus {
+  box-shadow: 0 0 0 1px #928a6b, 0 0 0 3px var(--primary-button-color);
+}

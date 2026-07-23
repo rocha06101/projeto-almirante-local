@@ -1,0 +1,54 @@
+{
+  "name": "almirante-tamandare-frontend",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve --proxy-config proxy.conf.json",
+    "start:https": "ng serve --ssl --port 4201 --proxy-config proxy.conf.json",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test"
+  },
+  "prettier": {
+    "printWidth": 100,
+    "singleQuote": true,
+    "overrides": [
+      {
+        "files": "*.html",
+        "options": {
+          "parser": "angular"
+        }
+      }
+    ]
+  },
+  "private": true,
+  "packageManager": "npm@11.6.2",
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": ">=10.0.0"
+  },
+  "dependencies": {
+    "@angular/common": "^21.2.9",
+    "@angular/compiler": "^21.2.9",
+    "@angular/core": "^21.2.9",
+    "@angular/forms": "^21.2.9",
+    "@angular/platform-browser": "^21.2.9",
+    "@angular/router": "^21.2.9",
+    "bootstrap": "^5.3.8",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.2.7",
+    "@angular/cli": "^21.2.7",
+    "@angular/compiler-cli": "^21.2.9",
+    "jsdom": "^27.1.0",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.8"
+  },
+  "optionalDependencies": {
+    "@emnapi/core": "^1.10.0",
+    "@emnapi/runtime": "^1.10.0",
+    "@emnapi/wasi-threads": "^1.2.1"
+  }
+}

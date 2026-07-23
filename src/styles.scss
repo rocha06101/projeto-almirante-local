@@ -1,0 +1,171 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+
+:root {
+  --font-primary: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  --color-background: linear-gradient(450deg, #041a4a 30%,#0A3EB0 100%);
+  --primary-color: #30557A;
+  --primary-button-color: #ffbf29;
+  --border-center-color: gradient(500deg, #E6CF85, #505457, #E6CF85 100%);
+  --black-color: #000000;
+  --white-color: #D8E1E6;
+  
+  // Modern color palette
+  --primary: #1e3a8a;
+  --primary-dark: #1e40af;
+  --secondary: #0284c7;
+  --success: #16a34a;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --info: #3b82f6;
+  --light: #f9fafb;
+  --dark: #111827;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #1f2937;
+  background: #f9fafb;
+}
+
+body {
+  overflow-x: hidden;
+  overflow-y: auto;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+app-root {
+  display: block;
+  height: 100%;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 5px;
+
+  &:hover {
+    background: #94a3b8;
+  }
+}
+
+/* Utility Classes */
+.container-lg {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-muted {
+  color: #6b7280;
+}
+
+.mt-4 {
+  margin-top: 1.5rem;
+}
+
+.mb-4 {
+  margin-bottom: 1.5rem;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+.gap-3 {
+  gap: 1rem;
+}
+
+.gap-4 {
+  gap: 1.5rem;
+}
+
+/* Responsive Images */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Buttons Reset */
+button {
+  font-family: inherit;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+/* Links */
+a {
+  color: #3b82f6;
+  text-decoration: none;
+
+  &:hover {
+    color: #2563eb;
+    text-decoration: underline;
+  }
+}
+
+/* Form Elements */
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+/* Animations */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Utility animations */
+.fade-in {
+  animation: fadeIn 0.3s ease;
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease;
+}
+

@@ -1,0 +1,73 @@
+<div class="dashboard-container">
+  <div class="dashboard-header">
+    <div class="header-content">
+      <h1>Dashboard</h1>
+      <p>Bem-vindo ao Clube de Desbravadores - Almirante Tamandaré</p>
+    </div>
+  </div>
+
+  <!-- Dashboard Cards -->
+  <div class="dashboard-grid">
+    @for (card of dashboardCards(); track card.title) {
+      <div class="dashboard-card" [style.--card-color]="card.color">
+        <div class="card-header">
+          <span class="card-icon">{{ card.icon }}</span>
+          <h3>{{ card.title }}</h3>
+        </div>
+        <div class="card-body">
+          <div class="card-value">{{ card.value }}</div>
+          <p class="card-description">{{ card.description }}</p>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Main Content Section -->
+  <div class="content-section">
+    <div class="section-grid">
+      <!-- Atividades Recentes -->
+      <div class="content-card">
+        <div class="card-header">
+          <h2>Atividades Recentes</h2>
+          <a href="#" class="view-all">Ver todas</a>
+        </div>
+        <div class="activities-list">
+          @for (activity of recentActivities(); track activity.id) {
+            <div class="activity-item">
+              <div class="activity-info">
+                <h4>{{ activity.title }}</h4>
+                <span class="activity-date">{{ activity.date }}</span>
+              </div>
+              <span class="activity-status" [class]="activity.status.toLowerCase().replace(' ', '-')">
+                {{ activity.status }}
+              </span>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Seções de Acesso Rápido -->
+      <div class="content-card">
+        <div class="card-header">
+          <h2>Acesso Rápido</h2>
+        </div>
+        <div class="quick-access">
+          <app-sections iconSrc="/icons/journal-icon.svg" title="Secretaria">
+          </app-sections>
+          <app-sections iconSrc="/icons/icon-cash.svg" title="Tesouraria">
+          </app-sections>
+          <app-sections iconSrc="/icons/warehouse-icon.svg" title="Almoxarifado">
+          </app-sections>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="dashboard-footer">
+    <img src="/images/logo-desbravadores.png" alt="Logo Desbravadores" />
+    <p>Clube de Desbravadores - Almirante Tamandaré</p>
+    <span class="version">v1.0.0</span>
+  </footer>
+</div>
+

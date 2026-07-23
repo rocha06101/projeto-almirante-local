@@ -1,0 +1,89 @@
+<div class="register-container">
+    <div class="main-content container-fluid px-3 py-5">
+        <div class="auth-shell col-12 col-sm-11 col-md-9 col-lg-6 col-xl-5">
+        <div class="auth-card">
+
+            <div class="content-title text-center">
+                <div class="logo">
+                    <img src="/images/logo.png" alt="Logo Almirante Tamandaré">
+                </div>
+                <div class="title">
+                    <span class="first-text">Realizar  </span>
+                    <span class="second-text">Cadastro</span>
+                </div>
+            </div>
+            
+            <form [formGroup]="form" (ngSubmit)="submit()" style="display: contents">
+            <div class="input w-100">
+                
+                <app-select
+                    label="Selecionar Cargo"
+                    [options]="[
+                      { label: 'Diretor', value: 'desbravador' },
+                      { label: 'Tesoureiro', value: 'diretoria' },
+                      { label: 'Secretário', value: 'conselheiro' },
+                      { label: 'Almoxarifado', value: 'conselheiro' }
+                    ]"
+                    [arrow]="true"
+                    icon="mail"
+                ></app-select>
+
+                <app-input
+                    formControlName="name"
+                    type="text"
+                    iconSrc="/icons/user-icon.svg"
+                    label="Nome Completo"
+                    >                         
+                </app-input>
+                <app-input 
+                formControlName="email"
+                type="email"
+                iconSrc="/icons/letter.svg"
+                label="Email">
+            </app-input>
+            @if (emailErrorMessage) {
+                <div class="field-error">{{ emailErrorMessage }}</div>
+            }
+                <app-input 
+                formControlName="password"
+                type="password"
+                iconSrc="/icons/padlock.svg"
+                label="Senha">
+                </app-input>
+                
+                <div class="container-validation">
+                    <strong>A senha deve conter:</strong>
+                    <br>
+                    <span>No mínimo 6 caracteres</span>
+                    <br>
+                    <span>No mínimo um caractere especial</span>
+                    <br>
+                    <span>No mínimo uma letra maiúscula</span>
+                    <br>
+                    <span>No mínimo um número</span>
+                </div>
+                
+                <app-input 
+                formControlName="confirmPassword"
+                type="password"
+                iconSrc="/icons/padlock.svg"
+                label="Confirmar senha">
+                </app-input>
+            </div>
+            <div class="button-register w-100">
+                <app-button 
+                type="submit"
+                label="Cadastrar">
+                </app-button>
+            </div>
+            </form>
+        </div>
+    </div>
+    </div>
+    <div class="footer">
+        <div class="img-footer">
+            <img src="/images/logo-desbravadores.png" alt="Logo Desbravadores">
+        </div>
+        <span>Clube de Desbravadores - Almirante Tamandaré</span>
+    </div>
+</div>  

@@ -1,0 +1,36 @@
+<section class="upload-foto-root">
+  <div
+    class="upload-foto-container"
+    [class.drag-over]="isDragOver"
+    (click)="onContainerClick()"
+    (dragenter)="handleDragEnter($event)"
+    (dragover)="handleDragOver($event)"
+    (dragleave)="handleDragLeave($event)"
+    (drop)="handleDrop($event)"
+    role="button"
+    tabindex="0"
+  >
+    <input
+      #fileInput
+      type="file"
+      accept="image/jpeg,image/png"
+      hidden
+      (change)="onFileSelected($event)"
+    />
+
+    <div class="upload-foto-content">
+      <div class="upload-foto-icon" aria-hidden="true">
+        <img src="/icons/upload-icon.svg" alt="Ícone de upload" width="56" height="56" />
+      </div>
+
+      <p class="upload-foto-label">
+        <span class="upload-foto-action">Clique para enviar</span>
+        <span class="upload-foto-or">ou arraste uma foto</span>
+      </p>
+
+      <p class="upload-foto-help">JPG, PNG — máx. 2MB</p>
+    </div>
+  </div>
+
+  <p class="upload-foto-error" *ngIf="erro">{{ erro }}</p>
+</section>

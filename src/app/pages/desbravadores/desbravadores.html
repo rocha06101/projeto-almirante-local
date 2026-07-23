@@ -1,0 +1,79 @@
+<section class="desbravadores-page">
+  <header class="page-header">
+    <div>
+      <span class="eyebrow">Gestao de usuarios</span>
+      <h1>Desbravadores</h1>
+      <p>Usuarios retornados pelo endpoint <strong>/api/Usuarios</strong>.</p>
+    </div>
+
+    <div class="header-actions">
+      <button
+        type="button"
+        class="refresh-button register"
+        [routerLink]="['/desbravadores/cadastrar']"
+      >
+        Cadastrar
+      </button>
+
+      <button type="button" class="refresh-button" (click)="carregarUsuarios()" [disabled]="isLoading()">
+        Atualizar
+      </button>
+    </div>
+  </header>
+
+  @if (isLoading()) {
+    <div class="state-card">
+      <span class="loader" aria-hidden="true"></span>
+      <p>Carregando usuarios...</p>
+    </div>
+  } @else if (errorMessage()) {
+    <div class="state-card error">
+      <h2>Algo saiu do trilho</h2>
+      <p>{{ errorMessage() }}</p>
+      <button type="button" (click)="carregarUsuarios()">Tentar novamente</button>
+    </div>
+  } @else if (usuarios().length === 0) {
+    <div class="state-card">
+      <h2>Nenhum usuario encontrado</h2>
+      <p>Quando a API retornar registros, eles aparecerao aqui.</p>
+    </div>
+  } @else {
+    <div class="summary-card">
+      <span>Total cadastrado</span>
+      <strong>{{ usuarios().length }}</strong>
+    </div>
+
+    <div class="users-table-card">
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Email</th>
+            <th>Data de criacao</th>
+            <th>Role</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (usuario of usuarios(); track usuario.id) {
+            <tr>
+              <td>
+                <div class="user-cell">
+                  <span class="avatar">{{ usuario.nome.charAt(0).toUpperCase() }}</span>
+                  <div>
+                    <strong>{{ usuario.nome }}</strong>
+                    <small>{{ usuario.id }}</small>
+                  </div>
+                </div>
+              </td>
+              <td>{{ usuario.email }}</td>
+              <td>{{ usuario.dataCriacao | date: 'dd/MM/yyyy' }}</td>
+              <td>
+                <span class="role-pill">{{ usuario.roles }}</span>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

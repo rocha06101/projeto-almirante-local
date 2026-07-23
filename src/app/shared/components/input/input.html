@@ -1,0 +1,24 @@
+<div class="relative input-wrapper">
+  @if (iconSrc){
+      <span class="input-icon">
+        <img src="{{iconSrc}}" alt="{{iconAlt}}">
+      </span>
+    }
+
+  <input class="input-cal input-base input-field"
+    [placeholder]="placeholder"
+    [type]="type"
+    [value]="value"
+    [disabled]="disable"
+    (input)="handleInput($event)"
+    (paste)="handlePaste($event)"
+    (blur)="handleBlur()"
+    >
+
+  <label class="label-cal label-base label-input">
+      
+    {{label}}
+  
+  </label>
+
+</div>

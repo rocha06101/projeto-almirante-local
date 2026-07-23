@@ -1,0 +1,73 @@
+
+> almirante-tamandare-frontend@0.0.0 start
+> ng serve --proxy-config proxy.conf.json --host 127.0.0.1 --port 4200
+
+[33m>[39m Building...
+[32m√[39m Building...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m        [2m | [22m [1mRaw size[22m
+[32mstyles.css[39m         [2m | [22m[2mstyles[22m       [2m | [22m[36m279.31 kB[39m[2m | [22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m         [2m | [22m [36m68.51 kB[39m[2m | [22m
+[32mchunk-6PHCMTZC.js[39m  [2m | [22m[2m-[22m            [2m | [22m  [36m2.00 kB[39m[2m | [22m
+[32mchunk-UV6AT5HZ.js[39m  [2m | [22m[2m-[22m            [2m | [22m  [36m1.10 kB[39m[2m | [22m
+
+[1m [22m                  [2m | [22m[1mInitial total[22m[2m | [22m[1m350.92 kB[22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m        [2m | [22m [1mRaw size[22m
+[32mchunk-M2CBBSNH.js[39m  [2m | [22m[2mhome[22m         [2m | [22m [36m28.00 kB[39m[2m | [22m
+[32mchunk-EGGCUQ5Y.js[39m  [2m | [22m[2mregister[22m     [2m | [22m [36m27.47 kB[39m[2m | [22m
+[32mchunk-WMV6NPTO.js[39m  [2m | [22m[2mdesbravadores[22m[2m | [22m [36m21.92 kB[39m[2m | [22m
+[32mchunk-WB4GJES2.js[39m  [2m | [22m[2mlogin[22m        [2m | [22m [36m19.83 kB[39m[2m | [22m
+[32mchunk-H7X6MUGZ.js[39m  [2m | [22m[2m-[22m            [2m | [22m [36m17.81 kB[39m[2m | [22m
+
+Application bundle generation complete. [2.197 seconds] - 2026-04-28T12:21:49.115Z
+
+Watch mode enabled. Watching for file changes...
+NOTE: Raw file sizes do not reflect development server per-request transformations.
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m4200[22m/[39m
+[2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m[2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m [2m | [22m[36m68.85 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.466 seconds] - 2026-04-28T12:31:40.808Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m[2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m [2m | [22m[36m72.04 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.206 seconds] - 2026-04-28T12:31:55.618Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m[2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m [2m | [22m[36m74.08 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.267 seconds] - 2026-04-28T12:32:09.260Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m[2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m [2m | [22m[36m74.08 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m[2m | [22m[1mRaw size[22m
+[32mchunk-WIPR627W.js[39m  [2m | [22m[2mhome[22m [2m | [22m[36m30.52 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.172 seconds] - 2026-04-28T12:32:22.335Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m        [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m         [2m | [22m[36m74.08 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m        [2m | [22m[1mRaw size[22m
+[32mchunk-TC2BZZIT.js[39m  [2m | [22m[2mdesbravadores[22m[2m | [22m[36m23.16 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.169 seconds] - 2026-04-28T12:32:32.415Z
+
+Component update sent to client(s).

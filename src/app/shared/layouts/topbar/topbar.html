@@ -19,6 +19,71 @@
 
     <!-- Right Actions -->
     <div class="topbar-actions">
+      <!-- Profile -->
+      <div class="profile-wrapper">
+        <button
+          class="action-btn profile-btn"
+          #profileButton
+          (click)="toggleProfile()"
+          [class.active]="profileOpen()"
+        >
+          <img [src]="userInfo.avatar" alt="Perfil" class="avatar" />
+          <span class="user-name">{{ userInfo.name }}</span>
+        </button>
+
+@if (profileOpen()) {
+  <div class="profile-dropdown" #profilePopup>
+    <div class="profile-header">
+      <div class="avatar-container">
+      <img [src]="userInfo.avatar" alt="Perfil" class="large-avatar" />
+      </div>
+      <div class="user-info">
+        <strong>{{ userInfo.name }}</strong>
+        <small>{{ userInfo.role }}</small>
+      </div>
+    </div>
+
+    <div class="profile-divider">
+      <hr>
+    </div>
+
+    <nav class="profile-menu">
+      <button class="menu-item" (click)="viewProfile()">
+        <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+        <span>Meu Perfil</span>
+      </button>
+      <button class="menu-item">
+        <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+        </svg>
+        <span>Segurança</span>
+      </button>
+      <button class="menu-item">
+        <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m4.24-4.24l4.24-4.24"></path>
+        </svg>
+        <span>Preferências</span>
+      </button>
+    </nav>
+
+    <div class="profile-footer">
+      <button class="logout-btn" (click)="logout()">
+        <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1-2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+        <span>Sair do Sistema</span>
+      </button>
+    </div>
+  </div>
+}
+      </div>
+
       <!-- Notifications -->
       <div class="notification-wrapper">
         <button
@@ -62,65 +127,6 @@
                 <p>Nenhuma notificação</p>
               </div>
             }
-          </div>
-        }
-      </div>
-
-      <!-- Profile -->
-      <div class="profile-wrapper">
-        <button
-          class="action-btn profile-btn"
-          #profileButton
-          (click)="toggleProfile()"
-          [class.active]="profileOpen()"
-        >
-          <img [src]="userInfo.avatar" alt="Perfil" class="avatar" />
-          <span class="user-name">{{ userInfo.name }}</span>
-        </button>
-
-        @if (profileOpen()) {
-          <div class="profile-dropdown" #profilePopup>
-            <div class="profile-header">
-              <img [src]="userInfo.avatar" alt="Perfil" class="large-avatar" />
-              <div class="user-info">
-                <strong>{{ userInfo.name }}</strong>
-                <small>{{ userInfo.role }}</small>
-              </div>
-            </div>
-
-            <nav class="profile-menu">
-              <button class="menu-item" (click)="viewProfile()">
-                <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-                <span>Meu Perfil</span>
-              </button>
-              <button class="menu-item">
-                <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                </svg>
-                <span>Segurança</span>
-              </button>
-              <button class="menu-item">
-                <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="3"></circle>
-                  <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m4.24-4.24l4.24-4.24"></path>
-                </svg>
-                <span>Preferências</span>
-              </button>
-            </nav>
-
-            <div class="profile-footer">
-              <button class="logout-btn" (click)="logout()">
-                <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                  <polyline points="16 17 21 12 16 7"></polyline>
-                  <line x1="21" y1="12" x2="9" y2="12"></line>
-                </svg>
-                <span>Sair do Sistema</span>
-              </button>
-            </div>
           </div>
         }
       </div>

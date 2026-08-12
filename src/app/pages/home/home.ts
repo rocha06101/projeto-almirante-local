@@ -1,6 +1,6 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth';
 import { SectionsComponent } from '../../shared/components/sections/sections';
 import { take } from 'rxjs';
@@ -17,7 +17,7 @@ interface DashboardCard {
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [CommonModule, SectionsComponent],
+  imports: [CommonModule, SectionsComponent, RouterLink],
   templateUrl: './home.html',
   styleUrl: './home.scss',
 })

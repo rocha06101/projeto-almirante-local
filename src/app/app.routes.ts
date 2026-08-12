@@ -46,6 +46,13 @@ export const routes: Routes = [
           import('./pages/desbravadores/user-register/user-register')
           .then(m => m.UserRegister),
       },
+      {
+        path: 'treasury',
+        loadComponent: () =>
+          import('./pages/treasury/treasury')
+          .then(m => m.Treasury),
+      }
+    
     ]
   },
   

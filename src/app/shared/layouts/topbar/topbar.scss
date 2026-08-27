@@ -261,7 +261,7 @@
     transition: background 0.2s;
 
     &:hover {
-      background: #f9fafb;
+      background: #F0F4F7;
     }
 
     &:last-child {
@@ -347,7 +347,7 @@
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
-  background: #F9FAFB;
+  background: #F0F4F7;
   border: solid 2px #d9d9d9d9;
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
@@ -470,7 +470,7 @@
 
   .logout-btn {
     width: 100%;
-    background: #F9FAFB;
+    background: #F0F4F7;
     border: 1px solid #f59e0b;
     border-radius: 6px;
     padding: 0.5rem 0.75rem;

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, Input } from '@angular/core';
 
 @Component({
   selector: 'app-kpi-component',
@@ -8,4 +8,10 @@ import { Component } from '@angular/core';
 })
 export class KpiComponent {
 
+  @Input() title = "";
+  @Input() value = "";
+  @Input() description = "";
+  @Input() icon = "";
+  @Input() backgroundColor = "#ffffff"
 }
+

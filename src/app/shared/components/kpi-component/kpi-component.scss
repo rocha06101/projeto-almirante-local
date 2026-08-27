@@ -1,24 +1,32 @@
-.kpi-component{
+.kpi-component {
     display: flex;
     flex-direction: row;
-    justify-content: center;
     align-items: center;
-    background-color: #f1f4f7;
-    height: 20vh;
-    width: 17vw;
+    background-color: #FFFFFF;
+    height: 19vh;
+    width: 19vw;
+    border-radius: 1rem;
 }
 
-.image-container{
+.kpi-image{
+    margin-left: 1rem;
+    img{
+        width: 3.3rem;
+    }
+}
+.image-container {
     display: flex;
     justify-content: center;
     align-items: center;
     height: 12vh;
     width: 12vh;
-    background-color: #E7F1FD;
     border-radius: 100%;
-    margin-right: 1.5em;
+    margin-right: 1.5rem;
 }
 
-.kpi-boddy{
-
+.kpi-body {
+    .value {
+        font-size: 2rem;
+        font-weight: 600;
+    }
 }

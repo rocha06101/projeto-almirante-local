@@ -36,8 +36,18 @@
 
         <div class="chart-container">
             <div class="chart-text">
-                <span class="chart-title">Receitas X Despesas</span>
+                <span class="chart-title">Receitas x Despesas</span>
                 <span class="chart-description">Últimos 6 meses</span>
+            </div>
+
+            <div class="chart-canvas-wrapper">
+                <canvas
+                    baseChart
+                    [data]="barChartData"
+                    [options]="barChartOptions"
+                    type="bar"
+                >
+                </canvas>
             </div>
         </div>
 

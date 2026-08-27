@@ -4,12 +4,14 @@ import { authInterceptor } from './core/interceptors/auth-interceptor';
 import { provideRouter } from '@angular/router';
 import { timeoutInterceptor } from './core/interceptors/timeout-interceptor';
 import { routes } from './app.routes';
+import { provideCharts, withDefaultRegisterables } from 'ng2-charts';
 
 export const appConfig: ApplicationConfig = {
   providers: [
  provideHttpClient(
     withInterceptors([authInterceptor, timeoutInterceptor])
   ),
-    provideRouter(routes)
+    provideRouter(routes),
+    provideCharts(withDefaultRegisterables())
   ]
 };

@@ -11,30 +11,51 @@ section{
     gap: 1rem;
 }
 
-.chart-container{
-    height: 45vh;
-    width: 99%;
-    background-color: #ffffff;
-    border-radius: 1rem;
-    margin-top: 1rem;
-    .chart-text{
-        padding: 0.5rem 0 0 1rem;
+    .chart-container{
+        height: 45vh;
+        width: 100%;
+        background-color: #ffffff;
+        border-radius: 1rem;
+        margin-top: 1rem;
+        box-sizing: border-box;
         display: flex;
         flex-direction: column;
-        .chart-title{
-            font-weight: 600;
+
+        .chart-text{
+            padding: 0.5rem 0 0 1rem;
+            display: flex;
+            flex-direction: column;
+
+            .chart-title{
+                font-weight: 600;
+            }
+
+            .chart-description{
+                font-size: 0.8rem;
+            }
         }
-        .chart-description{
-            font-size: 0.8rem;
+
+        .chart-canvas-wrapper{
+            flex: 1;
+            width: 100%;
+            min-height: 0;
+            padding: 1rem 1rem 1.5rem;
+            box-sizing: border-box;
+
+            canvas{
+                display: block;
+                width: 100% !important;
+                height: 100% !important;
+            }
         }
+
     }
-}
 
 .quick-actions{
     background-color: #ffffff;
     margin-top: 1rem;
     padding: 0.5rem 1rem 1rem;
-    width: 99%;
+    width: 100%;
     border-radius: 1rem;
     box-sizing: border-box;
     display: flex;

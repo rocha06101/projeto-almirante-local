@@ -1,0 +1,70 @@
+
+
+.financial-entries {
+  margin-top: 1rem;
+  width: 100%;
+  height: 75vh;
+  background-color: #fff;
+  border-radius: 1rem;
+}
+
+.financial-entries-header {
+  display: flex;
+  align-items: center;
+  padding: 1rem 0 0 1rem;
+  .financial-entries-header-title{
+    width: 15rem;
+  }
+}
+
+.search-section {
+    margin-right: 4rem;
+  width: 100%;
+
+  .search-wrapper {
+    display: flex;
+    align-items: center;
+    background: #f3f4f6;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    transition: all 0.3s ease;
+
+    &:focus-within {
+      background: #e5e7eb;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .search-icon {
+      width: 18px;
+      height: 18px;
+      margin-right: 0.5rem;
+      opacity: 0.6;
+      flex-shrink: 0;
+      stroke: currentColor;
+    }
+
+    .search-input {
+      border: none;
+      background: transparent;
+      outline: none;
+      flex: 1;
+      min-width: 0;
+      font-size: 0.95rem;
+      color: #111827;
+
+      &::placeholder {
+        color: #9ca3af;
+      }
+    }
+  }
+
+  @media (max-width: 575.98px) {
+    .search-wrapper {
+      padding: 0.45rem 0.65rem;
+    }
+
+    .search-input {
+      font-size: 0.875rem;
+    }
+  }
+}

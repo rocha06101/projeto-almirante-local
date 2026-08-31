@@ -51,8 +51,13 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./pages/treasury/treasury')
           .then(m => m.Treasury),
-      }
-    
+      },
+      {
+        path: 'lancamentos',
+        loadComponent: () =>
+          import('./shared/components/financial-entries-component/financial-entries-component')
+            .then(m => m.FinancialEntriesComponent),
+      },
     ]
   },
   

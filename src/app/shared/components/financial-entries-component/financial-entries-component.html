@@ -1,20 +1,190 @@
-<div class="financial-entries">
-    <div class="financial-entries-header">
-        <div class="financial-entries-header-title">Lançamentos financeiros</div>
-        <div class="search-section">
-  <div class="search-wrapper">
-    <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="11" cy="11" r="8"></circle>
-      <path d="m21 21-4.35-4.35"></path>
-    </svg>
-    <input
-      type="text"
-      class="search-input"
-      placeholder="Pesquisar desbravadores, atividades..."
-    />
+<section class="financial-entries" aria-label="Lançamentos financeiros">
+  <header class="financial-entries-header">
+    <h2 class="financial-entries-header-title">Lançamentos financeiros</h2>
+
+    <div class="toolbar" role="search">
+      <label class="search-wrapper" aria-label="Pesquisar lançamentos">
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="6"></circle>
+          <path d="m16 16 5 5"></path>
+        </svg>
+        <input
+          type="search"
+          class="search-input"
+          placeholder="Pesquisar..."
+          [value]="search()"
+          (input)="onSearchChange($any($event.target).value)"
+        />
+      </label>
+
+      <label class="filter-control">
+        <span>Status</span>
+        <select [ngModel]="selectedStatus()" (ngModelChange)="selectedStatus.set($event); onFilterChange()">
+          @for (option of statusOptions; track option) {
+            <option [value]="option">{{ option }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="filter-control">
+        <span>Tipo</span>
+        <select [ngModel]="selectedType()" (ngModelChange)="selectedType.set($event); onFilterChange()">
+          @for (option of typeOptions; track option) {
+            <option [value]="option">{{ option }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="filter-control filter-date">
+        <span>Data</span>
+        <input type="date" [ngModel]="selectedDate()" (ngModelChange)="selectedDate.set($event); onFilterChange()" />
+      </label>
+
+      <button type="button" class="primary-button" (click)="openNewEntry()">
+        Novo lançamento
+      </button>
+    </div>
+  </header>
+
+  @if (isModalOpen()) {
+    <div class="modal-backdrop" (click)="closeModal()">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3 id="modal-title">{{ modalTitle() }}</h3>
+          <button type="button" class="close-button" aria-label="Fechar modal" (click)="closeModal()">×</button>
+        </div>
+
+        <div class="modal-body">
+          <label class="form-field">
+            <span>Nome do Beneficiário</span>
+            <input type="text" [(ngModel)]="lancamentoAtual.nome" name="nomeBeneficiario" />
+          </label>
+
+          <div class="form-row">
+            <label class="form-field">
+              <span>Tipo de Lançamento</span>
+              <select [(ngModel)]="lancamentoAtual.tipo" name="tipoLancamento">
+                @for (type of modalTypeOptions; track type) {
+                  <option [value]="type">{{ type }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="form-field">
+              <span>Categoria</span>
+              <select [(ngModel)]="lancamentoAtual.categoria" name="categoriaLancamento">
+                @for (category of modalCategoryOptions; track category) {
+                  <option [value]="category">{{ category }}</option>
+                }
+              </select>
+            </label>
+          </div>
+
+          <div class="form-row">
+            <label class="form-field">
+              <span>Valor</span>
+              <input type="number" min="0" step="0.01" [(ngModel)]="lancamentoAtual.valor" name="valorLancamento" />
+            </label>
+
+            <label class="form-field">
+              <span>Data de Vencimento</span>
+              <input type="date" [(ngModel)]="lancamentoAtual.vencimento" name="vencimentoLancamento" />
+            </label>
+          </div>
+
+          <label class="form-field">
+            <span>Status</span>
+            <select [(ngModel)]="lancamentoAtual.status" name="statusLancamento">
+              @for (status of modalStatusOptions; track status) {
+                <option [value]="status">{{ status }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="secondary-button" (click)="closeModal()">Cancelar</button>
+          <button type="button" class="primary-button" (click)="editingId() ? salvarEdicao() : salvarNovoLancamento()">
+            {{ editingId() ? 'Salvar Alterações' : 'Salvar' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Tipo</th>
+          <th>Categoria</th>
+          <th>Valor</th>
+          <th>Vencimento</th>
+          <th>Status</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of displayedLancamentos(); track item.id) {
+          <tr>
+            <td>{{ item.nome }}</td>
+            <td>{{ item.tipo }}</td>
+            <td>{{ item.categoria }}</td>
+            <td>{{ formatCurrency(item.valor) }}</td>
+            <td>{{ item.vencimento }}</td>
+            <td>
+              <app-status-badge [status]="item.status"></app-status-badge>
+            </td>
+            <td>
+              <div class="action-buttons" aria-label="Ações do lançamento">
+                <button type="button" class="icon-button" aria-label="Visualizar lançamento" title="Visualizar" (click)="viewEntry(item)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>
+                </button>
+                <button type="button" class="icon-button" aria-label="Editar lançamento" title="Editar" (click)="openEditEntry(item)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm14.71-9.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.26 1.26 3.75 3.75 1.26-1.26Z"/></svg>
+                </button>
+                <button type="button" class="icon-button danger" aria-label="Excluir lançamento" title="Excluir" (click)="removeItem(item.id)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-1 7h2v8H8v-8Zm6 0h2v8h-2v-8ZM5 7h14l-1 12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7Z"/></svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
   </div>
-</div>
-    </div>
-    <div class="financial-entries-title">
-    </div>
-</div>
+
+  @if (filteredLancamentos().length === 0) {
+    <div class="state-block empty-state">Nenhum lançamento encontrado.</div>
+  }
+
+  <footer class="pagination-bar" aria-label="Paginação dos lançamentos">
+    <span class="pagination-summary">
+      @if (filteredLancamentos().length > 0) {
+        Mostrando de {{ paginationInfo().start }} a {{ paginationInfo().end }} de {{ paginationInfo().totalItems }} lançamentos
+      } @else {
+        Nenhum lançamento encontrado
+      }
+    </span>
+
+    <nav class="pagination-controls" aria-label="Navegação da página">
+      <button type="button" class="page-button" aria-label="Página anterior" [disabled]="page() === 1" (click)="goToPage(page() - 1)">‹</button>
+
+      @for (pageNumber of pageNumbers(); track pageNumber) {
+        <button
+          type="button"
+          class="page-button"
+          [class.active]="pageNumber === page()"
+          [attr.aria-current]="pageNumber === page() ? 'page' : null"
+          (click)="goToPage(pageNumber)"
+        >
+          {{ pageNumber }}
+        </button>
+      }
+
+      <button type="button" class="page-button" aria-label="Próxima página" [disabled]="page() >= pageNumbers().length" (click)="goToPage(page() + 1)">›</button>
+    </nav>
+  </footer>
+</section>
+

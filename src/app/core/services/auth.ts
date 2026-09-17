@@ -37,7 +37,6 @@ export class AuthService {
         this.isLoggedIn.set(false);
       }),
       catchError(() => {
-        // Even if logout request fails, remove token locally
         localStorage.removeItem(this.TOKEN_KEY);
         this.isLoggedIn.set(false);
         return of(void 0);

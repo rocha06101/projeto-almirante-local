@@ -40,11 +40,13 @@
 }
 
 .input-field {
+  box-sizing: border-box;
   transition: outline 0.2s ease;
   font-size: 1rem;
   outline: unset;
   border: 1px solid #bbbbbb;
   padding: 17px 1rem 10px 3.75rem;
+  min-height: 44px;
   width: 100%;
   color: #0B1C2D;
 }
@@ -79,4 +81,15 @@
 
 .input-field:focus {
   box-shadow: 0 0 0 1px #928a6b, 0 0 0 3px var(--primary-button-color);
+}
+
+@media (max-width: 575.98px) {
+  .input-field {
+    padding-left: 3.25rem;
+  }
+
+  .label-input {
+    left: 3.25rem;
+    font-size: 0.95rem;
+  }
 }

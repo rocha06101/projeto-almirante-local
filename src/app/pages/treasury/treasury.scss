@@ -80,4 +80,48 @@ section{
     }
 }
 
+    @media (max-width: 991.98px) {
+        .kpi-components {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            width: 100%;
+        }
+
+        .chart-container {
+            height: clamp(22rem, 55vh, 32rem);
+        }
+
+        app-action-component {
+            min-width: 0;
+        }
+    }
+
+    @media (max-width: 575.98px) {
+        .kpi-components {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .chart-container {
+            height: clamp(20rem, 68vh, 30rem);
+            border-radius: 0.75rem;
+
+            .chart-canvas-wrapper {
+                padding: 0.75rem 0.5rem 1rem;
+            }
+        }
+
+        .quick-actions {
+            padding-inline: 0.75rem;
+            border-radius: 0.75rem;
+        }
+
+        .quick-actions-list {
+            gap: 0.75rem;
+        }
+
+        app-action-component {
+            flex-basis: 100%;
+        }
+    }
+
 }

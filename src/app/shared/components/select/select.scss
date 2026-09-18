@@ -3,6 +3,7 @@
   width: 100%;
 
   select {
+    box-sizing: border-box;
     text-align: left;
     text-align-last: left;
     -webkit-appearance: none;
@@ -15,8 +16,17 @@
     border: solid 1px #bbbbbb;
     outline: none;
     font-size: 1.05rem;
+    min-height: 44px;
     color: #2C2C54;
 
+}
+
+@media (max-width: 575.98px) {
+  .select-container select {
+    padding-left: 3.25rem;
+    padding-right: 3rem;
+    font-size: 1rem;
+  }
 }
 
   select option {

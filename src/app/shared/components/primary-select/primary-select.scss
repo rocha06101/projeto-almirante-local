@@ -1,11 +1,14 @@
 .primary-select {
-    margin: 0.8rem 2rem;
+    box-sizing: border-box;
+    margin: 0.8rem 1rem;
     display: flex;
     flex-direction: column;
-    width: 90%;
+    width: calc(100% - 2rem);
 
     select {
+        box-sizing: border-box;
         padding: 0.5rem;
+        min-height: 44px;
         border: 2px solid #EAEBED;
         border-radius: 10px;
         font-size: 1rem;
@@ -13,5 +16,12 @@
         -webkit-appearance: none;
         -moz-appearance: none;
         appearance: none;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .primary-select {
+        margin-inline: 0.5rem;
+        width: calc(100% - 1rem);
     }
 }

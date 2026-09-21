@@ -1,5 +1,6 @@
 import { CommonModule, DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
+import { A11yModule } from '@angular/cdk/a11y';
 import { FormsModule } from '@angular/forms';
 
 import { StatusBadgeComponent } from '../../../features/lancamentos/components/status-badge/status-badge';
@@ -37,7 +38,7 @@ interface LancamentoForm {
 @Component({
   selector: 'app-financial-entries-component',
   standalone: true,
-  imports: [CommonModule, FormsModule, StatusBadgeComponent],
+  imports: [CommonModule, FormsModule, A11yModule, StatusBadgeComponent],
   providers: [DatePipe],
   templateUrl: './financial-entries-component.html',
   styleUrl: './financial-entries-component.scss',

@@ -1,31 +1,32 @@
-<aside class="sidebar" [class.expanded]="isExpanded()">
+<aside class="sidebar" [class.expanded]="expanded()">
   <div class="sidebar-header">
     <div class="logo-container">
-      <img src="/icons/anchor.svg" alt="Logo" class="logo" />
-      @if (isExpanded()) {
-        <span class="app-name">Desbravadores</span>
-      }
+      <img src="/icons/anchor.svg" alt="" class="logo" />
+      <span class="app-name">Desbravadores</span>
     </div>
-    <button class="toggle-btn" (click)="toggleSidebar()" aria-label="Toggle sidebar">
-      @if (isExpanded()) {
-        <span>&lsaquo;</span>
-      } @else {
-        <span>&rsaquo;</span>
-      }
+    <button
+      type="button"
+      class="toggle-btn"
+      (click)="toggleSidebar()"
+      [attr.aria-expanded]="expanded()"
+      [attr.aria-label]="expanded() ? 'Recolher menu lateral' : 'Expandir menu lateral'"
+    >
+      <span aria-hidden="true">{{ expanded() ? '&lsaquo;' : '&rsaquo;' }}</span>
     </button>
   </div>
 
-  <nav class="sidebar-nav">
+  <nav class="sidebar-nav" aria-label="Navegação principal">
     <ul>
       @for (item of menuItems(); track item.route) {
         <li>
           <a
             [routerLink]="item.route"
-            [routerLinkActive]="'active'"
+            routerLinkActive="active"
+            ariaCurrentWhenActive="page"
             class="nav-item"
             [title]="item.label"
           >
-            <svg class="icon-svg" [attr.data-icon]="item.icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg class="icon-svg" aria-hidden="true" focusable="false" [attr.data-icon]="item.icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <ng-container [ngSwitch]="item.icon">
                 <ng-container *ngSwitchCase="'dashboard'">
                   <rect x="3" y="3" width="7" height="7"></rect>
@@ -54,11 +55,9 @@
                 </ng-container>
               </ng-container>
             </svg>
-            @if (isExpanded()) {
-              <span class="label">{{ item.label }}</span>
-              @if (item.badge && item.badge > 0) {
-                <span class="badge">{{ item.badge }}</span>
-              }
+            <span class="label">{{ item.label }}</span>
+            @if (item.badge && item.badge > 0) {
+              <span class="badge">{{ item.badge }}</span>
             }
           </a>
         </li>
@@ -67,10 +66,6 @@
   </nav>
 
   <div class="sidebar-footer">
-    @if (isExpanded()) {
-      <div class="footer-text">
-        <small>v1.0.0</small>
-      </div>
-    }
+    <small>v1.0.0</small>
   </div>
 </aside>

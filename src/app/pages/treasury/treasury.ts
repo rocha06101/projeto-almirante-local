@@ -21,14 +21,14 @@ public barChartData: ChartData<'bar'> = {
       data: [220, 290, 210, 130, 390, 280],
       backgroundColor: '#2F00FC',
       borderRadius: 6,
-      barThickness: 32,
+      maxBarThickness: 32,
     },
     {
       label: 'Despesas',
       data: [120, 100, 280, 250, 220, 90],
       backgroundColor: '#FF0000',
       borderRadius: 6,
-      barThickness: 32,
+      maxBarThickness: 32,
     },
   ],
 };

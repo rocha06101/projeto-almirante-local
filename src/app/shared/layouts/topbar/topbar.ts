@@ -1,19 +1,22 @@
-import { Component, inject, signal, ElementRef, ViewChild, HostListener } from '@angular/core';
+import { Component, ElementRef, HostListener, ViewChild, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { AuthService } from '../../../core/services/auth';
+
 @Component({
   selector: 'app-topbar',
   standalone: true,
-  imports: [CommonModule,FormsModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './topbar.html',
   styleUrl: './topbar.scss',
 })
 export class TopbarComponent {
   private router = inject(Router);
+  private auth = inject(AuthService);
 
-  @ViewChild('profilePopup') profilePopup!: ElementRef;
-  @ViewChild('profileButton') profileButton!: ElementRef;
+  @ViewChild('profileWrapper') profileWrapper?: ElementRef<HTMLElement>;
+  @ViewChild('notificationWrapper') notificationWrapper?: ElementRef<HTMLElement>;
 
   searchQuery = signal('');
   profileOpen = signal(false);
@@ -24,11 +27,16 @@ export class TopbarComponent {
     { id: 2, message: 'Desbravador registrado com sucesso', type: 'success', timestamp: 'há 1 hora' },
   ]);
 
-  userInfo = {
-    name: 'Paolla',
-    role: 'Diretora',
-    avatar: '/icons/user-icon2.svg'
-  };
+  /** Dados do usuário autenticado (vindos de /Auth/Me). */
+  userInfo = computed(() => {
+    const user = this.auth.user();
+
+    return {
+      name: user?.nome ?? 'Usuário',
+      role: user?.cargo?.nome ?? '',
+      avatar: '/icons/user-icon2.svg',
+    };
+  });
 
   onSearch(event: Event) {
     const target = event.target as HTMLInputElement;
@@ -46,14 +54,24 @@ export class TopbarComponent {
     this.profileOpen.set(false);
   }
 
+  /** Fecha o dropdown aberto ao tocar/clicar fora dele. */
   @HostListener('document:click', ['$event'])
   closePopups(event: MouseEvent) {
-    const clickedInsideProfile = this.profilePopup?.nativeElement.contains(event.target);
-    const clickedProfileButton = this.profileButton?.nativeElement.contains(event.target);
+    const target = event.target as Node;
 
-    if (!clickedInsideProfile && !clickedProfileButton) {
+    if (!this.profileWrapper?.nativeElement.contains(target)) {
       this.profileOpen.set(false);
     }
+
+    if (!this.notificationWrapper?.nativeElement.contains(target)) {
+      this.notificationOpen.set(false);
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  closePopupsOnEscape() {
+    this.profileOpen.set(false);
+    this.notificationOpen.set(false);
   }
 
   viewProfile() {
@@ -62,8 +80,8 @@ export class TopbarComponent {
   }
 
   logout() {
-    // Implementar logout
-    this.router.navigate(['/login']);
+    this.profileOpen.set(false);
+    this.auth.logout().subscribe(() => this.router.navigate(['/login']));
   }
 
   clearNotifications() {

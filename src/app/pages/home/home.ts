@@ -1,10 +1,6 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router, RouterLink } from '@angular/router';
-import { AuthService } from '../../core/services/auth';
 import { SectionsComponent } from '../../shared/components/sections/sections';
-import { take } from 'rxjs';
-import { signal } from '@angular/core';
 
 interface DashboardCard {
   title: string;
@@ -17,14 +13,11 @@ interface DashboardCard {
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [CommonModule, SectionsComponent, RouterLink],
+  imports: [CommonModule, SectionsComponent],
   templateUrl: './home.html',
   styleUrl: './home.scss',
 })
-export class Home implements OnInit {
-  private authService = inject(AuthService);
-  private router = inject(Router);
-
+export class Home {
   dashboardCards = signal<DashboardCard[]>([
     {
       title: 'Total de Desbravadores',
@@ -61,12 +54,4 @@ export class Home implements OnInit {
     { id: 2, title: 'Treinamento de Liderança', date: '21/04/2024', status: 'Em Progresso' },
     { id: 3, title: 'Limpeza Comunitária', date: '20/04/2024', status: 'Concluída' },
   ]);
-
-  ngOnInit() {
-    this.authService.validateSession().pipe(take(1)).subscribe(isValid => {
-      if (!isValid) {
-        this.router.navigate(['/login']);
-      }
-    });
-  }
 }

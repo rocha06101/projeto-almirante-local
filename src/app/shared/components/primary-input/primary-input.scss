@@ -1,14 +1,27 @@
+:host {
+    display: block;
+    min-width: 0;
+}
 
 .primary-input{
     box-sizing: border-box;
     margin: 0.8rem 1rem;
     display: flex;
     flex-direction: column;
-    width: calc(100% - 2rem);
+    gap: 0.25rem;
+    min-width: 0;
+
+    label {
+        font-weight: 500;
+        color: #374151;
+    }
+
     input{
         box-sizing: border-box;
-        padding: 0.5rem;
-        min-height: 44px;
+        width: 100%;
+        min-width: 0;
+        padding: 0.5rem 0.75rem;
+        min-height: var(--tap-target);
         border: 2px solid #EAEBED;
         border-radius: 10px;
         font-size: 1rem;
@@ -18,6 +31,5 @@
 @media (max-width: 575.98px) {
     .primary-input {
         margin-inline: 0.5rem;
-        width: calc(100% - 1rem);
     }
 }

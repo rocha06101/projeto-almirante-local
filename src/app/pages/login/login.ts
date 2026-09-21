@@ -7,7 +7,6 @@ import { InputComponent } from '../../shared/components/input/input';
 import { ButtonComponent } from '../../shared/components/button/button';
 import { emailFormatValidator } from '../../shared/validators/email.validator';
 
-
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -15,11 +14,8 @@ import { emailFormatValidator } from '../../shared/validators/email.validator';
   templateUrl: './login.html',
   styleUrl: './login.scss',
 })
-
-
 export class Login {
-
- private authService = inject(AuthService);
+  private authService = inject(AuthService);
   private router = inject(Router);
   private fb = inject(FormBuilder);
 
@@ -36,18 +32,9 @@ export class Login {
   }
 
   get emailErrorMessage(): string {
-    if (!this.emailControl.dirty && !this.emailControl.touched) {
-      return '';
-    }
-
-    if (this.emailControl.hasError('required')) {
-      return 'Informe o e-mail.';
-    }
-
-    if (this.emailControl.hasError('emailFormat')) {
-      return 'Digite um e-mail valido.';
-    }
-
+    if (!this.emailControl.dirty && !this.emailControl.touched) return '';
+    if (this.emailControl.hasError('required')) return 'Informe o e-mail.';
+    if (this.emailControl.hasError('emailFormat')) return 'Digite um e-mail valido.';
     return '';
   }
 
@@ -58,17 +45,13 @@ export class Login {
     }
 
     const { email, password } = this.form.getRawValue();
-
     this.loading = true;
     this.error = '';
-
-    console.log('Botão clicado! Chamando a API do Render...');
 
     this.authService.login(email, password).subscribe({
       next: () => {
         this.loading = false;
-        console.log('Login realizado! Token salvo no localStorage.');
-        this.router.navigate(['/home']); 
+        this.router.navigate(['/home']);
       },
       error: (err) => {
         this.loading = false;

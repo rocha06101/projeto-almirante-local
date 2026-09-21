@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, catchError, map, of, tap } from 'rxjs';
+import { ApiService } from './api';
 import {
   CsrfResponse,
   LoginRequest,
@@ -12,14 +13,13 @@ import {
   providedIn: 'root',
 })
 export class AuthService {
+  private readonly api = inject(ApiService);
   private readonly http = inject(HttpClient);
   private readonly TOKEN_KEY = 'auth_token';
 
   getCsrfToken(): Observable<string> {
-    return this.http
-      .get<CsrfResponse>('/api/Auth/csrf', {
-        withCredentials: true,
-      })
+    return this.api
+      .get<CsrfResponse>('/Auth/csrf', { withCredentials: true })
       .pipe(map((response) => response.csrfToken));
   }
 

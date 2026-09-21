@@ -1,13 +1,23 @@
-<div class="main-section" [routerLink]="route ? route : null">
+<ng-template #content>
     <div class="section-card">
-      
+
         <div class="card-icon" >
             <img src="{{iconSrc}}" alt="">
         </div>
-        
+
         <div class="card-title">
             {{title}}
         </div>
-        
+
     </div>
-</div>
+</ng-template>
+
+@if (route) {
+    <a class="main-section" [routerLink]="route">
+        <ng-container *ngTemplateOutlet="content"></ng-container>
+    </a>
+} @else {
+    <div class="main-section">
+        <ng-container *ngTemplateOutlet="content"></ng-container>
+    </div>
+}

@@ -5,10 +5,15 @@
     "ng": "ng",
     "start": "ng serve --proxy-config proxy.conf.json",
     "start:https": "ng serve --ssl --port 4201 --proxy-config proxy.conf.json",
+    "start:local": "ng serve --ssl --port 4201 --proxy-config proxy.conf.backend-https.json",
+    "start:backend": "ng serve --proxy-config proxy.conf.backend.json",
+    "start:mock": "ng serve --proxy-config proxy.conf.local.json",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "start:backend": "ng serve --proxy-config proxy.conf.backend.json"
+    "serve:dist": "node scripts/serve-dist.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:pwa": "playwright test --project=pwa"
   },
   "prettier": {
     "printWidth": 100,
@@ -29,12 +34,15 @@
     "npm": ">=10.0.0"
   },
   "dependencies": {
+    "@angular/cdk": "^21.2.9",
     "@angular/common": "^21.2.9",
     "@angular/compiler": "^21.2.9",
     "@angular/core": "^21.2.9",
     "@angular/forms": "^21.2.9",
     "@angular/platform-browser": "^21.2.9",
     "@angular/router": "^21.2.9",
+    "@angular/service-worker": "^21.2.9",
+    "@fontsource-variable/inter": "^5.3.0",
     "bootstrap": "^5.3.8",
     "chart.js": "^4.5.1",
     "ng2-charts": "^10.0.0",
@@ -45,6 +53,7 @@
     "@angular/build": "^21.2.7",
     "@angular/cli": "^21.2.7",
     "@angular/compiler-cli": "^21.2.9",
+    "@playwright/test": "^1.63.0",
     "jsdom": "^27.1.0",
     "typescript": "~5.9.2",
     "vitest": "^4.0.8"

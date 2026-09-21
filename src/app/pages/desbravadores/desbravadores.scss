@@ -23,9 +23,14 @@
   align-items: flex-start;
   gap: 1rem;
 
+  > div {
+    min-width: 0;
+  }
+
   .header-actions {
     margin-top: 1.5rem;
     display: flex;
+    flex-wrap: wrap;
     gap: 0.75rem;
     align-items: center;
   }
@@ -33,7 +38,7 @@
   h1 {
     margin: 0.25rem 0 0;
     color: #111827;
-    font-size: 2rem;
+    font-size: clamp(1.6rem, 1.3rem + 1vw, 2rem);
     font-weight: 700;
   }
 
@@ -42,22 +47,16 @@
     color: #6b7280;
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 575.98px) {
     flex-direction: column;
     align-items: stretch;
 
     .header-actions {
-      justify-content: flex-start;
-      flex-wrap: wrap;
-      gap: 0.5rem;
+      margin-top: 0.75rem;
     }
 
     .header-actions button {
-      width: 100%;
-    }
-
-    h1 {
-      font-size: 1.6rem;
+      flex: 1 1 8rem;
     }
   }
 }
@@ -79,12 +78,15 @@
   color: #fff;
   cursor: pointer;
   font-weight: 700;
+  min-height: var(--tap-target);
   padding: 0.75rem 1rem;
   transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 
-  &:hover:not(:disabled) {
-    box-shadow: 0 10px 20px rgba(37, 99, 235, 0.22);
-    transform: translateY(-2px);
+  @media (hover: hover) {
+    &:hover:not(:disabled) {
+      box-shadow: 0 10px 20px rgba(37, 99, 235, 0.22);
+      transform: translateY(-2px);
+    }
   }
 
   &:disabled {
@@ -95,6 +97,7 @@
 
 .summary-card {
   align-items: center;
+  gap: 1rem;
   background: linear-gradient(135deg, #0f172a, #1d4ed8);
   border-radius: 16px;
   color: #fff;
@@ -141,20 +144,25 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
+// Em telas com espaço a tabela rola horizontalmente dentro do card (nunca a página);
+// no celular ela vira uma lista de cards (.table-cards, em styles.scss).
 .users-table-card {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 
   @media (max-width: 575.98px) {
     border-radius: 8px;
-    margin-inline: -0.25rem;
   }
 }
 
 table {
   border-collapse: collapse;
-  min-width: 680px;
+  min-width: 40rem;
   width: 100%;
+
+  @media (max-width: 575.98px) {
+    min-width: 0;
+  }
 }
 
 th,
@@ -184,8 +192,10 @@ td {
 tbody tr {
   transition: background 0.2s ease;
 
-  &:hover {
-    background: #f8fafc;
+  @media (hover: hover) {
+    &:hover {
+      background: #f8fafc;
+    }
   }
 
   &:last-child td {
@@ -197,6 +207,7 @@ tbody tr {
   align-items: center;
   display: flex;
   gap: 0.9rem;
+  min-width: 0;
 
   strong {
     color: #111827;
@@ -205,10 +216,11 @@ tbody tr {
   }
 
   small {
-    color: #94a3b8;
+    color: #64748b;
     display: block;
     font-size: 0.75rem;
     margin-top: 0.25rem;
+    overflow-wrap: anywhere;
   }
 }
 

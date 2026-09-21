@@ -1,7 +1,6 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, model, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule, Router } from '@angular/router';
-import { signal } from '@angular/core';
+import { RouterModule } from '@angular/router';
 
 interface MenuItem {
   label: string;
@@ -13,15 +12,14 @@ interface MenuItem {
 @Component({
   selector: 'app-sidebar',
   standalone: true,
-  imports: [CommonModule, RouterModule ],
+  imports: [CommonModule, RouterModule],
   templateUrl: './sidebar.html',
   styleUrl: './sidebar.scss',
 })
-export class SidebarComponent implements OnInit {
-  private router = inject(Router);
-  
-  isExpanded = signal(true);
-  
+export class SidebarComponent {
+  /** Barra completa (true) ou trilho de ícones (false). O estado pertence ao layout. */
+  readonly expanded = model(true);
+
   menuItems = signal<MenuItem[]>([
     {
       label: 'Dashboard',
@@ -51,19 +49,7 @@ export class SidebarComponent implements OnInit {
     },
   ]);
 
-  ngOnInit() {
-    // Você pode obter os itens do menu de um serviço se necessário
-  }
-
   toggleSidebar() {
-    this.isExpanded.update(value => !value);
-  }
-
-  navigateTo(route: string) {
-    this.router.navigate([route]);
-  }
-
-  isActive(route: string): boolean {
-    return this.router.url.includes(route);
+    this.expanded.update(value => !value);
   }
 }

@@ -20,6 +20,8 @@ export class SidebarComponent {
   /** Barra completa (true) ou trilho de ícones (false). O estado pertence ao layout. */
   readonly expanded = model(true);
 
+  // Somente destinos com página. Novos itens (Atividades, Relatórios…) entram aqui quando existirem;
+  // a barra inferior do celular comporta até 5.
   menuItems = signal<MenuItem[]>([
     {
       label: 'Dashboard',
@@ -33,19 +35,14 @@ export class SidebarComponent {
       badge: 0,
     },
     {
-      label: 'Atividades',
-      icon: 'clipboard',
-      route: '/atividades',
+      label: 'Tesouraria',
+      icon: 'wallet',
+      route: '/treasury',
     },
     {
-      label: 'Relatórios',
-      icon: 'chart',
-      route: '/relatorios',
-    },
-    {
-      label: 'Configurações',
-      icon: 'settings',
-      route: '/configuracoes',
+      label: 'Lançamentos',
+      icon: 'list',
+      route: '/lancamentos',
     },
   ]);
 

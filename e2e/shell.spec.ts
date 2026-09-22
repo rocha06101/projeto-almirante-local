@@ -31,7 +31,7 @@ test.describe('desktop 1366x768', () => {
     await expect(page.getByRole('link', { name: 'Desbravadores' })).toHaveAttribute('aria-current', 'page');
 
     await page.goto('/');
-    await page.getByRole('link', { name: 'Tesouraria' }).click();
+    await page.locator('aside.sidebar').getByRole('link', { name: 'Tesouraria' }).click();
     await expect(page).toHaveURL(/\/treasury$/);
 
     const logout = page.waitForRequest(r => r.url().endsWith('/api/Auth/logout') && r.method() === 'POST');

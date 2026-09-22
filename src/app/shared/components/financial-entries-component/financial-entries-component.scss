@@ -224,6 +224,68 @@ tbody tr {
   }
 }
 
+.state-block.error-state {
+  gap: 0.75rem;
+  color: #b91c1c;
+  text-align: center;
+}
+
+.danger-button {
+  border: none;
+  border-radius: 0.75rem;
+  background: #dc2626;
+  color: #fff;
+  padding: 0.8rem 1.1rem;
+  font-weight: 700;
+}
+
+.form-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 0.9rem;
+}
+
+.delete-text {
+  margin: 0 0 1rem;
+}
+
+.readonly-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  color: #111827;
+  font-weight: 600;
+
+  strong {
+    font-weight: 500;
+  }
+}
+
+.detail-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 0.75rem 1rem;
+  margin: 0;
+
+  dt {
+    color: #6b7280;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.icon-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .state-block {
   display: grid;
   place-items: center;
@@ -315,6 +377,7 @@ tbody tr {
 }
 
 .modal-actions {
+  margin-top: 1.2rem;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -388,6 +451,11 @@ tbody tr {
   .financial-entries {
     padding: 1rem 0.75rem 0.5rem;
     border-radius: 0.75rem;
+  }
+
+  // Um filtro por linha: lado a lado o valor selecionado ficaria truncado.
+  .filter-control {
+    flex-basis: 100%;
   }
 
   .primary-button {

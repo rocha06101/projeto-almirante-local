@@ -86,6 +86,27 @@ export async function mockApi(page: Page) {
         })),
       );
     }
+    if (path.endsWith('/lancamentos') && method === 'GET') {
+      const page = Number(url.searchParams.get('page') ?? 1);
+      return json(route, {
+        items: Array.from({ length: 6 }, (_, i) => ({
+          id: `0000000${i}-1111-2222-3333-444444444444`,
+          membroId: `0000000${i}-aaaa-bbbb-cccc-dddddddddddd`,
+          membroNome: i % 2 ? 'Bartolomeu Fernandes de Albuquerque Cavalcanti' : `Membro ${i + 1}`,
+          finalidade: ['Mensalidade', 'Campori', 'Acampamento'][i % 3],
+          descricao: null,
+          categoria: i % 2 ? 'Evento' : 'Clube',
+          tipoFluxo: i % 4 === 3 ? 'Saida' : 'Entrada',
+          valor: 20 + i * 15.5,
+          vencimento: `2026-08-1${i}`,
+          status: ['Pendente', 'Pago', 'Atrasado'][i % 3],
+        })),
+        total: 23,
+        page,
+        pageSize: 10,
+        totalPages: 3,
+      });
+    }
     return json(route, []);
   });
 }

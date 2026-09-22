@@ -7,6 +7,8 @@ export type ApiRequestOptions = {
   headers?: HttpHeaders | Record<string, string | string[]>;
   params?: HttpParams | Record<string, string | number | boolean | readonly (string | number | boolean)[]>;
   context?: HttpContext;
+  /** Corpo de requisições DELETE (a API de lançamentos exige o motivo). */
+  body?: unknown;
 };
 
 @Injectable({

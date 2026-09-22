@@ -57,3 +57,20 @@ E2E_EMAIL=... E2E_PASSWORD=... npx playwright test --project=real-backend   # lo
   dropdowns dentro da viewport, ausência de erros de console. Screenshots em `test-results/screens/` (`E2E_FULL=0` para só a viewport).
 - `e2e/shell.spec.ts`: sidebar (completa/trilho/barra inferior), cliques de navegação, logout, teclado, rotação.
 - `e2e/auth.real.spec.ts`: contra `https://localhost:8444` (o backend limita login a 3/min por IP: não repita em rajada).
+- `e2e/lancamentos.real.spec.ts`: menu lateral → Lançamentos e ida e volta real na API (registrar → detalhe → editar → excluir com motivo).
+  Cria um lançamento com descrição `E2E-TESTE` e o exclui; remove resíduos de execuções interrompidas.
+
+## Lançamentos (`/api/Lancamentos`, política GestaoFinanceira: só diretoria; 403 para os demais)
+
+| Operação | Chamada |
+| --- | --- |
+| Listar | `GET /api/Lancamentos?page&pageSize&search&status&finalidade&vencimento` → `{ items, total, page, pageSize, totalPages }` |
+| Detalhe | `GET /api/Lancamentos/{id}` |
+| Registrar | `POST /api/Lancamentos/Registrar` (201 individual; 200 em lote com `aplicarATodosOsMembros` + header `Idempotency-Key`) |
+| Editar | `PUT /api/Lancamentos/{id}` (campos opcionais) |
+| Excluir | `DELETE /api/Lancamentos/{id}` com corpo `{ "motivo": "..." }` |
+
+Regras da API refletidas na UI: `finalidade` é lista fechada (Mensalidade, Campori, Acampamento, Uniflash, Doação, Evento, Outros);
+`categoria` Evento/Clube; `tipoFluxo` Entrada/Saida; vencimento (`yyyy-MM-dd`) não pode estar no passado ao registrar;
+lançamentos gerados por evento (`eventoId`) só se alteram em `/api/Eventos`. O beneficiário vem de `GET /api/Usuarios`.
+O menu lateral lista apenas destinos com página: Dashboard, Desbravadores, Tesouraria e Lançamentos.

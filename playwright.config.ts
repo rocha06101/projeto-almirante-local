@@ -40,7 +40,7 @@ export default defineConfig({
     },
     {
       name: 'real-backend',
-      testMatch: /(auth\.real|dbg)\.spec\.ts/,
+      testMatch: /(auth|lancamentos)\.real\.spec\.ts/,
       use: { baseURL: 'https://localhost:4201' },
       fullyParallel: false,
       workers: 1,

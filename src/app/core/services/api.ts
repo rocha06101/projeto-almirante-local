@@ -1,17 +1,21 @@
-import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { resolveApiBaseUrl } from '../config/api-base';
 
 export type ApiRequestOptions = {
   headers?: HttpHeaders | Record<string, string | string[]>;
   params?: HttpParams | Record<string, string | number | boolean | readonly (string | number | boolean)[]>;
+  context?: HttpContext;
+  /** Corpo de requisições DELETE (a API de lançamentos exige o motivo). */
+  body?: unknown;
 };
 
 @Injectable({
   providedIn: 'root',
 })
 export class ApiService {
-  private readonly baseUrl = this.resolveBaseUrl();
+  private readonly baseUrl = resolveApiBaseUrl();
   private readonly http = inject(HttpClient);
 
   post<T>(url: string, body: unknown, options?: ApiRequestOptions): Observable<T> {
@@ -37,17 +41,4 @@ export class ApiService {
 
     return `${this.baseUrl}${url.startsWith('/') ? url : `/${url}`}`;
   }
-
-  private resolveBaseUrl(): string {
-    const host = globalThis.location?.hostname ?? '';
-    const isLocalhost = host === 'localhost' || host === '127.0.0.1';
-    const isCloudflareWorkers = host.endsWith('.workers.dev');
-
-    if (isLocalhost || isCloudflareWorkers) {
-      return '/api';
-    }
-
-    return 'https://desbravadores-gestao.onrender.com/api';
-  }
 }
-

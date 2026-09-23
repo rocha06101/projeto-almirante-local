@@ -7,6 +7,8 @@ import {
 } from '@angular/forms';
 
 
+let nextInputId = 0;
+
 @Component({
   selector: 'app-input',
   standalone: true,
@@ -28,6 +30,14 @@ export class InputComponent implements ControlValueAccessor {
   @Input() label: string = '';
   @Input() iconSrc?: string;
   @Input() iconAlt: string = '';
+  @Input() name: string = '';
+  @Input() autocomplete: string = '';
+  /** Marca o campo como inválido para tecnologias assistivas. */
+  @Input() invalid: boolean = false;
+  /** id do elemento com a mensagem de erro/ajuda associada ao campo. */
+  @Input() describedBy: string = '';
+
+  readonly id = 'app-input-' + nextInputId++;
 
   value: string = '';
   disable: boolean = false;

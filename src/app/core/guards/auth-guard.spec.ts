@@ -1,17 +1,32 @@
 import { TestBed } from '@angular/core/testing';
-import { CanActivateFn } from '@angular/router';
+import { ActivatedRouteSnapshot, CanActivateFn, Router, RouterStateSnapshot, UrlTree, provideRouter } from '@angular/router';
+import { Observable, of } from 'rxjs';
 
 import { authGuard } from './auth-guard';
+import { AuthService } from '../services/auth';
 
 describe('authGuard', () => {
-  const executeGuard: CanActivateFn = (...guardParameters) => 
-      TestBed.runInInjectionContext(() => authGuard(...guardParameters));
+  const run = () =>
+    TestBed.runInInjectionContext(() =>
+      (authGuard as CanActivateFn)({} as ActivatedRouteSnapshot, {} as RouterStateSnapshot),
+    ) as Observable<boolean | UrlTree>;
 
-  beforeEach(() => {
-    TestBed.configureTestingModule({});
+  const withSession = (valid: boolean) =>
+    TestBed.configureTestingModule({
+      providers: [provideRouter([]), { provide: AuthService, useValue: { validateSession: () => of(valid) } }],
+    });
+
+  it('libera a rota com sessão válida', () => {
+    withSession(true);
+    let result: boolean | UrlTree | undefined;
+    run().subscribe(value => (result = value));
+    expect(result).toBe(true);
   });
 
-  it('should be created', () => {
-    expect(executeGuard).toBeTruthy();
+  it('redireciona para /login sem sessão', () => {
+    withSession(false);
+    let result: boolean | UrlTree | undefined;
+    run().subscribe(value => (result = value));
+    expect(result).toEqual(TestBed.inject(Router).createUrlTree(['/login']));
   });
 });

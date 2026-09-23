@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Router, RouterLink } from '@angular/router';
 import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
 import { AuthService } from '../../core/services/auth';
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { InputComponent } from '../../shared/components/input/input';
 import { ButtonComponent } from '../../shared/components/button/button';
 import { emailFormatValidator } from '../../shared/validators/email.validator';
@@ -11,7 +12,7 @@ import { emailFormatValidator } from '../../shared/validators/email.validator';
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, InputComponent, ButtonComponent],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, InputComponent, ButtonComponent],
   templateUrl: './login.html',
   styleUrl: './login.scss',
 })
@@ -23,8 +24,9 @@ export class Login {
   private router = inject(Router);
   private fb = inject(FormBuilder);
 
-  loading = false;
-  error = '';
+  // Signals: o app é zoneless, então o estado atualizado em callbacks HTTP precisa ser reativo.
+  loading = signal(false);
+  error = signal('');
 
   form = this.fb.nonNullable.group({
     email: ['', [Validators.required, emailFormatValidator]],
@@ -59,22 +61,39 @@ export class Login {
 
     const { email, password } = this.form.getRawValue();
 
-    this.loading = true;
-    this.error = '';
-
-    console.log('Botão clicado! Chamando a API do Render...');
+    this.loading.set(true);
+    this.error.set('');
 
     this.authService.login(email, password).subscribe({
       next: () => {
-        this.loading = false;
-        console.log('Login realizado! Token salvo no localStorage.');
-        this.router.navigate(['/home']); 
+        this.loading.set(false);
+        this.router.navigate(['/']);
       },
-      error: (err) => {
-        this.loading = false;
-        this.error = 'Erro ao acordar a API ou dados inválidos.';
-        console.error('Detalhes do erro:', err);
-      }
+      error: (err: unknown) => {
+        this.loading.set(false);
+        this.error.set(this.messageFor(err));
+      },
     });
+  }
+
+  private messageFor(err: unknown): string {
+    if (err instanceof HttpErrorResponse) {
+      if (err.status === 401) {
+        return 'E-mail ou senha inválidos.';
+      }
+
+      if (err.status === 429) {
+        const seconds = Number(err.headers.get('Retry-After'));
+        return seconds > 0
+          ? `Muitas tentativas. Tente novamente em ${seconds} segundos.`
+          : 'Muitas tentativas. Aguarde um instante e tente novamente.';
+      }
+
+      if (err.status === 0) {
+        return 'Não foi possível conectar ao servidor. Verifique sua conexão.';
+      }
+    }
+
+    return 'Não foi possível entrar agora. Tente novamente em instantes.';
   }
 }

@@ -2,11 +2,19 @@
   flex: 1;
   display: flex;
   justify-content: center;
-  align-items: center;
+  // margin-block:auto no card (e não align-items:center) mantém o formulário acessível por
+  // rolagem quando a viewport é menor que ele (celular em paisagem, teclado virtual aberto).
+  align-items: flex-start;
+  padding:
+    calc(clamp(1rem, 4vh, 3rem) + var(--safe-top))
+    calc(var(--content-gutter) + var(--safe-right))
+    clamp(1rem, 4vh, 3rem)
+    calc(var(--content-gutter) + var(--safe-left));
 }
 
 .login-container {
   min-height: 100vh;
+  min-height: 100dvh;
   width: 100%;
   background: var(--color-background);
   display: flex;
@@ -24,7 +32,8 @@
 }
 
 .auth-shell {
-  width: min(100%, 520px);
+  width: min(100%, 32.5rem);
+  margin-block: auto;
   padding: 2px;
   border-radius: 18px;
   background: conic-gradient(
@@ -39,7 +48,6 @@
 }
 
 .auth-card {
-  min-height: 560px;
   background-color: var(--primary-color);
   border-radius: 15px;
   display: flex;
@@ -47,7 +55,11 @@
   justify-content: center;
   align-items: center;
   gap: 1.5rem;
-  padding: clamp(2rem, 4vw, 3rem);
+  padding: clamp(1.5rem, 5vw, 3rem);
+}
+
+.auth-form {
+  display: contents;
 }
 
 .content-title {
@@ -64,7 +76,9 @@
 }
 
 .title {
+  margin: 0;
   font-size: clamp(1.6rem, 4vw, 2rem);
+  font-weight: 400;
   line-height: 1.1;
 
   .first-text {
@@ -81,40 +95,61 @@
   flex-direction: column;
   align-items: center;
   gap: 1.35rem;
+  width: 100%;
   margin-bottom: 0.5rem;
 }
 
 app-input {
   display: block;
   width: 100%;
-  max-width: 600px;
+  min-width: 0;
 }
 
-.field-error {
+.field-error,
+.form-error {
   width: 100%;
-  max-width: 600px;
-  margin-top: -0.95rem;
   color: #ffb4b4;
   font-size: 0.88rem;
   line-height: 1.2;
   text-align: left;
 }
 
+.field-error {
+  margin-top: -0.95rem;
+}
+
+.form-error {
+  text-align: center;
+}
+
 .button-login {
   display: flex;
   justify-content: center;
   align-items: center;
-  max-width: 600px;
   flex-direction: column;
+  width: 100%;
+  text-align: center;
 
   .first-div {
-    margin-top: 1.5rem;
+    margin-top: 1rem;
   }
 
   .first-div a,
   .second-div,
   .second-div a {
     color: var(--white-color);
+  }
+
+  // Área de toque confortável para os links.
+  .first-div a,
+  .second-div a {
+    display: inline-block;
+    padding: 0.5rem 0.25rem;
+    text-decoration: underline;
+
+    &:focus-visible {
+      outline-color: var(--primary-button-color);
+    }
   }
 }
 
@@ -143,7 +178,7 @@ app-button ::ng-deep .c-button--gooey .c-button__blobs div {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.75rem 1.25rem;
-  padding: 1rem;
+  padding: 1rem calc(1rem + var(--safe-right)) calc(1rem + var(--safe-bottom)) calc(1rem + var(--safe-left));
   text-align: center;
 
   span {
@@ -168,7 +203,7 @@ app-button ::ng-deep .c-button--gooey .c-button__blobs div {
 }
 
 .loading-box {
-  min-width: 220px;
+  min-width: min(220px, 90vw);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -197,13 +232,23 @@ app-button ::ng-deep .c-button--gooey .c-button__blobs div {
   }
 }
 
-@media (max-width: 575.98px) {
-  .main-content {
-    align-items: flex-start;
+// Celular em paisagem / pouca altura: reduz o que é decorativo para o formulário caber.
+@media (max-height: 520px) {
+  .auth-card {
+    gap: 0.75rem;
+    padding-block: 1rem;
   }
 
-  .auth-card {
-    min-height: auto;
-    padding: 1.5rem;
+  .content-title {
+    flex-direction: row;
+    gap: 1rem;
+
+    .logo img {
+      width: 4rem;
+    }
+  }
+
+  .input {
+    gap: 0.9rem;
   }
 }

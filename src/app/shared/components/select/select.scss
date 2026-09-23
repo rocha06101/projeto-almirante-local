@@ -1,23 +1,32 @@
 .select-container {
   position: relative;
   width: 100%;
+  min-width: 0;
 
   select {
+    box-sizing: border-box;
     text-align: left;
     text-align-last: left;
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
     background-color: #fff;
-    width: 100%; 
-    padding: 12px 40px 12px 4rem;
+    width: 100%;
+    min-width: 0;
+    padding: 12px 3.5rem 12px 4rem;
     border-radius: 5px;
     border: solid 1px #bbbbbb;
-    outline: none;
     font-size: 1.05rem;
+    min-height: 44px;
     color: #2C2C54;
+    text-overflow: ellipsis;
 
-}
+    // Foco visível: o anel padrão do navegador sobre o fundo azul do formulário.
+    &:focus-visible {
+      outline: 3px solid var(--primary-button-color);
+      outline-offset: 2px;
+    }
+  }
 
   select option {
     text-align: left;
@@ -34,7 +43,6 @@
       width: 36px;
       height: 100%;
     }
-
   }
 
   .icon-right {
@@ -44,10 +52,6 @@
     transform: translateY(-50%);
     pointer-events: none;
 
-  }
-
-
-  .icon-right {
     img {
       width: 2.3rem;
       height: 100%;
@@ -55,29 +59,16 @@
       transition: transform 0.25s ease;
     }
 
-    &.focused {
-      img {
-        transform: rotate(180deg);
-      }
+    &.focused img {
+      transform: rotate(180deg);
     }
   }
+}
 
-// .select-container {
-//   position: relative;
-
-//   .icon-right img {
-//     width: 3rem;
-//     height: 100%;
-//     transform: rotate(0deg); // 🔽 fechado
-//     transition: transform 0.25s ease;
-//   }
-
-//   /* QUANDO O SELECT ESTIVER ATIVO */
-//   &:focus-within {
-//     .icon-right img {
-//       transform: rotate(180deg); // 🔼 aberto
-//     }
-//   }
-// }
-
+@media (max-width: 575.98px) {
+  .select-container select {
+    padding-left: 3.25rem;
+    padding-right: 3rem;
+    font-size: 1rem;
+  }
 }

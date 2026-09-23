@@ -40,12 +40,15 @@
 }
 
 .input-field {
+  box-sizing: border-box;
   transition: outline 0.2s ease;
   font-size: 1rem;
   outline: unset;
   border: 1px solid #bbbbbb;
   padding: 17px 1rem 10px 3.75rem;
+  min-height: 44px;
   width: 100%;
+  min-width: 0;
   color: #0B1C2D;
 }
 
@@ -56,19 +59,27 @@
   position: absolute;
   top: 23%;
   left: 60px;
+  max-width: calc(100% - 4.5rem);
   transform: scale(0.95);
+  transform-origin: left center;
   pointer-events: none;
   font-size: 1.05rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .input-base {
   border-radius: 5px;
 }
 
-.input-field:focus ~ .label-input,
-.input-field:not(:placeholder-shown) ~ .label-input {
-  top: -40% !important;
-  left: 10px !important;
+// Rótulo flutuante quando o campo tem foco ou conteúdo. O seletor mais específico
+// (.input-wrapper) dispensa !important para vencer .label-input.
+.input-wrapper .input-field:focus ~ .label-input,
+.input-wrapper .input-field:not(:placeholder-shown) ~ .label-input {
+  top: -40%;
+  left: 10px;
+  max-width: calc(100% - 20px);
   transform: scale(0.8);
   background: var(--primary-color);
   color: var(--primary-button-color);
@@ -79,4 +90,20 @@
 
 .input-field:focus {
   box-shadow: 0 0 0 1px #928a6b, 0 0 0 3px var(--primary-button-color);
+}
+
+.input-field[aria-invalid='true'] {
+  border-color: #ef4444;
+}
+
+@media (max-width: 575.98px) {
+  .input-field {
+    padding-left: 3.25rem;
+  }
+
+  .label-input {
+    left: 3.25rem;
+    font-size: 0.95rem;
+    max-width: calc(100% - 4rem);
+  }
 }

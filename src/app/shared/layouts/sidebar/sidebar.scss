@@ -81,8 +81,11 @@
   padding: 1rem 0;
   overflow-y: auto;
 
+  // O reboot do Bootstrap aplica padding-left: 2rem e margin-bottom: 1rem em ul, vencendo o reset `*`.
   ul {
     list-style: none;
+    margin: 0;
+    padding: 0;
   }
 
   li {
@@ -95,7 +98,8 @@
     align-items: center;
     gap: 0.75rem;
     min-height: var(--tap-target);
-    padding: 0.75rem 1.5rem;
+    // Descontar a borda de 3px deixa o ícone a 1rem da borda, centralizado com o logo do cabeçalho.
+    padding: 0.75rem 1rem 0.75rem calc(1rem - 3px);
     border-left: 3px solid transparent;
     color: rgba(255, 255, 255, 0.85);
     text-decoration: none;

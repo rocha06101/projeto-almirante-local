@@ -17,7 +17,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 })
 export class Login {
   private authService = inject(AuthService);
-  private router = inject(Router);
+  private router = inject(Router); 
   private fb = inject(FormBuilder);
 
   loading = false;

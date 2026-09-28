@@ -2,6 +2,7 @@ import { Component, inject, signal, ElementRef, ViewChild, HostListener } from '
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { AuthService } from '../../../core/services/auth';
 @Component({
   selector: 'app-topbar',
   standalone: true,
@@ -11,6 +12,7 @@ import { Router } from '@angular/router';
 })
 export class TopbarComponent {
   private router = inject(Router);
+  private authService = inject(AuthService)
 
   @ViewChild('profilePopup') profilePopup!: ElementRef;
   @ViewChild('profileButton') profileButton!: ElementRef;
@@ -61,10 +63,16 @@ export class TopbarComponent {
     this.profileOpen.set(false);
   }
 
-  logout() {
-    // Implementar logout
-    this.router.navigate(['/login']);
-  }
+logout() {
+  this.authService.logout().subscribe({
+    next: () => {
+      this.router.navigate(['/login']);
+    },
+    error: () => {
+      this.router.navigate(['/login']);
+    }
+  });
+}
 
   clearNotifications() {
     this.notifications.set([]);

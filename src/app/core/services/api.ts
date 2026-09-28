@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 export type ApiRequestOptions = {
   headers?: HttpHeaders | Record<string, string | string[]>;
   params?: HttpParams | Record<string, string | number | boolean | readonly (string | number | boolean)[]>;
+  withCredentials?: boolean;
 };
 
 @Injectable({
@@ -50,4 +51,3 @@ export class ApiService {
     return 'https://desbravadores-gestao.onrender.com/api';
   }
 }
-

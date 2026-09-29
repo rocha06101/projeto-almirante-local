@@ -3,7 +3,7 @@
     <h2 class="financial-entries-header-title">Lançamentos financeiros</h2>
 
     <div class="toolbar" role="search">
-      <label class="search-wrapper" aria-label="Pesquisar lançamentos">
+      <label class="search-wrapper">
         <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="11" cy="11" r="6"></circle>
           <path d="m16 16 5 5"></path>
@@ -12,6 +12,7 @@
           type="search"
           class="search-input"
           placeholder="Pesquisar..."
+          aria-label="Pesquisar lançamentos"
           [value]="search()"
           (input)="onSearchChange($any($event.target).value)"
         />
@@ -27,16 +28,16 @@
       </label>
 
       <label class="filter-control">
-        <span>Tipo</span>
-        <select [ngModel]="selectedType()" (ngModelChange)="selectedType.set($event); onFilterChange()">
-          @for (option of typeOptions; track option) {
+        <span>Finalidade</span>
+        <select [ngModel]="selectedFinalidade()" (ngModelChange)="selectedFinalidade.set($event); onFilterChange()">
+          @for (option of filterFinalidadeOptions; track option) {
             <option [value]="option">{{ option }}</option>
           }
         </select>
       </label>
 
       <label class="filter-control filter-date">
-        <span>Data</span>
+        <span>Vencimento</span>
         <input type="date" [ngModel]="selectedDate()" (ngModelChange)="selectedDate.set($event); onFilterChange()" />
       </label>
 
@@ -46,105 +47,175 @@
     </div>
   </header>
 
-  @if (isModalOpen()) {
-    <div class="modal-backdrop" (click)="closeModal()">
-      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" (click)="$event.stopPropagation()">
+  @if (modalMode(); as mode) {
+    <div class="modal-backdrop" (click)="closeModal()" (keydown.escape)="closeModal()">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" cdkTrapFocus [cdkTrapFocusAutoCapture]="true" (click)="$event.stopPropagation()">
         <div class="modal-header">
           <h3 id="modal-title">{{ modalTitle() }}</h3>
           <button type="button" class="close-button" aria-label="Fechar modal" (click)="closeModal()">×</button>
         </div>
 
-        <div class="modal-body">
+        @if (mode === 'view' && selected(); as item) {
+          <dl class="detail-list">
+            <div><dt>Beneficiário</dt><dd>{{ item.membroNome }}</dd></div>
+            <div><dt>Finalidade</dt><dd>{{ item.finalidade || '—' }}</dd></div>
+            <div><dt>Descrição</dt><dd>{{ item.descricao || '—' }}</dd></div>
+            <div><dt>Categoria</dt><dd>{{ item.categoria }}</dd></div>
+            <div><dt>Fluxo</dt><dd>{{ fluxoLabel(item.tipoFluxo) }}</dd></div>
+            <div><dt>Valor</dt><dd>{{ formatCurrency(item.valor) }}</dd></div>
+            <div><dt>Vencimento</dt><dd>{{ formatDate(item.vencimento) }}</dd></div>
+            <div><dt>Status</dt><dd><app-status-badge [status]="item.status"></app-status-badge></dd></div>
+          </dl>
+          <div class="modal-actions">
+            <button type="button" class="secondary-button" (click)="closeModal()">Fechar</button>
+          </div>
+        } @else if (mode === 'delete' && selected(); as item) {
+          <p class="delete-text">
+            Excluir o lançamento de <strong>{{ item.membroNome }}</strong>
+            ({{ item.finalidade || 'sem finalidade' }}, {{ formatCurrency(item.valor) }})?
+            Informe o motivo para o registro de auditoria.
+          </p>
           <label class="form-field">
-            <span>Nome do Beneficiário</span>
-            <input type="text" [(ngModel)]="lancamentoAtual.nome" name="nomeBeneficiario" />
+            <span>Motivo da exclusão</span>
+            <input type="text" maxlength="255" [(ngModel)]="motivoExclusao" name="motivoExclusao" />
           </label>
-
-          <div class="form-row">
-            <label class="form-field">
-              <span>Tipo de Lançamento</span>
-              <select [(ngModel)]="lancamentoAtual.tipo" name="tipoLancamento">
-                @for (type of modalTypeOptions; track type) {
-                  <option [value]="type">{{ type }}</option>
-                }
-              </select>
-            </label>
-
-            <label class="form-field">
-              <span>Categoria</span>
-              <select [(ngModel)]="lancamentoAtual.categoria" name="categoriaLancamento">
-                @for (category of modalCategoryOptions; track category) {
-                  <option [value]="category">{{ category }}</option>
-                }
-              </select>
-            </label>
+          @if (formError()) {
+            <p class="form-error" role="alert">{{ formError() }}</p>
+          }
+          <div class="modal-actions">
+            <button type="button" class="secondary-button" (click)="closeModal()">Cancelar</button>
+            <button type="button" class="danger-button" [disabled]="saving()" (click)="submit()">
+              {{ saving() ? 'Excluindo…' : 'Excluir' }}
+            </button>
           </div>
-
-          <div class="form-row">
-            <label class="form-field">
-              <span>Valor</span>
-              <input type="number" min="0" step="0.01" [(ngModel)]="lancamentoAtual.valor" name="valorLancamento" />
-            </label>
-
-            <label class="form-field">
-              <span>Data de Vencimento</span>
-              <input type="date" [(ngModel)]="lancamentoAtual.vencimento" name="vencimentoLancamento" />
-            </label>
-          </div>
-
-          <label class="form-field">
-            <span>Status</span>
-            <select [(ngModel)]="lancamentoAtual.status" name="statusLancamento">
-              @for (status of modalStatusOptions; track status) {
-                <option [value]="status">{{ status }}</option>
+        } @else {
+          <div class="modal-body">
+            @if (mode === 'new') {
+              <label class="form-field">
+                <span>Beneficiário</span>
+                <select [(ngModel)]="lancamentoAtual.membroId" name="membroId">
+                  <option value="" disabled>Selecione…</option>
+                  <option [value]="TODOS">Todos os membros</option>
+                  @for (usuario of usuarios(); track usuario.id) {
+                    <option [value]="usuario.id">{{ usuario.nome }}</option>
+                  }
+                </select>
+              </label>
+              @if (usuariosError()) {
+                <p class="form-error" role="alert">{{ usuariosError() }}</p>
               }
-            </select>
-          </label>
-        </div>
+            } @else {
+              <p class="readonly-field"><span>Beneficiário</span><strong>{{ selected()?.membroNome }}</strong></p>
+            }
 
-        <div class="modal-actions">
-          <button type="button" class="secondary-button" (click)="closeModal()">Cancelar</button>
-          <button type="button" class="primary-button" (click)="editingId() ? salvarEdicao() : salvarNovoLancamento()">
-            {{ editingId() ? 'Salvar Alterações' : 'Salvar' }}
-          </button>
-        </div>
+            <label class="form-field">
+              <span>Finalidade</span>
+              <select [(ngModel)]="lancamentoAtual.finalidade" name="finalidade">
+                @for (finalidade of finalidadeOptions; track finalidade) {
+                  <option [value]="finalidade">{{ finalidade }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="form-field">
+              <span>Descrição (opcional)</span>
+              <input type="text" [(ngModel)]="lancamentoAtual.descricao" name="descricao" />
+            </label>
+
+            <div class="form-row">
+              <label class="form-field">
+                <span>Categoria</span>
+                <select [(ngModel)]="lancamentoAtual.categoria" name="categoria">
+                  @for (category of modalCategoryOptions; track category) {
+                    <option [value]="category">{{ category }}</option>
+                  }
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>Fluxo</span>
+                <select [(ngModel)]="lancamentoAtual.tipoFluxo" name="tipoFluxo">
+                  @for (fluxo of modalFluxoOptions; track fluxo.value) {
+                    <option [value]="fluxo.value">{{ fluxo.label }}</option>
+                  }
+                </select>
+              </label>
+            </div>
+
+            <div class="form-row">
+              <label class="form-field">
+                <span>Valor</span>
+                <input type="number" min="0" step="0.01" inputmode="decimal" [(ngModel)]="lancamentoAtual.valor" name="valor" />
+              </label>
+
+              <label class="form-field">
+                <span>Data de vencimento</span>
+                <input type="date" [attr.min]="mode === 'new' ? today : null" [(ngModel)]="lancamentoAtual.vencimento" name="vencimento" />
+              </label>
+            </div>
+
+            @if (mode === 'edit') {
+              <label class="form-field">
+                <span>Status</span>
+                <select [(ngModel)]="lancamentoAtual.status" name="status">
+                  @for (status of modalStatusOptions; track status) {
+                    <option [value]="status">{{ status }}</option>
+                  }
+                </select>
+              </label>
+            }
+
+            @if (formError()) {
+              <p class="form-error" role="alert">{{ formError() }}</p>
+            }
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="secondary-button" (click)="closeModal()">Cancelar</button>
+            <button type="button" class="primary-button" [disabled]="saving()" (click)="submit()">
+              {{ saving() ? 'Salvando…' : mode === 'edit' ? 'Salvar alterações' : 'Salvar' }}
+            </button>
+          </div>
+        }
       </div>
     </div>
   }
 
-  <div class="table-wrapper">
-    <table>
-      <thead>
-        <tr>
-          <th>Nome</th>
-          <th>Tipo</th>
-          <th>Categoria</th>
-          <th>Valor</th>
-          <th>Vencimento</th>
-          <th>Status</th>
-          <th>Ações</th>
+  <div class="table-wrapper" tabindex="0" role="region" aria-label="Tabela de lançamentos financeiros" [attr.aria-busy]="loading()">
+    <table class="table-cards" role="table">
+      <thead role="rowgroup">
+        <tr role="row">
+          <th scope="col" role="columnheader">Beneficiário</th>
+          <th scope="col" role="columnheader">Finalidade</th>
+          <th scope="col" role="columnheader">Categoria</th>
+          <th scope="col" role="columnheader">Fluxo</th>
+          <th scope="col" role="columnheader">Valor</th>
+          <th scope="col" role="columnheader">Vencimento</th>
+          <th scope="col" role="columnheader">Status</th>
+          <th scope="col" role="columnheader">Ações</th>
         </tr>
       </thead>
-      <tbody>
-        @for (item of displayedLancamentos(); track item.id) {
-          <tr>
-            <td>{{ item.nome }}</td>
-            <td>{{ item.tipo }}</td>
-            <td>{{ item.categoria }}</td>
-            <td>{{ formatCurrency(item.valor) }}</td>
-            <td>{{ item.vencimento }}</td>
-            <td>
+      <tbody role="rowgroup">
+        @for (item of items(); track item.id) {
+          <tr role="row">
+            <td role="cell" class="cell-title">{{ item.membroNome }}</td>
+            <td role="cell" data-label="Finalidade">{{ item.finalidade || '—' }}</td>
+            <td role="cell" data-label="Categoria">{{ item.categoria }}</td>
+            <td role="cell" data-label="Fluxo">{{ fluxoLabel(item.tipoFluxo) }}</td>
+            <td role="cell" data-label="Valor">{{ formatCurrency(item.valor) }}</td>
+            <td role="cell" data-label="Vencimento">{{ formatDate(item.vencimento) }}</td>
+            <td role="cell" data-label="Status">
               <app-status-badge [status]="item.status"></app-status-badge>
             </td>
-            <td>
+            <td role="cell" data-label="Ações">
               <div class="action-buttons" aria-label="Ações do lançamento">
-                <button type="button" class="icon-button" aria-label="Visualizar lançamento" title="Visualizar" (click)="viewEntry(item)">
+                <button type="button" class="icon-button" [attr.aria-label]="'Visualizar lançamento de ' + item.membroNome" title="Visualizar" (click)="viewEntry(item)">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>
                 </button>
-                <button type="button" class="icon-button" aria-label="Editar lançamento" title="Editar" (click)="openEditEntry(item)">
+                <button type="button" class="icon-button" [attr.aria-label]="'Editar lançamento de ' + item.membroNome" [title]="isFromEvento(item) ? 'Gerado por evento: edite em Eventos' : 'Editar'" [disabled]="isFromEvento(item)" (click)="openEditEntry(item)">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm14.71-9.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.26 1.26 3.75 3.75 1.26-1.26Z"/></svg>
                 </button>
-                <button type="button" class="icon-button danger" aria-label="Excluir lançamento" title="Excluir" (click)="removeItem(item.id)">
+                <button type="button" class="icon-button danger" [attr.aria-label]="'Excluir lançamento de ' + item.membroNome" [title]="isFromEvento(item) ? 'Gerado por evento: exclua em Eventos' : 'Excluir'" [disabled]="isFromEvento(item)" (click)="openDelete(item)">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-1 7h2v8H8v-8Zm6 0h2v8h-2v-8ZM5 7h14l-1 12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7Z"/></svg>
                 </button>
               </div>
@@ -155,13 +226,20 @@
     </table>
   </div>
 
-  @if (filteredLancamentos().length === 0) {
+  @if (loading() && items().length === 0) {
+    <div class="state-block" role="status">Carregando lançamentos…</div>
+  } @else if (listError()) {
+    <div class="state-block error-state" role="alert">
+      {{ listError() }}
+      <button type="button" class="secondary-button" (click)="load()">Tentar novamente</button>
+    </div>
+  } @else if (items().length === 0) {
     <div class="state-block empty-state">Nenhum lançamento encontrado.</div>
   }
 
   <footer class="pagination-bar" aria-label="Paginação dos lançamentos">
     <span class="pagination-summary">
-      @if (filteredLancamentos().length > 0) {
+      @if (total() > 0) {
         Mostrando de {{ paginationInfo().start }} a {{ paginationInfo().end }} de {{ paginationInfo().totalItems }} lançamentos
       } @else {
         Nenhum lançamento encontrado
@@ -183,8 +261,7 @@
         </button>
       }
 
-      <button type="button" class="page-button" aria-label="Próxima página" [disabled]="page() >= pageNumbers().length" (click)="goToPage(page() + 1)">›</button>
+      <button type="button" class="page-button" aria-label="Próxima página" [disabled]="page() >= totalPages()" (click)="goToPage(page() + 1)">›</button>
     </nav>
   </footer>
 </section>
-

@@ -1,14 +1,15 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+// A fonte Inter é empacotada (@fontsource-variable/inter, via angular.json) para funcionar
+// offline no PWA e sem depender de CDN de terceiros.
 
 :root {
-  --font-primary: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  --font-primary: 'Inter Variable', 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --color-background: linear-gradient(450deg, #041a4a 30%,#0A3EB0 100%);
   --primary-color: #30557A;
   --primary-button-color: #ffbf29;
   --border-center-color: gradient(500deg, #E6CF85, #505457, #E6CF85 100%);
   --black-color: #000000;
   --white-color: #D8E1E6;
-  
+
   // Modern color palette
   --primary: #1e3a8a;
   --primary-dark: #1e40af;
@@ -19,6 +20,23 @@
   --info: #3b82f6;
   --light: #F0F4F7;
   --dark: #111827;
+
+  // Layout responsivo. Larguras da navegação lateral: barra completa (desktop) e trilho de
+  // ícones (tablet). Abaixo de 768px a navegação vira barra inferior (ver layout.scss).
+  --sidebar-width: 15.625rem;
+  --sidebar-width-rail: 5rem;
+  --topbar-height: 4.375rem;
+  --bottom-nav-height: 4rem;
+  --content-gutter: clamp(0.75rem, 3vw, 2rem);
+  --tap-target: 2.75rem;
+
+  // Áreas seguras (notch / barra de gestos). Valem 0 em navegadores sem recorte.
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
+  --focus-ring: #2563eb;
 }
 
 * {
@@ -27,9 +45,15 @@
   box-sizing: border-box;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
 html, body {
   width: 100%;
-  height: 100%;
+  min-height: 100%;
   font-family: var(--font-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -46,7 +70,8 @@ body {
 
 app-root {
   display: block;
-  height: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Scrollbar Styling */
@@ -120,6 +145,16 @@ button {
   }
 }
 
+// Remove o atraso/zoom por toque duplo em controles (comportamento de app).
+a,
+button,
+input,
+select,
+textarea,
+[role='button'] {
+  touch-action: manipulation;
+}
+
 /* Links */
 a {
   color: #3b82f6;
@@ -131,12 +166,30 @@ a {
   }
 }
 
+/* Foco visível por teclado (não aparece em cliques/toques) */
+:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 /* Form Elements */
+// 16px evita o zoom automático do iOS ao focar campos.
 input,
 textarea,
 select {
   font-family: inherit;
   font-size: 1rem;
+}
+
+/* Mídia e palavras longas nunca devem estourar o container */
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+h1, h2, h3, h4, p, td, th, li {
+  overflow-wrap: break-word;
 }
 
 /* Animations */
@@ -169,3 +222,85 @@ select {
   animation: slideIn 0.3s ease;
 }
 
+// Respeita a preferência do sistema por menos movimento.
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+// Tabelas em "cards" no celular. Uso: <table class="table-cards"> com data-label em cada <td>
+// (a célula sem data-label vira o título do card). Em telas maiores a tabela é a normal, dentro
+// de um container com overflow-x:auto. Os seletores são mais específicos que os estilos de
+// tabela dos componentes (encapsulados) para vencer sem !important.
+@media (max-width: 575.98px) {
+  table.table-cards {
+    display: block;
+    width: 100%;
+    min-width: 0;
+
+    thead {
+      // Some visualmente, mas continua disponível para leitores de tela.
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    tbody {
+      display: block;
+    }
+
+    tbody tr {
+      display: block;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #eef2f7;
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    tbody td {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.4rem 0;
+      border: none;
+      text-align: right;
+      // anywhere (e não break-word) reduz também a largura mínima, permitindo quebrar e-mails longos.
+      overflow-wrap: anywhere;
+    }
+
+    tbody td > * {
+
+      min-width: 0;
+
+    }
+
+
+    tbody td[data-label]::before {
+      content: attr(data-label);
+      flex: none;
+      color: #64748b;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-align: left;
+      text-transform: uppercase;
+    }
+
+    tbody td:not([data-label]) {
+      justify-content: flex-start;
+      text-align: left;
+    }
+  }
+}

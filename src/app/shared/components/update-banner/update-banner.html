@@ -1,0 +1,9 @@
+@if (updates.updateReady()) {
+  <div class="update-banner" role="status">
+    <span class="message">Há uma nova versão do aplicativo.</span>
+    <div class="actions">
+      <button type="button" class="apply" (click)="updates.applyUpdate()">Atualizar agora</button>
+      <button type="button" class="dismiss" (click)="updates.dismiss()">Depois</button>
+    </div>
+  </div>
+}

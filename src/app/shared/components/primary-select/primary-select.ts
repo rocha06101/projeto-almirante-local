@@ -1,6 +1,8 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
+let nextPrimarySelectId = 0;
+
 @Component({
   selector: 'app-primary-select',
   standalone: true,
@@ -11,6 +13,7 @@ import { CommonModule } from '@angular/common';
 export class PrimarySelect {
   @Input() label = 'Selecione uma opção';
   @Input() placeholder = '';
-  @Input() id = 'select-field';
+  /** Se omitido, gera um id único para associar label e campo. */
+  @Input() id = `primary-select-${nextPrimarySelectId++}`;
   @Input() options: { label: string; value: any }[] = [];
 }

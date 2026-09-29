@@ -1,88 +1,51 @@
+import { HttpErrorResponse, HttpInterceptorFn, HttpRequest } from '@angular/common/http';
 import { inject } from '@angular/core';
-import {
-  HttpContextToken,
-  HttpErrorResponse,
-  HttpInterceptorFn,
-} from '@angular/common/http';
-import { Router } from '@angular/router';
 import { catchError, switchMap, throwError } from 'rxjs';
-import { TokenStore } from '../services/token-store';
+import { isApiUrl } from '../config/api-base';
 import { AuthService } from '../services/auth';
+import { SKIP_AUTH } from './auth-context';
 
-const AUTH_ENDPOINTS_WITHOUT_BEARER = [
-  '/Auth/csrf',
-  '/Auth/login',
-  '/Auth/refresh',
-  '/Auth/logout',
-];
+const AUTH_ENDPOINT = /\/Auth\/(login|refresh|logout|csrf)\/?$/i;
 
-const REFRESH_ATTEMPTED = new HttpContextToken<boolean>(() => false);
-
+/**
+ * Aplica credenciais somente à API legítima:
+ *  - `withCredentials` (cookies `__Host-*` de CSRF/refresh);
+ *  - `Authorization: Bearer` com o access token em memória.
+ * Um `401` de endpoint de negócio provoca uma única renovação e uma única repetição
+ * (a API não executou a operação); se a renovação falhar, a sessão é encerrada.
+ * `403` não encerra a sessão: é falta de permissão.
+ */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const tokenStore = inject(TokenStore);
-  const authService = inject(AuthService);
-  const router = inject(Router);
-
-  const isAuthEndpoint = AUTH_ENDPOINTS_WITHOUT_BEARER.some((endpoint) =>
-    req.url.includes(endpoint)
-  );
-
-  if (isAuthEndpoint) {
+  if (!isApiUrl(req.url)) {
     return next(req);
   }
 
-  const token = tokenStore.getToken();
+  const auth = inject(AuthService);
+  const base = req.clone({ withCredentials: true });
+  const token = req.context.get(SKIP_AUTH) ? null : auth.accessToken();
 
-  const authReq = token && !tokenStore.isExpired()
-    ? req.clone({
-        setHeaders: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-    : req;
+  return next(token ? withBearer(base, token) : base).pipe(
+    catchError((error: unknown) => {
+      const unauthorized = error instanceof HttpErrorResponse && error.status === 401;
 
-  return next(authReq).pipe(
-    catchError((error: HttpErrorResponse) => {
-      if (error.status !== 401) {
+      if (!unauthorized || !token || AUTH_ENDPOINT.test(req.url)) {
         return throwError(() => error);
       }
 
-      const refreshAlreadyAttempted = req.context.get(REFRESH_ATTEMPTED);
-
-      if (refreshAlreadyAttempted) {
-        tokenStore.clear();
-        router.navigate(['/login']);
-
-        return throwError(() => error);
-      }
-
-      return authService.refresh().pipe(
-        switchMap(() => {
-          const newToken = tokenStore.getToken();
-
-          if (!newToken) {
-            tokenStore.clear();
-            router.navigate(['/login']);
-
-            return throwError(() => error);
+      return auth.refreshSession().pipe(
+        switchMap(fresh => next(withBearer(base, fresh))),
+        catchError((retryError: unknown) => {
+          // Só encerra a sessão quando a API a recusou (401); falha de rede/5xx mantém a sessão.
+          if (!(retryError instanceof HttpErrorResponse) || retryError.status === 401) {
+            auth.expireSession();
           }
-
-          const retryReq = req.clone({
-            context: req.context.set(REFRESH_ATTEMPTED, true),
-            setHeaders: {
-              Authorization: `Bearer ${newToken}`,
-            },
-          });
-
-          return next(retryReq);
+          return throwError(() => retryError);
         }),
-        catchError((refreshError) => {
-          tokenStore.clear();
-          router.navigate(['/login']);
-
-          return throwError(() => refreshError);
-        })
       );
-    })
+    }),
   );
 };
+
+function withBearer(req: HttpRequest<unknown>, token: string): HttpRequest<unknown> {
+  return req.clone({ setHeaders: { Authorization: `Bearer ${token}` } });
+}

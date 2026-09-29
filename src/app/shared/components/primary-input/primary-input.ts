@@ -1,6 +1,8 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
+let nextPrimaryInputId = 0;
+
 @Component({
   selector: 'app-primary-input',
   standalone: true,
@@ -11,6 +13,7 @@ import { CommonModule } from '@angular/common';
 export class PrimaryInput {
   @Input() label = 'Nome Completo';
   @Input() placeholder = '';
-  @Input() id = 'input-field';
+  /** Se omitido, gera um id único para associar label e campo (vários campos convivem na mesma página). */
+  @Input() id = `primary-input-${nextPrimaryInputId++}`;
   @Input() type: string = 'text';
 }

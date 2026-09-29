@@ -6,7 +6,12 @@
     }
 
   <input class="input-cal input-base input-field"
-    [placeholder]="placeholder"
+    [id]="id"
+    [attr.name]="name || null"
+    [attr.autocomplete]="autocomplete || null"
+    [attr.aria-invalid]="invalid ? 'true' : null"
+    [attr.aria-describedby]="describedBy || null"
+    [placeholder]="placeholder || ' '"
     [type]="type"
     [value]="value"
     [disabled]="disable"
@@ -15,10 +20,6 @@
     (blur)="handleBlur()"
     >
 
-  <label class="label-cal label-base label-input">
-      
-    {{label}}
-  
-  </label>
+  <label class="label-cal label-base label-input" [for]="id">{{label}}</label>
 
 </div>

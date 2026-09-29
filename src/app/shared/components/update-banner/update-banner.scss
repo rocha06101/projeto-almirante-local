@@ -1,0 +1,55 @@
+.update-banner {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 1rem);
+  z-index: 1100;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 1rem;
+  width: min(32rem, calc(100vw - 2rem));
+  padding: 0.75rem 1rem;
+  transform: translateX(-50%);
+  border-radius: 12px;
+  background: #0f172a;
+  color: #fff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+
+  @media (max-width: 767.98px) {
+    // Fica acima da barra de navegação inferior.
+    bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + 0.75rem);
+  }
+
+  :focus-visible {
+    outline-color: #ffbf29;
+  }
+}
+
+.message {
+  font-size: 0.95rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+button {
+  min-height: var(--tap-target);
+  padding: 0 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.apply {
+  border: none;
+  background: #ffbf29;
+  color: #1f2937;
+}
+
+.dismiss {
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: transparent;
+  color: #fff;
+}

@@ -9,6 +9,9 @@
     (drop)="handleDrop($event)"
     role="button"
     tabindex="0"
+    aria-label="Enviar foto do membro (JPG ou PNG, até 2MB)"
+    (keydown.enter)="onContainerClick()"
+    (keydown.space)="$event.preventDefault(); onContainerClick()"
   >
     <input
       #fileInput
@@ -20,7 +23,7 @@
 
     <div class="upload-foto-content">
       <div class="upload-foto-icon" aria-hidden="true">
-        <img src="/icons/upload-icon.svg" alt="Ícone de upload" width="56" height="56" />
+        <img src="/icons/upload-icon.svg" alt="" width="56" height="56" />
       </div>
 
       <p class="upload-foto-label">
@@ -32,5 +35,7 @@
     </div>
   </div>
 
-  <p class="upload-foto-error" *ngIf="erro">{{ erro }}</p>
+  @if (erro) {
+    <p class="upload-foto-error" role="alert">{{ erro }}</p>
+  }
 </section>

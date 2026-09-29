@@ -1,207 +1,190 @@
+// Barra superior fixa. Começa depois da navegação lateral (--sidebar-w, definido em layout.scss)
+// e ocupa toda a largura quando a navegação vai para a barra inferior (< 768px).
 .topbar {
-  height: 70px;
-  background: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   position: fixed;
   top: 0;
   right: 0;
-  left: 0;
+  left: var(--sidebar-w);
   z-index: 99;
-  margin-left: 250px;
-  transition: margin-left 0.3s ease;
-
-  @media (max-width: 991.98px) {
-    margin-left: 0;
-  }
-
-  @media (max-width: 575.98px) {
-    height: 64px;
-  }
+  height: calc(var(--topbar-height) + var(--safe-top));
+  padding-top: var(--safe-top);
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: left 0.25s ease;
 }
 
 .topbar-container {
   height: 100%;
-  padding: 0 2rem;
+  min-width: 0;
+  padding: 0 calc(var(--content-gutter) + var(--safe-right)) 0 var(--content-gutter);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 2rem;
-  min-width: 0;
+  gap: clamp(0.5rem, 2vw, 2rem);
 
-  @media (max-width: 991.98px) {
-    padding: 0 1rem;
-    gap: 1rem;
-  }
-
-  @media (max-width: 575.98px) {
-    padding: 0 0.75rem;
-    gap: 0.75rem;
+  @media (max-width: 767.98px) {
+    padding-left: calc(var(--content-gutter) + var(--safe-left));
   }
 }
 
 .search-section {
   flex: 1;
-  max-width: 400px;
   min-width: 0;
+  max-width: 25rem;
 
   .search-wrapper {
     display: flex;
     align-items: center;
-    background: #f3f4f6;
+    min-height: var(--tap-target);
+    padding: 0 1rem;
     border-radius: 8px;
-    padding: 0.5rem 1rem;
-    transition: all 0.3s ease;
+    background: #f3f4f6;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
 
     &:focus-within {
       background: #e5e7eb;
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
     }
+  }
 
-    .search-icon {
-      width: 18px;
-      height: 18px;
-      margin-right: 0.5rem;
-      opacity: 0.6;
-      flex-shrink: 0;
-      stroke: currentColor;
-    }
+  .search-icon {
+    width: 1.125rem;
+    height: 1.125rem;
+    margin-right: 0.5rem;
+    flex: none;
+    opacity: 0.6;
+  }
 
-    .search-input {
-      border: none;
-      background: transparent;
+  .search-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    font-size: 1rem; // 16px: evita o zoom automático do iOS ao focar
+    color: #111827;
+
+    // O anel de foco fica no container (:focus-within).
+    &:focus-visible {
       outline: none;
-      flex: 1;
-      min-width: 0;
-      font-size: 0.95rem;
-      color: #111827;
+    }
 
-      &::placeholder {
-        color: #9ca3af;
-      }
+    &::placeholder {
+      color: #6b7280;
+      text-overflow: ellipsis;
     }
   }
 
   @media (max-width: 575.98px) {
-    max-width: none;
-
     .search-wrapper {
-      padding: 0.45rem 0.65rem;
+      padding: 0 0.75rem;
     }
-
-    .search-input {
-      font-size: 0.875rem;
-    }
-  }
-
-  @media (max-width: 430px) {
-    display: none;
   }
 }
 
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  flex-shrink: 0;
+  flex: none;
+  gap: clamp(0.25rem, 1.5vw, 1rem);
+}
 
-  @media (max-width: 575.98px) {
-    gap: 0.5rem;
-  }
+.notification-wrapper,
+.profile-wrapper {
+  position: relative;
 }
 
 .action-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem;
-  border-radius: 6px;
-  transition: all 0.3s ease;
-  position: relative;
+  min-width: var(--tap-target);
+  min-height: var(--tap-target);
+  padding: 0.25rem 0.5rem;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: none;
   color: #1f2937;
+  transition: background-color 0.2s ease;
 
   svg {
-    width: 24px;
-    height: 24px;
-    stroke: currentColor;
-  }
-
-  &:hover {
-    background: #f3f4f6;
+    width: 1.5rem;
+    height: 1.5rem;
   }
 
   &.active {
     background: #f3f4f6;
   }
 
+  @media (hover: hover) {
+    &:hover {
+      background: #f3f4f6;
+    }
+  }
+
   .badge {
     position: absolute;
-    top: -5px;
-    right: -5px;
-    background: #ef4444;
-    color: white;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
+    top: 0.1rem;
+    right: 0.1rem;
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 50%;
+    background: #ef4444;
+    color: #fff;
     font-size: 0.7rem;
     font-weight: 600;
   }
 }
 
-.notification-btn {
-  font-size: 1.35rem;
-}
-
 .profile-btn {
   .avatar {
-    width: 32px;
-    height: 32px;
+    width: 2rem;
+    height: 2rem;
+    flex: none;
     border-radius: 50%;
-    object-fit: cover;
     border: 2px solid #d1d5db;
+    object-fit: cover;
   }
 
   .user-name {
-    font-size: 0.9rem;
-    color: #1f2937;
-    font-weight: 500;
-    max-width: 100px;
-    white-space: nowrap;
+    max-width: 8rem;
     overflow: hidden;
+    color: #1f2937;
+    font-size: 0.9rem;
+    font-weight: 500;
     text-overflow: ellipsis;
+    white-space: nowrap;
 
-    @media (max-width: 768px) {
+    // Sem largura para o nome: fica só o avatar (o nome acessível está no aria-label).
+    @media (max-width: 767.98px) {
       display: none;
     }
   }
 }
 
-// Dropdowns
-.notification-dropdown
-{
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  right: 0;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
-  min-width: 320px;
-  max-width: calc(100vw - 1.5rem);
+// Dropdowns: posicionados em relação à viewport, logo abaixo da barra, com largura limitada
+// pela própria viewport. Não dependem de onde o botão que os abriu está, então não saem da tela
+// em nenhuma largura nem exigem deslocamentos por breakpoint.
+.dropdown {
+  position: fixed;
+  top: calc(var(--topbar-height) + var(--safe-top) + 0.25rem);
+  right: calc(var(--content-gutter) + var(--safe-right));
   z-index: 1000;
+  width: min(22rem, calc(100vw - 2 * var(--content-gutter) - var(--safe-left) - var(--safe-right)));
+  max-height: calc(100dvh - var(--topbar-height) - var(--safe-top) - var(--safe-bottom) - 1rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 12px;
   animation: slideDown 0.2s ease;
 
-@media (max-width: 600px) {
-    left: -85% !important;
-    right: auto !important;
-    transform: none !important;
-    min-width: 90vw;
-    max-width: 95vw;
+  @media (max-width: 767.98px) {
+    // Deixa a barra de navegação inferior livre.
+    max-height: calc(100dvh - var(--topbar-height) - var(--safe-top) - var(--bottom-nav-height) - var(--safe-bottom) - 1rem);
   }
 }
 
@@ -216,18 +199,19 @@
   }
 }
 
-.notification-wrapper,
-.profile-wrapper {
-  position: relative;
+.notification-dropdown {
+  background: #fff;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
 }
 
 .dropdown-header {
-  padding: 1rem;
+  padding: 0.5rem 1rem;
+  min-height: 3.5rem;
   border-bottom: 1px solid #e5e7eb;
   display: flex;
   align-items: center;
   justify-content: space-between;
-
+  gap: 0.75rem;
 
   h4 {
     margin: 0;
@@ -236,33 +220,31 @@
   }
 
   .clear-btn {
-    background: none;
+    min-height: var(--tap-target);
+    padding: 0 0.5rem;
     border: none;
-    color: #3b82f6;
-    cursor: pointer;
-    font-size: 0.8rem;
+    background: none;
+    color: #1d4ed8;
+    font-size: 0.875rem;
     font-weight: 500;
     transition: color 0.2s;
 
-    &:hover {
-      color: #2563eb;
+    @media (hover: hover) {
+      &:hover {
+        color: #1e40af;
+      }
     }
   }
 }
 
 .notification-list {
-  max-height: 350px;
+  list-style: none;
+  max-height: 22rem;
   overflow-y: auto;
 
   .notification-item {
     padding: 1rem;
     border-bottom: 1px solid #f3f4f6;
-    cursor: pointer;
-    transition: background 0.2s;
-
-    &:hover {
-      background: #F0F4F7;
-    }
 
     &:last-child {
       border-bottom: none;
@@ -270,40 +252,32 @@
 
     .notif-message {
       display: block;
+      margin-bottom: 0.25rem;
       color: #1f2937;
       font-size: 0.9rem;
       font-weight: 500;
-      margin-bottom: 0.25rem;
     }
 
     .notif-time {
       display: block;
-      color: #9ca3af;
+      color: #6b7280;
       font-size: 0.8rem;
     }
 
-    &.info {
-      .notif-message {
-        color: #0284c7;
-      }
+    &.info .notif-message {
+      color: #0369a1;
     }
 
-    &.success {
-      .notif-message {
-        color: #16a34a;
-      }
+    &.success .notif-message {
+      color: #15803d;
     }
 
-    &.warning {
-      .notif-message {
-        color: #f59e0b;
-      }
+    &.warning .notif-message {
+      color: #b45309;
     }
 
-    &.error {
-      .notif-message {
-        color: #ef4444;
-      }
+    &.error .notif-message {
+      color: #dc2626;
     }
   }
 }
@@ -311,7 +285,7 @@
 .empty-state {
   padding: 2rem 1rem;
   text-align: center;
-  color: #9ca3af;
+  color: #6b7280;
 
   p {
     margin: 0;
@@ -319,53 +293,13 @@
   }
 }
 
-
-
-
-.notification-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  min-width: 320px;
-  max-width: 90vw; // Limita o tamanho no mobile
-  z-index: 1000;
-
-  @media (max-width: 600px) {
-    left: auto !important;
-    right: auto !important;
-    transform: none !important;
-    min-width: 90vw;
-    max-width: 95vw;
-  }
-}
-
-
-
-
-
 .profile-dropdown {
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  right: 0;
   background: #F0F4F7;
   border: solid 2px #d9d9d9d9;
-  border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
-  min-width: 320px;
-  max-width: calc(100vw - 1.5rem);
-  z-index: 1000;
-  animation: slideDown 0.2s ease;
-
-  @media (max-width: 600px) {
-    left: -85% !important;
-    right: auto !important;
-    transform: none !important;
-    min-width: 90vw;
-    max-width: 95vw;
-  }
 }
 
-@at-root .profile-header {
+.profile-header {
   padding: 1rem;
   display: flex;
   flex-direction: column;
@@ -379,46 +313,38 @@
   }
 
   .large-avatar {
-    width: 50px;
-    height: 50px;
+    width: 3.125rem;
+    height: 3.125rem;
     border-radius: 50%;
-    object-fit: cover;
     border: 2px solid #D1D5DB;
+    object-fit: cover;
   }
 
   .user-info {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
+    min-width: 0;
 
     strong {
-      color: #000000;
+      color: #000;
       font-size: 1.2rem;
     }
 
     small {
-      color: #000000;
+      color: #000;
       font-size: 0.8rem;
     }
   }
 }
 
 .profile-divider {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
   padding: 0 1rem;
 
   hr {
-    flex: 1;
+    margin: 0 0.625rem;
     border: none;
-    border-top: 1px solid #000000;
-    margin: 0 10px;
-  }
-
-  .divider-icon {
-    width: 1.5rem;
-    height: auto;
+    border-top: 1px solid #000;
   }
 }
 
@@ -426,84 +352,61 @@
   padding: 0.5rem 0;
 
   .menu-item {
-    width: 100%;
-    background: none;
-    border: none;
-    padding: 0.75rem 1rem;
-    text-align: left;
-    color: #000000;
-    cursor: pointer;
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    font-size: 0.9rem;
+    width: 100%;
+    min-height: var(--tap-target);
+    padding: 0.5rem 1rem;
+    border: none;
     border-radius: 6px;
-    transition: background-color 0.2s ease, transform 0.15s ease;
+    background: none;
+    color: #000;
+    font-size: 0.95rem;
+    text-align: left;
+    transition: background-color 0.2s ease;
 
-    &:hover {
-      background-color: #D1D5DB;
-      transform: translateX(4px);
-    }
-
-    &:active {
-      animation: menuItemPulse 0.18s ease;
+    @media (hover: hover) {
+      &:hover {
+        background-color: #D1D5DB;
+      }
     }
 
     .menu-icon {
-      width: 20px;
-      height: 20px;
-      stroke: currentColor;
-      flex-shrink: 0;
+      width: 1.25rem;
+      height: 1.25rem;
+      flex: none;
     }
   }
-}
-
-@keyframes menuItemPulse {
-  0% { transform: translateX(4px) scale(1); opacity: 1; }
-  50% { transform: translateX(4px) scale(0.96); opacity: 0.85; }
-  100% { transform: translateX(4px) scale(1); opacity: 1; }
 }
 
 .profile-footer {
-  width: 100%;
   padding: 0.5rem 1rem 1rem;
 
   .logout-btn {
-    width: 100%;
-    background: #F0F4F7;
-    border: 1px solid #f59e0b;
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
     display: flex;
-    justify-content: center;
     align-items: center;
+    justify-content: center;
     gap: 0.75rem;
-    color: #f59e0b;
+    width: 100%;
+    min-height: var(--tap-target);
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #b45309;
+    border-radius: 6px;
+    background: #F0F4F7;
+    color: #b45309;
+    font-size: 0.95rem;
     font-weight: 600;
-    font-size: 0.9rem;
-    cursor: pointer;
     transition: background-color 0.2s ease;
 
-    .menu-icon {
-      width: 20px;
-      height: 20px;
-      stroke: currentColor;
-      flex-shrink: 0;
+    &:active {
+      background: #fde68a;
     }
 
-    &:active {
-      animation: logoutPulse 0.25s ease;
+    .menu-icon {
+      width: 1.25rem;
+      height: 1.25rem;
+      flex: none;
     }
   }
-}
-
-@keyframes logoutPulse {
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(0.96); opacity: 0.85; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
 }

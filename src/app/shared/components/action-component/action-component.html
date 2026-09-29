@@ -1,11 +1,12 @@
-<div
+<button
+  type="button"
   class="action"
   [style.--action-hover-border-color]="hoverBorderColor"
   [style.--action-hover-text-color]="hoverTextColor"
 >
-  <div class="action-class">
-    <img [src]="icon">
-  </div>
+  <span class="action-class">
+    <img [src]="icon" alt="">
+  </span>
 
-  <div class="action-text">{{ actionText }}</div>
-</div>
+  <span class="action-text">{{ actionText }}</span>
+</button>

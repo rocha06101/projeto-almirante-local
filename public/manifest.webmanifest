@@ -1,0 +1,20 @@
+{
+  "name": "Clube de Desbravadores - Almirante Tamandaré",
+  "short_name": "Desbravadores",
+  "description": "Gestão do Clube de Desbravadores Almirante Tamandaré: membros, tesouraria e atividades.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "lang": "pt-BR",
+  "background_color": "#041a4a",
+  "theme_color": "#1e3a8a",
+  "icons": [
+    { "src": "icons/pwa/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/pwa/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/pwa/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/pwa/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

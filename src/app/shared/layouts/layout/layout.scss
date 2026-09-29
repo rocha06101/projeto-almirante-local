@@ -1,53 +1,71 @@
+// Shell da aplicação. A largura ocupada pela navegação lateral vem de --sidebar-w, herdada
+// por sidebar, topbar e conteúdo; assim só este arquivo decide como o espaço é dividido.
+//
+//   < 768px      barra de navegação inferior (--sidebar-w: 0)
+//   768–1199px   trilho de ícones (5rem); pode ser expandido pelo usuário
+//   >= 1200px    barra lateral completa (15.625rem); pode ser recolhida
 .app-layout {
+  --sidebar-w: calc(var(--sidebar-width-rail) + var(--safe-left));
+
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
   background: #F0F4F7;
-  overflow-x: hidden;
+
+  &.sidebar-expanded {
+    --sidebar-w: calc(var(--sidebar-width) + var(--safe-left));
+  }
+
+  @media (max-width: 767.98px) {
+    &,
+    &.sidebar-expanded {
+      --sidebar-w: 0px;
+    }
+  }
 }
 
 .layout-wrapper {
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin-left: 250px;
-  transition: margin-left 0.3s ease;
   min-width: 0;
-
-  @media (max-width: 991.98px) {
-    margin-left: 0;
-  }
+  margin-left: var(--sidebar-w);
+  transition: margin-left 0.25s ease;
 }
 
 .main-content {
   flex: 1;
-  overflow-y: auto;
-  padding: 70px 2rem 2rem 2rem;
   min-width: 0;
-  width: 100%;
+  padding:
+    calc(var(--topbar-height) + var(--safe-top) + var(--content-gutter))
+    calc(var(--content-gutter) + var(--safe-right))
+    var(--content-gutter)
+    var(--content-gutter);
 
-  @media (max-width: 991.98px) {
-    padding: 70px 1rem 5.75rem 1rem;
+  &:focus {
+    outline: none;
   }
 
-  @media (max-width: 575.98px) {
-    padding: 64px 0.75rem 5.5rem;
+  @media (max-width: 767.98px) {
+    // Reserva o espaço da barra inferior (+ área segura) para o conteúdo nunca ficar atrás dela.
+    padding-bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + var(--content-gutter));
+    padding-left: calc(var(--content-gutter) + var(--safe-left));
   }
 }
 
-// Scrollbar customizado
-.main-content::-webkit-scrollbar {
-  width: 8px;
-}
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 2000;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  background: #fff;
+  color: #1e3a8a;
+  font-weight: 600;
+  transform: translateY(-200%);
 
-.main-content::-webkit-scrollbar-track {
-  background: #f1f5f9;
-}
-
-.main-content::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-
-  &:hover {
-    background: #94a3b8;
+  &:focus {
+    transform: none;
   }
 }

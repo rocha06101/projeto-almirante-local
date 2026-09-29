@@ -1,104 +1,91 @@
+// Três modos, todos controlados por CSS + --sidebar-w (definido em layout.scss):
+//   >= 768px   lateral fixa: completa (.expanded) ou trilho de ícones
+//   <  768px   barra de navegação inferior com ícone + rótulo
 .sidebar {
-  width: 250px;
-  height: 100vh;
-  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-  color: #fff;
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 100;
+  width: var(--sidebar-w);
+  padding-left: var(--safe-left);
   display: flex;
   flex-direction: column;
-  transition: width 0.3s ease;
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 100;
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+  color: #fff;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  transition: width 0.25s ease;
+  overflow: hidden;
 
-  &.expanded {
-    width: 250px;
-  }
-
-  &:not(.expanded) {
-    width: 80px;
-
-    .toggle-btn {
-      width: 40px;
-    }
-  }
-
-  @media (max-width: 991.98px) {
-    width: 100%;
-    height: 64px;
-    top: auto;
-    right: 0;
-    bottom: 0;
-    z-index: 1050;
-    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.18);
-
-    &.expanded,
-    &:not(.expanded) {
-      width: 100%;
-    }
+  :focus-visible {
+    outline-color: #ffbf29;
   }
 }
 
 .sidebar-header {
-  padding: 1.5rem 0.5rem 1.5rem 0.5rem;
+  min-height: var(--topbar-height);
+  padding: 0 0.75rem;
   border-bottom: 2px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
 
   .logo-container {
     display: flex;
     align-items: center;
     gap: 0.75rem;
     flex: 1;
+    min-width: 0;
 
     .logo {
-      width: 32px;
-      height: 32px;
+      width: 2rem;
+      height: 2rem;
+      flex: none;
       filter: brightness(0) invert(1);
     }
 
     .app-name {
-      font-size: 1.25rem;
+      font-size: 1.05rem;
       font-weight: 700;
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-  }
-
-  @media (max-width: 991.98px) {
-    display: none;
   }
 }
 
 .toggle-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  color: #fff;
-  width: 2vw;
-  height: 36px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 1.25rem;
+  flex: none;
+  width: var(--tap-target);
+  height: var(--tap-target);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s ease;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 1.5rem;
+  line-height: 1;
+  transition: background-color 0.2s ease;
 
-  &:hover {
-    background: rgba(255, 255, 255, 0.2);
+  @media (hover: hover) {
+    &:hover {
+      background: rgba(255, 255, 255, 0.22);
+    }
   }
 }
 
 .sidebar-nav {
   flex: 1;
+  min-height: 0;
   padding: 1rem 0;
   overflow-y: auto;
 
+  // O reboot do Bootstrap aplica padding-left: 2rem e margin-bottom: 1rem em ul, vencendo o reset `*`.
   ul {
     list-style: none;
-    padding: 0;
     margin: 0;
+    padding: 0;
   }
 
   li {
@@ -106,68 +93,126 @@
   }
 
   .nav-item {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.875rem 1.5rem;
-    color: rgba(255, 255, 255, 0.8);
-    text-decoration: none;
-    transition: all 0.3s ease;
+    min-height: var(--tap-target);
+    // Descontar a borda de 3px deixa o ícone a 1rem da borda, centralizado com o logo do cabeçalho.
+    padding: 0.75rem 1rem 0.75rem calc(1rem - 3px);
     border-left: 3px solid transparent;
-    position: relative;
+    color: rgba(255, 255, 255, 0.85);
+    text-decoration: none;
+    transition: background-color 0.2s ease, color 0.2s ease;
 
     .icon-svg {
-      width: 24px;
-      height: 24px;
-      min-width: 24px;
-      stroke: currentColor;
-      transition: all 0.3s ease;
+      width: 1.5rem;
+      height: 1.5rem;
+      flex: none;
     }
 
     .label {
-      white-space: nowrap;
       flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .badge {
-      background: #ef4444;
-      color: white;
-      border-radius: 12px;
       padding: 0.125rem 0.5rem;
+      border-radius: 12px;
+      background: #ef4444;
+      color: #fff;
       font-size: 0.75rem;
       font-weight: 600;
     }
 
-    &:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
+    @media (hover: hover) {
+      &:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        text-decoration: none;
+      }
     }
 
     &.active {
       background: rgba(255, 255, 255, 0.15);
       border-left-color: #fbbf24;
       color: #fff;
+    }
+  }
+}
 
-      &::before {
+.sidebar-footer {
+  padding: 1rem;
+  border-top: 2px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+// Trilho de ícones (tablet): só o ícone; o texto permanece no DOM como nome acessível.
+@media (min-width: 768px) {
+  .sidebar:not(.expanded) {
+    .app-name,
+    .label,
+    .badge,
+    .sidebar-footer {
+      display: none;
+    }
+
+    .sidebar-header {
+      flex-direction: column;
+      justify-content: center;
+      padding: 0.75rem 0;
+      gap: 0.5rem;
+    }
+
+    .logo-container {
+      flex: none;
+    }
+
+    .nav-item {
+      justify-content: center;
+      padding-inline: 0;
+      border-left-width: 0;
+
+      &.active::before {
         content: '';
         position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
+        inset: 0 auto 0 0;
         width: 3px;
         background: #fbbf24;
       }
     }
   }
+}
 
-  @media (max-width: 991.98px) {
-    height: 100%;
+// Barra inferior (smartphones).
+@media (max-width: 767.98px) {
+  .sidebar,
+  .sidebar.expanded {
+    inset: auto 0 0 0;
+    width: 100%;
+    height: calc(var(--bottom-nav-height) + var(--safe-bottom));
+    padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
+    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.18);
+    transition: none;
+  }
+
+  .sidebar-header,
+  .sidebar-footer {
+    display: none;
+  }
+
+  .sidebar-nav {
     padding: 0;
     overflow: hidden;
 
     ul {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(0, 1fr);
       height: 100%;
     }
 
@@ -178,47 +223,50 @@
 
     .nav-item {
       height: 100%;
+      flex-direction: column;
       justify-content: center;
-      gap: 0;
-      padding: 0.5rem 0.35rem;
+      gap: 0.15rem;
+      padding: 0.35rem 0.25rem;
       border-left: 0;
       border-top: 3px solid transparent;
+      text-align: center;
 
       .icon-svg {
-        width: 22px;
-        height: 22px;
-        min-width: 22px;
+        width: 1.4rem;
+        height: 1.4rem;
       }
 
-      .label,
-      .badge {
-        display: none;
+      .label {
+        display: block;
+        flex: none;
+        max-width: 100%;
+        font-size: 0.6875rem;
+        line-height: 1.2;
       }
 
       &.active {
-        border-left-color: transparent;
         border-top-color: #fbbf24;
+      }
 
-        &::before {
-          inset: 0 auto auto 0;
-          width: 100%;
-          height: 3px;
-        }
+      &.active::before {
+        content: none;
       }
     }
-  }
-}
 
-.sidebar-footer {
-  padding: 1.5rem;
-  border-top: 2px solid rgba(255, 255, 255, 0.1);
-
-  .footer-text {
-    text-align: center;
-    color: rgba(255, 255, 255, 0.6);
+    .badge {
+      display: none;
+    }
   }
 
-  @media (max-width: 991.98px) {
-    display: none;
+  // Sem espaço para rótulos legíveis: só ícones (nome acessível via title/texto oculto).
+  @media (max-width: 399.98px) {
+    .sidebar-nav .nav-item .label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
   }
 }

@@ -1,8 +1,9 @@
-<div class="app-layout">
-  <app-sidebar></app-sidebar>
+<div class="app-layout" [class.sidebar-expanded]="sidebarExpanded()">
+  <a class="skip-link" href="#conteudo-principal">Ir para o conteúdo</a>
+  <app-sidebar [(expanded)]="sidebarExpanded"></app-sidebar>
   <div class="layout-wrapper">
     <app-topbar></app-topbar>
-    <main class="main-content">
+    <main class="main-content" id="conteudo-principal" tabindex="-1">
       <router-outlet></router-outlet>
     </main>
   </div>

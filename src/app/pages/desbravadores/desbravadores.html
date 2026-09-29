@@ -43,20 +43,20 @@
       <strong>{{ usuarios().length }}</strong>
     </div>
 
-    <div class="users-table-card">
-      <table>
-        <thead>
-          <tr>
-            <th>Nome</th>
-            <th>Email</th>
-            <th>Data de criacao</th>
-            <th>Role</th>
+    <div class="users-table-card" tabindex="0" role="region" aria-label="Lista de usuários">
+      <table class="table-cards" role="table">
+        <thead role="rowgroup">
+          <tr role="row">
+            <th scope="col" role="columnheader">Nome</th>
+            <th scope="col" role="columnheader">Email</th>
+            <th scope="col" role="columnheader">Data de criacao</th>
+            <th scope="col" role="columnheader">Role</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody role="rowgroup">
           @for (usuario of usuarios(); track usuario.id) {
-            <tr>
-              <td>
+            <tr role="row">
+              <td class="cell-name" role="cell">
                 <div class="user-cell">
                   <span class="avatar">{{ usuario.nome.charAt(0).toUpperCase() }}</span>
                   <div>
@@ -65,10 +65,10 @@
                   </div>
                 </div>
               </td>
-              <td>{{ usuario.email }}</td>
-              <td>{{ usuario.dataCriacao | date: 'dd/MM/yyyy' }}</td>
-              <td>
-                <span class="role-pill">{{ usuario.roles }}</span>
+              <td role="cell" data-label="Email">{{ usuario.email }}</td>
+              <td role="cell" data-label="Data de criacao">{{ usuario.dataCriacao | date: 'dd/MM/yyyy' }}</td>
+              <td role="cell" data-label="Role">
+                <span class="role-pill">{{ usuario.cargo?.nome ?? usuario.roles }}</span>
               </td>
             </tr>
           }

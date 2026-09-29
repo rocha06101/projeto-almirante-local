@@ -78,8 +78,16 @@ export class Login {
 
   private messageFor(err: unknown): string {
     if (err instanceof HttpErrorResponse) {
+      if (err.status === 400) {
+        return 'Não foi possível processar a solicitação. Verifique os dados e tente novamente.';
+      }
+
       if (err.status === 401) {
         return 'E-mail ou senha inválidos.';
+      }
+
+      if (err.status === 403) {
+        return 'Você não tem permissão para realizar esta ação.';
       }
 
       if (err.status === 429) {

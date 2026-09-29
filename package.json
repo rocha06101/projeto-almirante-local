@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve --proxy-config proxy.conf.json",
-    "start:https": "ng serve --ssl --port 4201 --proxy-config proxy.conf.json",
+    "start": "ng serve",
+    "start:https": "ng serve --port 4201",
     "start:local": "ng serve --ssl --port 4201 --proxy-config proxy.conf.backend-https.json",
     "start:backend": "ng serve --proxy-config proxy.conf.backend.json",
     "start:mock": "ng serve --proxy-config proxy.conf.local.json",

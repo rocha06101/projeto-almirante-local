@@ -62,6 +62,10 @@ describe('Desbravadores', () => {
     expect(html).not.toContain(CARGO_GUID);
   });
 
+  it('não exibe o endpoint da API na tela', () => {
+    expect(host.textContent).not.toMatch(/\/api\b|endpoint/i);
+  });
+
   it('mantém o GUID disponível internamente no estado do componente', () => {
     expect(component.usuarios()[0].id).toBe(USER_GUID);
   });

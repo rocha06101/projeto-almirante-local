@@ -6,13 +6,14 @@ import { AuthService } from '../../core/services/auth';
 import { Component, inject, signal } from '@angular/core';
 import { InputComponent } from '../../shared/components/input/input';
 import { ButtonComponent } from '../../shared/components/button/button';
+import { PasswordToggleComponent } from '../../shared/components/password-toggle/password-toggle';
 import { emailFormatValidator } from '../../shared/validators/email.validator';
 
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, InputComponent, ButtonComponent],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, InputComponent, ButtonComponent, PasswordToggleComponent],
   templateUrl: './login.html',
   styleUrl: './login.scss',
 })
@@ -27,6 +28,7 @@ export class Login {
   // Signals: o app é zoneless, então o estado atualizado em callbacks HTTP precisa ser reativo.
   loading = signal(false);
   error = signal('');
+  showPassword = signal(false);
 
   form = this.fb.nonNullable.group({
     email: ['', [Validators.required, emailFormatValidator]],

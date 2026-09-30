@@ -1,6 +1,16 @@
 <div class="container-input">
   <div class="primary-input">
     <label [for]="id">{{ label }}</label>
-    <input [id]="id" [type]="type" [placeholder]="placeholder">
+    <input
+      [id]="id"
+      [type]="type"
+      [placeholder]="placeholder"
+      [value]="value()"
+      [disabled]="disabled()"
+      [attr.autocomplete]="autocomplete || null"
+      [attr.aria-invalid]="invalid || null"
+      [attr.aria-describedby]="describedBy || null"
+      (input)="handleInput($event)"
+      (blur)="handleBlur()">
   </div>
 </div>

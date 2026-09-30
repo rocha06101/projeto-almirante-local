@@ -47,6 +47,14 @@ export const routes: Routes = [
           .then(m => m.UserRegister),
       },
       {
+        // O usuário chega pelo estado de navegação da listagem (não existe GET /api/Usuarios/{id}); o id não vai para a URL.
+        path: 'desbravadores/editar',
+        data: { modo: 'editar' },
+        loadComponent: () =>
+          import('./pages/desbravadores/user-register/user-register')
+          .then(m => m.UserRegister),
+      },
+      {
         path: 'treasury',
         loadComponent: () =>
           import('./pages/treasury/treasury')

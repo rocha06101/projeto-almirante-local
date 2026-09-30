@@ -3,31 +3,39 @@
     <div>
       <span class="eyebrow">Gestao de usuarios</span>
       <h1>Desbravadores</h1>
-      <p>Preencha os campos abaixo para cadastrar um novo membro.</p>
+      @if (isEdicao()) {
+        <p>Altere os campos abaixo para atualizar o cadastro do membro.</p>
+      } @else {
+        <p>Preencha os campos abaixo para cadastrar um novo membro.</p>
+      }
     </div>
 
     <div class="header-actions">
-      <button type="button" class="refresh-button">
+      <button type="button" class="refresh-button" (click)="salvar()" [disabled]="saving() || form.disabled">
         <img src="/icons/save-icon.svg" alt="" width="24" height="24">
-        Salvar Cadastro
+        {{ saving() ? 'Salvando...' : 'Salvar Cadastro' }}
       </button>
 
-      <button type="button" class="button-cancel">
+      <button type="button" class="button-cancel" (click)="cancelar()">
         <img src="/icons/cancel-icon.svg" alt="" width="24" height="24">
         Cancelar
       </button>
     </div>
   </header>
 
+  @if (errorMessage()) {
+    <p class="form-feedback error" role="alert">{{ errorMessage() }}</p>
+  }
+
   <div class="container-center">
 
     <div class="header-actions-down">
-    <button type="button" class="refresh-button">
+    <button type="button" class="refresh-button" (click)="salvar()" [disabled]="saving() || form.disabled">
       <img src="/icons/save-icon.svg" alt="" width="24" height="24">
-      Salvar Cadastro
+      {{ saving() ? 'Salvando...' : 'Salvar Cadastro' }}
     </button>
 
-    <button type="button" class="button-cancel">
+    <button type="button" class="button-cancel" (click)="cancelar()">
       <img src="/icons/cancel-icon.svg" alt="" width="24" height="24">
       Cancelar
     </button>
@@ -35,10 +43,17 @@
 
     <div class="container-form">
       <div class="form-container-left">
-        <form>
+        <form [formGroup]="form" (ngSubmit)="salvar()" novalidate>
           <app-primary-input
             label="Nome Completo"
+            formControlName="nome"
+            autocomplete="name"
+            [invalid]="!!fieldError('nome')"
+            describedBy="user-register-nome-error"
           ></app-primary-input>
+          @if (fieldError('nome'); as erro) {
+            <p class="field-error" id="user-register-nome-error">{{ erro }}</p>
+          }
           <app-primary-input
             label="CPF"
             placeholder="000.000.000-00"
@@ -59,24 +74,61 @@
             label="Email"
             placeholder=""
             type="email"
+            formControlName="email"
+            autocomplete="email"
+            [invalid]="!!fieldError('email')"
+            describedBy="user-register-email-error"
           ></app-primary-input>
+          @if (fieldError('email'); as erro) {
+            <p class="field-error" id="user-register-email-error">{{ erro }}</p>
+          }
           <app-primary-input
             label="Senha"
             placeholder=""
             type="password"
+            formControlName="senha"
+            autocomplete="new-password"
+            [invalid]="!!fieldError('senha')"
+            [describedBy]="fieldError('senha') ? 'user-register-senha-error user-register-senha-policy' : 'user-register-senha-policy'"
           >
           </app-primary-input>
+          @if (fieldError('senha'); as erro) {
+            <p class="field-error" id="user-register-senha-error">{{ erro }}</p>
+          }
+          @if (isEdicao()) {
+            <p class="password-policy" id="user-register-senha-policy">
+              A alteração de cadastro não altera a senha do usuário.
+            </p>
+          } @else {
+            <div class="password-policy" id="user-register-senha-policy">
+              <strong>A senha deve:</strong>
+              <ul>
+                <li>ter entre {{ senhaMinimo }} e {{ senhaMaximo }} caracteres;</li>
+                <li>não ser formada por um ou dois caracteres repetidos;</li>
+                <li>não ser uma sequência simples (ex.: 123456789012, abcdefghijkl);</li>
+                <li>não ser trivial ou muito comum (ex.: "senha", "admin", "desbravador");</li>
+                <li>não conter o e-mail do usuário.</li>
+              </ul>
+            </div>
+          }
           <app-primary-input
             label="Confirmar Senha"
             placeholder=""
             type="password"
+            formControlName="confirmarSenha"
+            autocomplete="new-password"
+            [invalid]="!!fieldError('confirmarSenha')"
+            describedBy="user-register-confirmar-senha-error"
           >
-          </app-primary-input>  
+          </app-primary-input>
+          @if (fieldError('confirmarSenha'); as erro) {
+            <p class="field-error" id="user-register-confirmar-senha-error">{{ erro }}</p>
+          }
         </form>
       </div>
 
       <div class="form-container-right">
-        <form>
+        <form [formGroup]="form" (ngSubmit)="salvar()" novalidate>
           <app-primary-input
             label="Nome do responsável"
           ></app-primary-input>
@@ -92,14 +144,26 @@
           ></app-primary-input>
           <app-primary-select
             label="cargo/ Função"
-            placeholder="Selecione o cargo"
-            [options]="cargoOptions"
+            [placeholder]="isLoadingCargos() ? 'Carregando cargos...' : 'Selecione o cargo'"
+            [options]="cargoOptions()"
+            formControlName="cargoId"
+            [invalid]="!!fieldError('cargoId')"
+            describedBy="user-register-cargo-error"
             >
           </app-primary-select>
+          @if (fieldError('cargoId'); as erro) {
+            <p class="field-error" id="user-register-cargo-error">{{ erro }}</p>
+          }
+          @if (cargosError()) {
+            <p class="field-error" role="alert">
+              {{ cargosError() }}
+              <button type="button" class="link-button" (click)="carregarCargos()">Tentar novamente</button>
+            </p>
+          }
         </form>
       </div>
 
-      
+
     </div>
 
     <div class="container-image">

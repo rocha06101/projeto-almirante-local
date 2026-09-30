@@ -294,3 +294,191 @@ tbody tr {
     transform: rotate(360deg);
   }
 }
+
+// ---- Gestão de usuários (filtro de inativos, ações por linha e confirmação de exclusão) ----
+
+.inactive-toggle {
+  align-items: center;
+  color: #334155;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 600;
+  gap: 0.5rem;
+  min-height: var(--tap-target);
+
+  // Altura da área de toque; a caixa desenhada continua no tamanho da largura.
+  input {
+    accent-color: #2563eb;
+    cursor: pointer;
+    height: var(--tap-target);
+    margin: 0;
+    width: 1.15rem;
+  }
+}
+
+.feedback-banner {
+  border-radius: 10px;
+  font-weight: 600;
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+
+  &.success {
+    background: #ecfdf5;
+    border: 1px solid #bbf7d0;
+    color: #047857;
+  }
+}
+
+.status-pill {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 800;
+  margin-top: 0.35rem;
+  padding: 0.2rem 0.6rem;
+
+  &.inactive {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+  }
+}
+
+.inactive-row .avatar {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+
+  @media (min-width: 576px) {
+    justify-content: flex-start;
+  }
+}
+
+.action-button {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-weight: 700;
+  min-height: var(--tap-target);
+  padding: 0.4rem 0.8rem;
+
+  &.danger {
+    background: #fff7f7;
+    border-color: #fecaca;
+    color: #b91c1c;
+  }
+}
+
+.muted {
+  color: #94a3b8;
+}
+
+// Modal no mesmo desenho do de Lançamentos.
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 1200;
+  padding: calc(1rem + var(--safe-top)) calc(1rem + var(--safe-right)) calc(1rem + var(--safe-bottom)) calc(1rem + var(--safe-left));
+  overflow-y: auto;
+}
+
+.modal-card {
+  width: min(100%, 32rem);
+  max-height: 100%;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 1rem;
+  padding: 1.25rem;
+  box-shadow: 0 22px 54px rgba(15, 23, 42, 0.18);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+
+  h3 {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #111827;
+  }
+}
+
+.close-button {
+  flex: none;
+  width: var(--tap-target);
+  height: var(--tap-target);
+  border: none;
+  background: transparent;
+  color: #374151;
+  font-size: 2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.delete-text {
+  color: #334155;
+  margin: 0 0 1rem;
+}
+
+.form-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 0.9rem;
+}
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.2rem;
+
+  button {
+    min-height: var(--tap-target);
+    cursor: pointer;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.65;
+    }
+  }
+
+  @media (max-width: 575.98px) {
+    button {
+      flex: 1 1 8rem;
+    }
+  }
+}
+
+.secondary-button {
+  border: none;
+  background: #e5e7eb;
+  color: #111827;
+  border-radius: 0.75rem;
+  padding: 0.8rem 1.1rem;
+  font-weight: 700;
+}
+
+.danger-button {
+  border: none;
+  border-radius: 0.75rem;
+  background: #dc2626;
+  color: #fff;
+  padding: 0.8rem 1.1rem;
+  font-weight: 700;
+}

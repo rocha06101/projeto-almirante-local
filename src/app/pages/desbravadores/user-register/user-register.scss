@@ -186,3 +186,54 @@
     }
   }
 }
+
+// Feedback do formulário (erros da API e de validação), no mesmo tom dos erros de Lançamentos.
+.form-feedback {
+  margin: 1rem 0 0;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  font-weight: 600;
+
+  &.error {
+    background: #fff7f7;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+  }
+}
+
+.field-error {
+  margin: -0.4rem 1rem 0.4rem;
+  color: #b91c1c;
+  font-size: 0.85rem;
+  line-height: 1.3;
+}
+
+.password-policy {
+  margin: -0.2rem 1rem 0.4rem;
+  color: #6b7280;
+  font-size: 0.82rem;
+  line-height: 1.35;
+
+  ul {
+    margin: 0.25rem 0 0;
+    padding-left: 1.1rem;
+  }
+}
+
+.link-button {
+  border: none;
+  background: none;
+  color: #2563eb;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  text-decoration: underline;
+}
+
+@media (max-width: 575.98px) {
+  .field-error,
+  .password-policy {
+    margin-inline: 0.5rem;
+  }
+}

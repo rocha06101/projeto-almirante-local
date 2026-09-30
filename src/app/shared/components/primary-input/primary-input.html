@@ -8,7 +8,7 @@
       [value]="value()"
       [disabled]="disabled()"
       [attr.autocomplete]="autocomplete || null"
-      [attr.aria-invalid]="invalid || null"
+      [attr.inputmode]="mask ? 'numeric' : null"      [attr.aria-invalid]="invalid || null"
       [attr.aria-describedby]="describedBy || null"
       (input)="handleInput($event)"
       (blur)="handleBlur()">

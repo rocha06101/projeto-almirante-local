@@ -57,18 +57,23 @@
           <app-primary-input
             label="CPF"
             placeholder="000.000.000-00"
-            type="number"
+            type="text"
+            mask="cpf"
           >
           </app-primary-input>
           <app-primary-input
             label="Data de Nascimento"
             placeholder="dd/mm/aaaa"
-            type="date"
+            type="text"
+            mask="data"
+            autocomplete="bday"
           ></app-primary-input>
           <app-primary-input
             label="Telefone"
             placeholder="(00) 00000-0000"
-            type="number"
+            type="tel"
+            mask="telefone"
+            autocomplete="tel"
           ></app-primary-input>
           <app-primary-input
             label="Email"
@@ -135,7 +140,8 @@
           <app-primary-input
             label="Telefone do responsável"
             placeholder="(00) 00000-0000"
-            type="number"
+            type="tel"
+            mask="telefone"
           ></app-primary-input>
           <app-primary-input
             label="Email do responsável"

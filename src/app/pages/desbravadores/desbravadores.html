@@ -75,8 +75,8 @@
                 <div class="user-cell">
                   <span class="avatar">{{ usuario.nome.charAt(0).toUpperCase() }}</span>
                   <div>
+                    <!-- O id do usuário fica só no estado do Angular (editar/excluir); nunca é renderizado. -->
                     <strong>{{ usuario.nome }}</strong>
-                    <small>{{ usuario.id }}</small>
                     @if (usuario.ativo === false) {
                       <span class="status-pill inactive">Inativo</span>
                     }

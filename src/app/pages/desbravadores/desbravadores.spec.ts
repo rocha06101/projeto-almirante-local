@@ -64,6 +64,17 @@ describe('Desbravadores', () => {
     expect(primeiraLinha.querySelector('.role-pill')?.textContent?.trim()).toBe('Secretário');
   });
 
+  it('não renderiza o id (GUID) dos usuários no HTML, nem com inativos e modal abertos', async () => {
+    const guids = ['3f2504e0-4f89-11d3-9a0c-0305e82c3301', '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'];
+    await create([usuario({ id: guids[0] }), usuario({ id: guids[1], nome: 'Bruno Lima', ativo: false })]);
+    rowButton('Ana Souza', 'Excluir').click();
+    render();
+
+    for (const guid of guids) {
+      expect(host.innerHTML).not.toContain(guid);
+    }
+  });
+
   it('"Exibir inativos" recarrega com includeInactive e marca os inativos sem ações', async () => {
     await create();
     service.listarUsuarios.mockReturnValue(of([usuario(), usuario({ id: 'u3', nome: 'Caio Inativo', ativo: false })]));

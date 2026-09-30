@@ -197,6 +197,14 @@ describe('UserRegister', () => {
     expect(select.value).toBe('c-sec');
   });
 
+  it('edição não renderiza o id (GUID) do usuário no HTML', async () => {
+    const guid = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
+    history.replaceState({ usuario: { ...usuario, id: guid } }, '');
+    await setup('editar');
+
+    expect(host.innerHTML).not.toContain(guid);
+  });
+
   it('edição chama PUT com o id do usuário, sem senha, e volta para a listagem', async () => {
     service.atualizarUsuario.mockReturnValue(of({ ...usuario, nome: 'Ana Maria Souza', cargo: cargos[0] }));
     history.replaceState({ usuario }, '');

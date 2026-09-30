@@ -94,6 +94,10 @@ test.describe('fluxo completo autenticado', () => {
     await page.getByRole('link', { name: 'Desbravadores' }).click();
     await expect(page).toHaveURL(/\/desbravadores$/);
     await expect(page.locator('app-desbravadores table, app-desbravadores .state-card').first()).toBeVisible();
+    // O GUID dos usuários segue no estado interno, mas não pode chegar ao DOM.
+    expect(await page.locator('app-desbravadores').evaluate(el => el.outerHTML)).not.toMatch(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    );
 
     // Reload: memória zerada → sessão restaurada via cookie de refresh (com CSRF)
     const refreshesBefore = traffic.refresh.length;

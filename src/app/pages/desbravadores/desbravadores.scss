@@ -22,6 +22,7 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
+  margin-bottom: 1.5rem;
 
   > div {
     min-width: 0;
@@ -42,14 +43,10 @@
     font-weight: 700;
   }
 
-  p {
-    margin: 0.5rem 0 0;
-    color: #6b7280;
-  }
-
   @media (max-width: 575.98px) {
     flex-direction: column;
     align-items: stretch;
+    margin-bottom: 1.25rem;
 
     .header-actions {
       margin-top: 0.75rem;
@@ -213,14 +210,6 @@ tbody tr {
     color: #111827;
     display: block;
     font-size: 0.95rem;
-  }
-
-  small {
-    color: #64748b;
-    display: block;
-    font-size: 0.75rem;
-    margin-top: 0.25rem;
-    overflow-wrap: anywhere;
   }
 }
 

@@ -42,6 +42,20 @@ test.describe('desktop 1366x768', () => {
     await expect(page).toHaveURL(/\/login$/);
   });
 
+  test('listagem de desbravadores não expõe GUID no DOM nem no console', async ({ page }) => {
+    const guid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+    const consoleMessages: string[] = [];
+    page.on('console', message => consoleMessages.push(message.text()));
+
+    await page.goto('/desbravadores');
+    await expect(page.locator('app-desbravadores tbody tr')).toHaveCount(8);
+    await expect(page.locator('app-desbravadores thead th')).toHaveText(['Nome', 'Email', 'Data de criacao', 'Role']);
+    await expect(page.locator('app-desbravadores tbody tr').first()).toContainText('Desbravador 1');
+
+    expect(await page.locator('body').evaluate(body => body.outerHTML)).not.toMatch(guid);
+    expect(consoleMessages.filter(text => guid.test(text))).toEqual([]);
+  });
+
   test('teclado: link "Ir para o conteúdo" e foco visível', async ({ page }) => {
     await page.goto('/');
     await page.locator('app-home').waitFor();

@@ -28,11 +28,12 @@
                 }
                 <app-input
                 formControlName="password"
-                type="password"
+                [type]="showPassword() ? 'text' : 'password'"
                 name="password"
                 autocomplete="current-password"
                 iconSrc="/icons/padlock.svg"
                 label="Senha">
+                    <app-password-toggle [(visible)]="showPassword" />
                 </app-input>
             </div>
             @if (error()) {

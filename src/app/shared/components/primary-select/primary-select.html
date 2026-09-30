@@ -1,9 +1,15 @@
 <div class="container-input">
   <div class="primary-select">
     <label [for]="id">{{ label }}</label>
-    <select [id]="id">
-      <option value="" disabled selected>{{ placeholder || 'Selecione' }}</option>
-      <option *ngFor="let option of options" [value]="option.value">
+    <select
+      [id]="id"
+      [disabled]="disabled()"
+      [attr.aria-invalid]="invalid || null"
+      [attr.aria-describedby]="describedBy || null"
+      (change)="handleChange($event)"
+      (blur)="handleBlur()">
+      <option value="" disabled [selected]="!value()">{{ placeholder || 'Selecione' }}</option>
+      <option *ngFor="let option of options" [value]="option.value" [selected]="option.value === value()">
         {{ option.label }}
       </option>
     </select>

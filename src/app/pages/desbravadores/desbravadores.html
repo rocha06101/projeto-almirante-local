@@ -6,6 +6,16 @@
     </div>
 
     <div class="header-actions">
+      <label class="inactive-toggle">
+        <input
+          type="checkbox"
+          [checked]="includeInactive()"
+          [disabled]="isLoading()"
+          (change)="alternarInativos($event)"
+        >
+        Exibir inativos
+      </label>
+
       <button
         type="button"
         class="refresh-button register"
@@ -19,6 +29,10 @@
       </button>
     </div>
   </header>
+
+  @if (successMessage()) {
+    <p class="feedback-banner success" role="status">{{ successMessage() }}</p>
+  }
 
   @if (isLoading()) {
     <div class="state-card">
@@ -49,29 +63,94 @@
             <th scope="col" role="columnheader">Nome</th>
             <th scope="col" role="columnheader">Email</th>
             <th scope="col" role="columnheader">Data de criacao</th>
-            <th scope="col" role="columnheader">Role</th>
+            <th scope="col" role="columnheader">Cargo/Função</th>
+            <th scope="col" role="columnheader">Ações</th>
           </tr>
         </thead>
         <tbody role="rowgroup">
           @for (usuario of usuarios(); track usuario.id) {
-            <tr role="row">
+            <tr role="row" [class.inactive-row]="usuario.ativo === false">
               <td class="cell-name" role="cell">
                 <div class="user-cell">
                   <span class="avatar">{{ usuario.nome.charAt(0).toUpperCase() }}</span>
                   <div>
+                    <!-- O id do usuário fica só no estado do Angular (editar/excluir); nunca é renderizado. -->
                     <strong>{{ usuario.nome }}</strong>
+                    @if (usuario.ativo === false) {
+                      <span class="status-pill inactive">Inativo</span>
+                    }
                   </div>
                 </div>
               </td>
               <td role="cell" data-label="Email">{{ usuario.email }}</td>
               <td role="cell" data-label="Data de criacao">{{ usuario.dataCriacao | date: 'dd/MM/yyyy' }}</td>
-              <td role="cell" data-label="Role">
-                <span class="role-pill">{{ usuario.cargo?.nome ?? usuario.roles }}</span>
+              <td role="cell" data-label="Cargo/Função">
+                <span class="role-pill">{{ usuario.cargo?.nome ?? usuario.funcao ?? usuario.roles }}</span>
+              </td>
+              <td role="cell" data-label="Ações">
+                @if (usuario.ativo !== false) {
+                  <div class="row-actions">
+                    <button
+                      type="button"
+                      class="action-button"
+                      [attr.aria-label]="'Editar ' + usuario.nome"
+                      (click)="editar(usuario)"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      class="action-button danger"
+                      [attr.aria-label]="'Excluir ' + usuario.nome"
+                      (click)="solicitarExclusao(usuario)"
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                } @else {
+                  <span class="muted">—</span>
+                }
               </td>
             </tr>
           }
         </tbody>
       </table>
+    </div>
+  }
+
+  @if (usuarioParaExcluir(); as usuario) {
+    <div class="modal-backdrop" (click)="cancelarExclusao()" (keydown.escape)="cancelarExclusao()">
+      <div
+        class="modal-card"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-user-title"
+        aria-describedby="delete-user-text"
+        cdkTrapFocus
+        [cdkTrapFocusAutoCapture]="true"
+        (click)="$event.stopPropagation()"
+      >
+        <div class="modal-header">
+          <h3 id="delete-user-title">Excluir usuário</h3>
+          <button type="button" class="close-button" aria-label="Fechar modal" [disabled]="isDeleting()" (click)="cancelarExclusao()">×</button>
+        </div>
+
+        <p class="delete-text" id="delete-user-text">
+          Deseja realmente excluir o usuário <strong>{{ usuario.nome }}</strong> ({{ usuario.email }})?
+          Ele deixará de acessar o sistema e passará a aparecer somente entre os inativos.
+        </p>
+
+        @if (deleteError()) {
+          <p class="form-error" role="alert">{{ deleteError() }}</p>
+        }
+
+        <div class="modal-actions">
+          <button type="button" class="secondary-button" [disabled]="isDeleting()" (click)="cancelarExclusao()">Cancelar</button>
+          <button type="button" class="danger-button" [disabled]="isDeleting()" (click)="confirmarExclusao()">
+            {{ isDeleting() ? 'Excluindo…' : 'Excluir' }}
+          </button>
+        </div>
+      </div>
     </div>
   }
 </section>

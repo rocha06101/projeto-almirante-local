@@ -96,6 +96,27 @@
   border-color: #ef4444;
 }
 
+.input-suffix {
+  position: absolute;
+  right: 5px;
+  display: flex;
+  align-items: center;
+
+  &:empty {
+    display: none;
+  }
+}
+
+// Reserva espaço para a ação à direita e esconde o "olho" nativo do Edge,
+// para não duplicar o botão de exibir senha.
+.input-wrapper:has(.input-suffix:not(:empty)) .input-field {
+  padding-right: 3rem;
+
+  &::-ms-reveal {
+    display: none;
+  }
+}
+
 @media (max-width: 575.98px) {
   .input-field {
     padding-left: 3.25rem;

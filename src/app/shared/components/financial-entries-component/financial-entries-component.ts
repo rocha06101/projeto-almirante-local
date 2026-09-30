@@ -33,6 +33,15 @@ interface LancamentoForm {
 export const TODOS_OS_MEMBROS = '__todos__';
 const SEARCH_DEBOUNCE_MS = 300;
 
+/**
+ * Máscara de centavos do campo Valor: só os dígitos contam ("R$ 1.250,50" → 1250.5).
+ * Vazio ou zero → null, para o campo poder ser apagado. 15 dígitos cabem em inteiro seguro.
+ */
+export function parseCurrencyInput(text: string): number | null {
+  const cents = Number(text.replace(/\D/g, '').slice(0, 15));
+  return cents > 0 ? cents / 100 : null;
+}
+
 @Component({
   selector: 'app-financial-entries-component',
   standalone: true,
@@ -394,6 +403,16 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
       style: 'currency',
       currency: 'BRL',
     }).format(value);
+  }
+
+  formatCurrencyInput(value: number | null): string {
+    return value === null ? '' : this.formatCurrency(value);
+  }
+
+  /** O modelo segue numérico (contrato da API); o campo é reescrito já mascarado. */
+  onValorInput(input: HTMLInputElement): void {
+    this.lancamentoAtual.valor = parseCurrencyInput(input.value);
+    input.value = this.formatCurrencyInput(this.lancamentoAtual.valor);
   }
 
   private describe(error: unknown, fallback: string): string {

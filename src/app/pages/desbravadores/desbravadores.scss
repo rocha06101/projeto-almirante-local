@@ -134,6 +134,52 @@
   }
 }
 
+.search-box {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  min-height: var(--tap-target);
+  padding: 0 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &:focus-within {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  }
+
+  .search-icon {
+    fill: none;
+    flex: none;
+    height: 1.15rem;
+    stroke: #64748b;
+    stroke-linecap: round;
+    stroke-width: 2;
+    width: 1.15rem;
+  }
+
+  input {
+    background: transparent;
+    border: none;
+    color: #111827;
+    flex: 1;
+    font: inherit;
+    // 16px evita o zoom automático do iOS ao focar o campo.
+    font-size: 1rem;
+    min-width: 0;
+    outline: none;
+    padding: 0.8rem 0;
+  }
+
+  @media (max-width: 575.98px) {
+    border-radius: 8px;
+  }
+}
+
 .users-table-card,
 .state-card {
   background: #fff;
@@ -154,11 +200,83 @@
 
 table {
   border-collapse: collapse;
-  min-width: 40rem;
   width: 100%;
+}
 
-  @media (max-width: 575.98px) {
-    min-width: 0;
+// O layout depende da largura do próprio card, não da janela: com o menu lateral aberto a área útil
+// fica bem menor que a tela, e a tabela espremida empurrava os botões de ação para fora do card.
+.users-table-card {
+  container: usuarios / inline-size;
+}
+
+// Coluna de ações só com a largura dos botões; o restante fica para o nome.
+@container usuarios (min-width: 640px) {
+  .cell-actions {
+    white-space: nowrap;
+    width: 1%;
+
+    .row-actions {
+      flex-wrap: nowrap;
+    }
+  }
+}
+
+// Card estreito: cada usuário vira um card (mesmo desenho do .table-cards global do celular).
+@container usuarios (max-width: 639.98px) {
+  table,
+  tbody,
+  tr {
+    display: block;
+  }
+
+  thead {
+    // Some visualmente, mas continua disponível para leitores de tela.
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid #eef2f7;
+    padding: 0.75rem 1rem;
+  }
+
+  tbody td {
+    align-items: center;
+    border: none;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    overflow-wrap: anywhere;
+    padding: 0.4rem 0;
+    text-align: right;
+
+    > * {
+      min-width: 0;
+    }
+
+    &[data-label]::before {
+      color: #64748b;
+      content: attr(data-label);
+      flex: none;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-align: left;
+      text-transform: uppercase;
+    }
+
+    &:not([data-label]) {
+      justify-content: flex-start;
+      text-align: left;
+    }
+  }
+
+  .row-actions {
+    justify-content: flex-end;
   }
 }
 

@@ -53,15 +53,61 @@ describe('Desbravadores', () => {
     });
   });
 
-  it('lista nome, e-mail, data de criação e o nome do cargo', async () => {
+  it('lista nome e cargo, sem e-mail nem data de criação', async () => {
     await create();
 
     expect(service.listarUsuarios).toHaveBeenCalledWith({ includeInactive: false });
     const primeiraLinha = host.querySelector('tbody tr')!;
     expect(primeiraLinha.textContent).toContain('Ana Souza');
-    expect(primeiraLinha.textContent).toContain('ana@example.com');
-    expect(primeiraLinha.textContent).toContain('01/09/2026');
+    expect(primeiraLinha.textContent).not.toContain('ana@example.com');
+    expect(primeiraLinha.textContent).not.toContain('01/09/2026');
     expect(primeiraLinha.querySelector('.role-pill')?.textContent?.trim()).toBe('Secretário');
+  });
+
+  it('não tem botão "Atualizar"', async () => {
+    await create();
+
+    const textos = Array.from(host.querySelectorAll('button')).map(b => b.textContent?.trim());
+    expect(textos).not.toContain('Atualizar');
+  });
+
+  const pesquisar = (termo: string) => {
+    const campo = host.querySelector<HTMLInputElement>('.search-box input')!;
+    campo.value = termo;
+    campo.dispatchEvent(new Event('input'));
+    render();
+  };
+
+  const nomesListados = () => Array.from(host.querySelectorAll('tbody tr strong')).map(s => s.textContent?.trim());
+
+  it('pesquisa filtra por nome ou cargo, ignorando acentos e maiúsculas', async () => {
+    await create([
+      usuario(),
+      usuario({ id: 'u2', nome: 'Bruno Lima', cargo: { id: 'c-dir', nome: 'Diretor', role: 'DIR' } }),
+      usuario({ id: 'u3', nome: 'Érica Prado', cargo: { id: 'c-ins', nome: 'Instrutor', role: 'INS' } }),
+    ]);
+
+    pesquisar('BRUNO');
+    expect(nomesListados()).toEqual(['Bruno Lima']);
+
+    pesquisar('erica');
+    expect(nomesListados()).toEqual(['Érica Prado']);
+
+    pesquisar('secretario');
+    expect(nomesListados()).toEqual(['Ana Souza']);
+
+    pesquisar('');
+    expect(nomesListados()).toEqual(['Ana Souza', 'Bruno Lima', 'Érica Prado']);
+  });
+
+  it('pesquisa sem resultado mostra aviso e não esconde o campo de busca', async () => {
+    await create();
+
+    pesquisar('zzz');
+
+    expect(host.querySelector('tbody')).toBeNull();
+    expect(host.querySelector('.state-card')?.textContent).toContain('Nenhum usuario corresponde a "zzz"');
+    expect(host.querySelector('.search-box input')).toBeTruthy();
   });
 
   it('não renderiza o id (GUID) dos usuários no HTML, nem com inativos e modal abertos', async () => {

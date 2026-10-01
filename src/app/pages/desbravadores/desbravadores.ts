@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { A11yModule } from '@angular/cdk/a11y';
 import { finalize, take } from 'rxjs';
 import { User as UserModel } from '../../core/models/user.model';
@@ -7,6 +7,8 @@ import { User as UserService } from '../../core/services/user';
 import { Router, RouterModule } from '@angular/router';
 import { UsuarioNavigationState, readNavigationState } from './usuario-navigation';
 import { describeUsuarioError } from './usuarios-api-errors';
+
+const normalizar = (texto: string) => texto.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 
 @Component({
   selector: 'app-desbravadores',
@@ -22,6 +24,18 @@ export class Desbravadores implements OnInit {
   usuarios = signal<UserModel[]>([]);
   isLoading = signal(true);
   errorMessage = signal('');
+
+  /** Busca local (nome ou cargo) sobre os usuários já carregados; ignora acentos e maiúsculas. */
+  termoBusca = signal('');
+  usuariosFiltrados = computed(() => {
+    const termo = normalizar(this.termoBusca().trim());
+    if (!termo) {
+      return this.usuarios();
+    }
+    return this.usuarios().filter(usuario =>
+      normalizar(`${usuario.nome} ${usuario.cargo?.nome ?? usuario.funcao ?? usuario.roles ?? ''}`).includes(termo),
+    );
+  });
 
   /** `?includeInactive=true` na API: inclui os excluídos logicamente. */
   includeInactive = signal(false);

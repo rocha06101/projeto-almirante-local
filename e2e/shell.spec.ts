@@ -49,7 +49,7 @@ test.describe('desktop 1366x768', () => {
 
     await page.goto('/desbravadores');
     await expect(page.locator('app-desbravadores tbody tr')).toHaveCount(8);
-    await expect(page.locator('app-desbravadores thead th')).toHaveText(['Nome', 'Email', 'Data de criacao', 'Role']);
+    await expect(page.locator('app-desbravadores thead th')).toHaveText(['Nome', 'Cargo/Função', 'Ações']);
     await expect(page.locator('app-desbravadores tbody tr').first()).toContainText('Desbravador 1');
 
     expect(await page.locator('body').evaluate(body => body.outerHTML)).not.toMatch(guid);

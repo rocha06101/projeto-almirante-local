@@ -23,10 +23,6 @@
       >
         Cadastrar
       </button>
-
-      <button type="button" class="refresh-button" (click)="carregarUsuarios()" [disabled]="isLoading()">
-        Atualizar
-      </button>
     </div>
   </header>
 
@@ -56,66 +52,84 @@
       <strong>{{ usuarios().length }}</strong>
     </div>
 
-    <div class="users-table-card" tabindex="0" role="region" aria-label="Lista de usuários">
-      <table class="table-cards" role="table">
-        <thead role="rowgroup">
-          <tr role="row">
-            <th scope="col" role="columnheader">Nome</th>
-            <th scope="col" role="columnheader">Email</th>
-            <th scope="col" role="columnheader">Data de criacao</th>
-            <th scope="col" role="columnheader">Cargo/Função</th>
-            <th scope="col" role="columnheader">Ações</th>
-          </tr>
-        </thead>
-        <tbody role="rowgroup">
-          @for (usuario of usuarios(); track usuario.id) {
-            <tr role="row" [class.inactive-row]="usuario.ativo === false">
-              <td class="cell-name" role="cell">
-                <div class="user-cell">
-                  <span class="avatar">{{ usuario.nome.charAt(0).toUpperCase() }}</span>
-                  <div>
-                    <!-- O id do usuário fica só no estado do Angular (editar/excluir); nunca é renderizado. -->
-                    <strong>{{ usuario.nome }}</strong>
-                    @if (usuario.ativo === false) {
-                      <span class="status-pill inactive">Inativo</span>
-                    }
-                  </div>
-                </div>
-              </td>
-              <td role="cell" data-label="Email">{{ usuario.email }}</td>
-              <td role="cell" data-label="Data de criacao">{{ usuario.dataCriacao | date: 'dd/MM/yyyy' }}</td>
-              <td role="cell" data-label="Cargo/Função">
-                <span class="role-pill">{{ usuario.cargo?.nome ?? usuario.funcao ?? usuario.roles }}</span>
-              </td>
-              <td role="cell" data-label="Ações">
-                @if (usuario.ativo !== false) {
-                  <div class="row-actions">
-                    <button
-                      type="button"
-                      class="action-button"
-                      [attr.aria-label]="'Editar ' + usuario.nome"
-                      (click)="editar(usuario)"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      class="action-button danger"
-                      [attr.aria-label]="'Excluir ' + usuario.nome"
-                      (click)="solicitarExclusao(usuario)"
-                    >
-                      Excluir
-                    </button>
-                  </div>
-                } @else {
-                  <span class="muted">—</span>
-                }
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+    <div class="search-box" role="search">
+      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"></circle>
+        <path d="m20 20-3.5-3.5"></path>
+      </svg>
+      <input
+        type="search"
+        placeholder="Pesquisar por nome ou cargo..."
+        aria-label="Pesquisar usuários por nome ou cargo"
+        autocomplete="off"
+        [value]="termoBusca()"
+        (input)="termoBusca.set($any($event.target).value)"
+      >
     </div>
+
+    @if (usuariosFiltrados().length === 0) {
+      <div class="state-card">
+        <h2>Nenhum usuario encontrado</h2>
+        <p>Nenhum usuario corresponde a "{{ termoBusca().trim() }}".</p>
+      </div>
+    } @else {
+      <div class="users-table-card" tabindex="0" role="region" aria-label="Lista de usuários">
+        <table class="table-cards" role="table">
+          <thead role="rowgroup">
+            <tr role="row">
+              <th scope="col" role="columnheader">Nome</th>
+              <th scope="col" role="columnheader">Cargo/Função</th>
+              <th scope="col" role="columnheader" class="cell-actions">Ações</th>
+            </tr>
+          </thead>
+          <tbody role="rowgroup">
+            @for (usuario of usuariosFiltrados(); track usuario.id) {
+              <tr role="row" [class.inactive-row]="usuario.ativo === false">
+                <td class="cell-name" role="cell">
+                  <div class="user-cell">
+                    <span class="avatar">{{ usuario.nome.charAt(0).toUpperCase() }}</span>
+                    <div>
+                      <!-- O id do usuário fica só no estado do Angular (editar/excluir); nunca é renderizado. -->
+                      <strong>{{ usuario.nome }}</strong>
+                      @if (usuario.ativo === false) {
+                        <span class="status-pill inactive">Inativo</span>
+                      }
+                    </div>
+                  </div>
+                </td>
+                <td role="cell" data-label="Cargo/Função">
+                  <span class="role-pill">{{ usuario.cargo?.nome ?? usuario.funcao ?? usuario.roles }}</span>
+                </td>
+                <td class="cell-actions" role="cell" data-label="Ações">
+                  @if (usuario.ativo !== false) {
+                    <div class="row-actions">
+                      <button
+                        type="button"
+                        class="action-button"
+                        [attr.aria-label]="'Editar ' + usuario.nome"
+                        (click)="editar(usuario)"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        class="action-button danger"
+                        [attr.aria-label]="'Excluir ' + usuario.nome"
+                        (click)="solicitarExclusao(usuario)"
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  } @else {
+                    <span class="muted">—</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
   }
 
   @if (usuarioParaExcluir(); as usuario) {

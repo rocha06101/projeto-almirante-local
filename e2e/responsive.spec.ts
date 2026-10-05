@@ -107,6 +107,45 @@ for (const viewport of ALL_VIEWPORTS) {
       });
     }
 
+    if (viewport.name === 'phone-320x568' || viewport.name === 'laptop-1366x768') {
+      test('modal de lançamento alterna os tipos sem overflow e mantém as ações acessíveis', async ({ page }) => {
+        await page.goto('/lancamentos');
+        await page.locator('app-financial-entries-component').waitFor();
+        await page.locator('.toolbar .primary-button').click();
+
+        const selector = page.getByLabel('Tipo de lançamento');
+        await expect(selector).toHaveValue('unico');
+        await expect(page.locator('select[name="membroId"]')).toBeVisible();
+        await expect(page.locator('.modal-backdrop')).toHaveCount(1);
+
+        await selector.selectOption('geral');
+        await expect(page.locator('.readonly-field strong')).toHaveText('Todos os membros');
+        await expect(page.locator('select[name="membroId"]')).toHaveCount(0);
+        await expect(page.locator('.modal-actions .primary-button')).toContainText('Salvar lançamento geral');
+
+        const modalBounds = await page.evaluate(() => {
+          const modal = document.querySelector('.modal-card')!;
+          const bounds = modal.getBoundingClientRect();
+          const documentElement = document.documentElement;
+          return {
+            left: bounds.left,
+            right: bounds.right,
+            width: bounds.width,
+            viewportWidth: innerWidth,
+            documentOverflow: documentElement.scrollWidth - documentElement.clientWidth,
+          };
+        });
+        expect(modalBounds.left).toBeGreaterThanOrEqual(-1);
+        expect(modalBounds.right).toBeLessThanOrEqual(modalBounds.viewportWidth + 1);
+        expect(modalBounds.width).toBeLessThanOrEqual(modalBounds.viewportWidth + 1);
+        expect(modalBounds.documentOverflow).toBeLessThanOrEqual(0);
+
+        const saveButton = page.locator('.modal-actions .primary-button');
+        await saveButton.scrollIntoViewIfNeeded();
+        await expect(saveButton).toBeInViewport();
+      });
+    }
+
     test('dropdowns de perfil e notificações permanecem inteiros dentro da viewport', async ({ page }) => {
       await page.goto('/');
       await page.locator('app-home').waitFor();

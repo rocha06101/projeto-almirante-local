@@ -17,6 +17,7 @@ import { User as UsuarioModel } from '../../../core/models/user.model';
 import { User as UsuarioService } from '../../../core/services/user';
 
 type ModalMode = 'new' | 'edit' | 'view' | 'delete';
+type ModalLancamentoTipo = 'unico' | 'geral';
 
 interface LancamentoForm {
   /** '' = nenhum; TODOS_OS_MEMBROS = lançamento em lote. */
@@ -78,6 +79,7 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
 
   // Modal
   readonly modalMode = signal<ModalMode | null>(null);
+  readonly modalLancamentoTipo = signal<ModalLancamentoTipo>('unico');
   readonly selected = signal<Lancamento | null>(null);
   readonly saving = signal(false);
   readonly formError = signal('');
@@ -192,6 +194,7 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
   // ---- Modal -------------------------------------------------------------------------------
 
   openNewEntry(): void {
+    this.modalLancamentoTipo.set('unico');
     this.lancamentoAtual = this.emptyForm();
     this.idempotencyKey = crypto.randomUUID();
     this.openModal('new', null);
@@ -199,6 +202,7 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
   }
 
   openEditEntry(item: Lancamento): void {
+    this.modalLancamentoTipo.set('unico');
     this.lancamentoAtual = {
       membroId: item.membroId ?? '',
       finalidade: item.finalidade ?? '',
@@ -210,6 +214,11 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
       status: item.status,
     };
     this.openModal('edit', item);
+  }
+
+  onModalLancamentoTipoChange(tipo: ModalLancamentoTipo): void {
+    this.modalLancamentoTipo.set(tipo);
+    this.lancamentoAtual.membroId = tipo === 'geral' ? TODOS_OS_MEMBROS : '';
   }
 
   viewEntry(item: Lancamento): void {
@@ -229,6 +238,10 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
   }
 
   submit(): void {
+    if (this.saving()) {
+      return;
+    }
+
     switch (this.modalMode()) {
       case 'new':
         return this.salvarNovo();

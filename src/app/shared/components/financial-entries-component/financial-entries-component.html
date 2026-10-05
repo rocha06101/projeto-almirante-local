@@ -92,17 +92,32 @@
           <div class="modal-body">
             @if (mode === 'new') {
               <label class="form-field">
-                <span>Beneficiário</span>
-                <select [(ngModel)]="lancamentoAtual.membroId" name="membroId">
-                  <option value="" disabled>Selecione…</option>
-                  <option [value]="TODOS">Todos os membros</option>
-                  @for (usuario of usuarios(); track usuario.id) {
-                    <option [value]="usuario.id">{{ usuario.nome }}</option>
-                  }
+                <span>Tipo de lançamento</span>
+                <select
+                  [ngModel]="modalLancamentoTipo()"
+                  (ngModelChange)="onModalLancamentoTipoChange($event)"
+                  name="modalLancamentoTipo"
+                >
+                  <option value="unico">Lançamento Único</option>
+                  <option value="geral">Lançamento Geral</option>
                 </select>
               </label>
-              @if (usuariosError()) {
-                <p class="form-error" role="alert">{{ usuariosError() }}</p>
+
+              @if (modalLancamentoTipo() === 'unico') {
+                <label class="form-field">
+                  <span>Beneficiário</span>
+                  <select [(ngModel)]="lancamentoAtual.membroId" name="membroId">
+                    <option value="" disabled>Selecione…</option>
+                    @for (usuario of usuarios(); track usuario.id) {
+                      <option [value]="usuario.id">{{ usuario.nome }}</option>
+                    }
+                  </select>
+                </label>
+                @if (usuariosError()) {
+                  <p class="form-error" role="alert">{{ usuariosError() }}</p>
+                }
+              } @else {
+                <p class="readonly-field"><span>Beneficiário</span><strong>Todos os membros</strong></p>
               }
             } @else {
               <p class="readonly-field"><span>Beneficiário</span><strong>{{ selected()?.membroNome }}</strong></p>
@@ -173,7 +188,7 @@
           <div class="modal-actions">
             <button type="button" class="secondary-button" (click)="closeModal()">Cancelar</button>
             <button type="button" class="primary-button" [disabled]="saving()" (click)="submit()">
-              {{ saving() ? 'Salvando…' : mode === 'edit' ? 'Salvar alterações' : 'Salvar' }}
+              {{ saving() ? 'Salvando…' : mode === 'edit' ? 'Salvar alterações' : modalLancamentoTipo() === 'geral' ? 'Salvar lançamento geral' : 'Salvar' }}
             </button>
           </div>
         }

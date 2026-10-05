@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { FinancialEntriesComponent, TODOS_OS_MEMBROS, parseCurrencyInput } from './financial-entries-component';
 import { Lancamento, LancamentosResponse } from '../../../features/lancamentos/models/lancamento.model';
@@ -79,6 +79,72 @@ describe('FinancialEntriesComponent', () => {
     expect(service.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, status: 'Pago' }));
   });
 
+  it('abre um único modal com Lançamento Único e mostra o formulário individual por padrão', async () => {
+    await create();
+    host.querySelector<HTMLButtonElement>('.toolbar .primary-button')!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const selector = host.querySelector<HTMLSelectElement>('select[name="modalLancamentoTipo"]');
+    expect(selector?.value).toBe('unico');
+    expect(Array.from(selector!.options).map(option => option.textContent?.trim())).toEqual([
+      'Lançamento Único',
+      'Lançamento Geral',
+    ]);
+    expect(host.querySelectorAll('.modal-backdrop')).toHaveLength(1);
+    expect(host.querySelector('select[name="membroId"]')).not.toBeNull();
+    expect(host.querySelector('.readonly-field strong')?.textContent).not.toBe('Todos os membros');
+    expect(component.modalLancamentoTipo()).toBe('unico');
+  });
+
+  it('alterna os formulários geral e individual dentro do mesmo modal', async () => {
+    await create();
+    component.openNewEntry();
+    fixture.detectChanges();
+    const selector = host.querySelector<HTMLSelectElement>('select[name="modalLancamentoTipo"]')!;
+
+    selector.value = 'geral';
+    selector.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(component.modalLancamentoTipo()).toBe('geral');
+    expect(component.lancamentoAtual.membroId).toBe(TODOS_OS_MEMBROS);
+    expect(host.querySelector('select[name="membroId"]')).toBeNull();
+    expect(host.querySelector('.readonly-field strong')?.textContent).toBe('Todos os membros');
+    expect(host.querySelector('.modal-actions .primary-button')?.textContent).toContain('Salvar lançamento geral');
+
+    selector.value = 'unico';
+    selector.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(component.modalLancamentoTipo()).toBe('unico');
+    expect(component.lancamentoAtual.membroId).toBe('');
+    expect(host.querySelector('select[name="membroId"]')).not.toBeNull();
+  });
+
+  it('reabre sempre em Lançamento Único depois de fechar uma criação geral', async () => {
+    await create();
+    const openButton = host.querySelector<HTMLButtonElement>('.toolbar .primary-button')!;
+    openButton.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const selector = host.querySelector<HTMLSelectElement>('select[name="modalLancamentoTipo"]')!;
+    selector.value = 'geral';
+    selector.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    host.querySelector<HTMLButtonElement>('.close-button')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    host.querySelector<HTMLButtonElement>('.toolbar .primary-button')!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.modalLancamentoTipo()).toBe('unico');
+    expect(component.lancamentoAtual.membroId).toBe('');
+    expect(host.querySelector<HTMLSelectElement>('select[name="modalLancamentoTipo"]')?.value).toBe('unico');
+  });
+
   it('mostra mensagem de permissão quando a API responde 403', async () => {
     service.list.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 403 })));
     fixture = TestBed.createComponent(FinancialEntriesComponent);
@@ -109,7 +175,8 @@ describe('FinancialEntriesComponent', () => {
     await create();
     service.registrar.mockReturnValue(of({ operacaoId: 'o', usuariosProcessados: 2, lancamentosCriados: 2, dataHoraUtc: '' }));
     component.openNewEntry();
-    component.lancamentoAtual = { ...component.lancamentoAtual, membroId: TODOS_OS_MEMBROS, valor: 30, vencimento: '2026-09-01' };
+    component.onModalLancamentoTipoChange('geral');
+    component.lancamentoAtual = { ...component.lancamentoAtual, valor: 30, vencimento: '2026-09-01' };
 
     component.submit();
 
@@ -117,6 +184,43 @@ describe('FinancialEntriesComponent', () => {
     expect(payload.aplicarATodosOsMembros).toBe(true);
     expect('membroId' in payload).toBe(false);
     expect(key).toMatch(/^[0-9a-f-]{36}$/);
+    expect(component.modalMode()).toBeNull();
+    expect(service.list).toHaveBeenCalledTimes(2);
+  });
+
+  it('reutiliza a mesma Idempotency-Key ao repetir um lançamento geral após erro', async () => {
+    await create();
+    service.registrar
+      .mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 0 })))
+      .mockReturnValueOnce(of({ operacaoId: 'o', usuariosProcessados: 2, lancamentosCriados: 2, dataHoraUtc: '' }));
+    component.openNewEntry();
+    component.onModalLancamentoTipoChange('geral');
+    component.lancamentoAtual = { ...component.lancamentoAtual, valor: 30, vencimento: '2026-09-01' };
+
+    component.submit();
+    const firstKey = service.registrar.mock.calls[0][1];
+    expect(component.saving()).toBe(false);
+    component.submit();
+
+    expect(service.registrar).toHaveBeenCalledTimes(2);
+    expect(service.registrar.mock.calls[1][1]).toBe(firstKey);
+  });
+
+  it('ignora submits repetidos enquanto o registro está pendente', async () => {
+    await create();
+    const pending = new Subject<Lancamento>();
+    service.registrar.mockReturnValue(pending);
+    component.openNewEntry();
+    component.onModalLancamentoTipoChange('geral');
+    component.lancamentoAtual = { ...component.lancamentoAtual, valor: 30, vencimento: '2026-09-01' };
+
+    component.submit();
+    component.submit();
+
+    expect(service.registrar).toHaveBeenCalledTimes(1);
+    expect(component.saving()).toBe(true);
+    pending.next(lancamento());
+    pending.complete();
   });
 
   it('valida campos antes de chamar a API', async () => {
@@ -196,6 +300,8 @@ describe('FinancialEntriesComponent', () => {
     component.openEditEntry(lancamento({ valor: 1250.5 }));
     fixture.detectChanges();
 
+    expect(component.modalLancamentoTipo()).toBe('unico');
+    expect(host.querySelector('select[name="modalLancamentoTipo"]')).toBeNull();
     expect(plain(host.querySelector<HTMLInputElement>('input[name="valor"]')!.value)).toBe('R$ 1.250,50');
 
     component.submit();

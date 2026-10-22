@@ -34,7 +34,14 @@ describe('User', () => {
   });
 
   it('cadastra com POST /api/Usuarios enviando somente o corpo informado', () => {
-    const payload = { nome: 'Ana', email: 'ana@example.com', senha: 'Kx9#pLm2@vQz', cargoId: 'c1' };
+    const payload = {
+      nome: 'Ana',
+      email: 'ana@example.com',
+      senha: 'Kx9#pLm2@vQz',
+      cargoId: 'c1',
+      tipoSanguineo: 'O+',
+      doencasAlergias: 'Alergia a amendoim',
+    };
     let criado: unknown;
     service.criarUsuario(payload).subscribe(u => (criado = u));
 
@@ -45,10 +52,22 @@ describe('User', () => {
   });
 
   it('altera com PUT /api/Usuarios/{id} sem senha', () => {
-    service.atualizarUsuario('u1', { nome: 'Ana', email: 'ana@example.com', cargoId: 'c2' }).subscribe();
+    service.atualizarUsuario('u1', {
+      nome: 'Ana',
+      email: 'ana@example.com',
+      cargoId: 'c2',
+      tipoSanguineo: null,
+      doencasAlergias: null,
+    }).subscribe();
 
     const req = http.expectOne(r => r.method === 'PUT' && r.url === '/api/Usuarios/u1');
-    expect(req.request.body).toEqual({ nome: 'Ana', email: 'ana@example.com', cargoId: 'c2' });
+    expect(req.request.body).toEqual({
+      nome: 'Ana',
+      email: 'ana@example.com',
+      cargoId: 'c2',
+      tipoSanguineo: null,
+      doencasAlergias: null,
+    });
     req.flush({ id: 'u1' });
   });
 
@@ -69,5 +88,14 @@ describe('User', () => {
     const req = http.expectOne(r => r.method === 'GET' && r.url === '/api/Cargos');
     req.flush([{ id: 'c1', nome: 'Diretor', descricao: '', ativo: true, role: 'DIR' }]);
     expect(cargos).toEqual([{ id: 'c1', nome: 'Diretor', descricao: '', ativo: true, role: 'DIR' }]);
+  });
+
+  it('consulta CEP em GET /api/Cep/{cep}', () => {
+    let endereco: unknown;
+    service.consultarCep('01001000').subscribe(resultado => (endereco = resultado));
+
+    const req = http.expectOne(r => r.method === 'GET' && r.url === '/api/Cep/01001000');
+    req.flush({ cep: '01001-000', logradouro: 'Praça da Sé', bairro: 'Sé', uf: 'SP' });
+    expect(endereco).toEqual({ cep: '01001-000', logradouro: 'Praça da Sé', bairro: 'Sé', uf: 'SP' });
   });
 });

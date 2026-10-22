@@ -10,11 +10,27 @@ describe('masks', () => {
     expect(applyMask('12a3', 'cpf')).toBe('123');
   });
 
+  it('RG: formata como 00.000.000-0, ignora letras e corta excesso', () => {
+    expect(applyMask('12', 'rg')).toBe('12');
+    expect(applyMask('123', 'rg')).toBe('12.3');
+    expect(applyMask('12345678', 'rg')).toBe('12.345.678');
+    expect(applyMask('123456789', 'rg')).toBe('12.345.678-9');
+    expect(applyMask('12a34567899', 'rg')).toBe('12.345.678-9');
+  });
+
   it('data: dd/mm/aaaa', () => {
     expect(applyMask('0', 'data')).toBe('0');
     expect(applyMask('011', 'data')).toBe('01/1');
     expect(applyMask('01102010', 'data')).toBe('01/10/2010');
     expect(applyMask('0110201099', 'data')).toBe('01/10/2010');
+  });
+
+  it('CEP: formata como 00000-000, ignora letras e corta excesso', () => {
+    expect(applyMask('1234', 'cep')).toBe('1234');
+    expect(applyMask('123456', 'cep')).toBe('12345-6');
+    expect(applyMask('12345678', 'cep')).toBe('12345-678');
+    expect(applyMask('12345-67899', 'cep')).toBe('12345-678');
+    expect(applyMask('123a45678', 'cep')).toBe('12345-678');
   });
 
   it('telefone: fixo (8 dígitos) e celular (9 dígitos) com DDD', () => {

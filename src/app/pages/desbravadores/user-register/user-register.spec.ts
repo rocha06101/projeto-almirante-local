@@ -1,10 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { UserRegister } from './user-register';
-import { Cargo, User as UserModel } from '../../../core/models/user.model';
+import { Cargo, UserAddress, User as UserModel } from '../../../core/models/user.model';
 import { User as UserService } from '../../../core/services/user';
 
 const cargos: Cargo[] = [
@@ -17,6 +17,17 @@ const usuario: UserModel = {
   id: 'u1',
   nome: 'Ana Souza',
   email: 'ana@example.com',
+  tipoSanguineo: 'O+',
+  doencasAlergias: 'Asma',
+  endereco: {
+    cep: '01001-000',
+    logradouro: 'Praça da Sé',
+    numero: '10',
+    complemento: 'Apto 1',
+    bairro: 'Sé',
+    localidade: 'São Paulo',
+    uf: 'SP',
+  },
   dataCriacao: '2026-09-01T10:00:00Z',
   funcao: 'Secretário',
   ativo: true,
@@ -31,6 +42,7 @@ describe('UserRegister', () => {
   let host: HTMLElement;
   let service: {
     listarCargos: ReturnType<typeof vi.fn>;
+    consultarCep: ReturnType<typeof vi.fn>;
     criarUsuario: ReturnType<typeof vi.fn>;
     atualizarUsuario: ReturnType<typeof vi.fn>;
   };
@@ -55,7 +67,11 @@ describe('UserRegister', () => {
     fixture.detectChanges();
   };
 
-  const preencher = (valores: Partial<Record<'nome' | 'email' | 'senha' | 'confirmarSenha' | 'cargoId', string>>) => {
+  const preencher = (
+    valores: Partial<
+      Record<'nome' | 'email' | 'senha' | 'confirmarSenha' | 'cargoId' | 'tipoSanguineo' | 'doencasAlergias', string>
+    >,
+  ) => {
     component.form.patchValue(valores);
     fixture.detectChanges();
   };
@@ -69,6 +85,15 @@ describe('UserRegister', () => {
     history.replaceState(null, '');
     service = {
       listarCargos: vi.fn().mockReturnValue(of(cargos)),
+      consultarCep: vi.fn().mockReturnValue(of({
+        cep: '01001-000',
+        logradouro: 'Praça da Sé',
+        bairro: 'Sé',
+        localidade: 'São Paulo',
+        uf: 'SP',
+        estado: 'São Paulo',
+        ibge: '3550308',
+      })),
       criarUsuario: vi.fn(),
       atualizarUsuario: vi.fn(),
     };
@@ -80,7 +105,9 @@ describe('UserRegister', () => {
     await setup();
 
     expect(service.listarCargos).toHaveBeenCalledTimes(1);
-    const options = Array.from(host.querySelectorAll<HTMLOptionElement>('app-primary-select option'))
+    const cargoSelect = Array.from(host.querySelectorAll<HTMLSelectElement>('app-primary-select select'))
+      .find(select => select.querySelector('option[value="c-dir"]'))!;
+    const options = Array.from(cargoSelect.querySelectorAll<HTMLOptionElement>('option'))
       .filter(option => option.value)
       .map(option => ({ label: option.textContent?.trim(), value: option.value }));
     expect(options).toEqual([
@@ -94,16 +121,44 @@ describe('UserRegister', () => {
 
     const labels = Array.from(host.querySelectorAll('label')).map(label => label.textContent?.trim());
     expect(labels).toEqual(
-      expect.arrayContaining(['CPF', 'Telefone', 'Nome do responsável', 'Email do responsável', 'cargo/ Função']),
+      expect.arrayContaining([
+        'CPF',
+        'RG',
+        'Telefone',
+        'Tipo sanguíneo',
+        'Doenças e alergias',
+        'CEP',
+        'Rua',
+        'Bairro',
+        'Número',
+        'Complemento',
+        'Nome do responsável',
+        'Email do responsável',
+        'cargo/ Função',
+      ]),
     );
+    expect(host.querySelector('#user-register-address-title')?.textContent?.trim()).toBe('Endereço');
+    expect(Array.from(host.querySelectorAll('app-primary-select option')).map(option => option.textContent?.trim()))
+      .toEqual(expect.arrayContaining(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']));
+    expect(host.querySelector('input[placeholder="00.000.000-0"]')).toBeTruthy();
+    expect(host.querySelector('textarea[formControlName="doencasAlergias"]')).toBeTruthy();
     expect(host.querySelector('app-upload-foto')).toBeTruthy();
   });
 
-  it('cadastra enviando somente nome, email, senha e cargoId e volta para a listagem', async () => {
+  it('cadastra enviando os dados de saúde junto da conta e volta para a listagem', async () => {
     service.criarUsuario.mockReturnValue(of({ ...usuario, id: 'novo' }));
     await setup();
 
-    preencher({ nome: '  Ana Souza ', email: 'ana@example.com ', senha: SENHA_VALIDA, confirmarSenha: SENHA_VALIDA, cargoId: 'c-sec' });
+    preencher({
+      nome: '  Ana Souza ',
+      email: 'ana@example.com ',
+      senha: SENHA_VALIDA,
+      confirmarSenha: SENHA_VALIDA,
+      cargoId: 'c-sec',
+      tipoSanguineo: 'O+',
+      doencasAlergias: 'Alergia a amendoim',
+    });
+
     clicarSalvar();
 
     expect(service.criarUsuario).toHaveBeenCalledWith({
@@ -111,10 +166,90 @@ describe('UserRegister', () => {
       email: 'ana@example.com',
       senha: SENHA_VALIDA,
       cargoId: 'c-sec',
+      tipoSanguineo: 'O+',
+      doencasAlergias: 'Alergia a amendoim',
     });
     expect(navigate).toHaveBeenCalledWith(['/desbravadores'], {
       state: { feedback: 'Ana Souza cadastrado com sucesso.' },
     });
+  });
+
+  it('consulta CEP completo com atraso, preenche rua e bairro e envia os metadados retornados', async () => {
+    service.criarUsuario.mockReturnValue(of({ ...usuario, id: 'novo' }));
+    await setup();
+
+    component.form.patchValue({
+      nome: 'Ana Souza',
+      email: 'ana@example.com',
+      senha: SENHA_VALIDA,
+      confirmarSenha: SENHA_VALIDA,
+      cargoId: 'c-sec',
+      cep: '01001-000',
+      numero: '10',
+      complemento: 'Apto 1',
+    });
+    fixture.detectChanges();
+    await new Promise(resolve => setTimeout(resolve, 400));
+    fixture.detectChanges();
+
+    expect(service.consultarCep).toHaveBeenCalledWith('01001000');
+    expect(component.form.controls.logradouro.value).toBe('Praça da Sé');
+    expect(component.form.controls.bairro.value).toBe('Sé');
+
+    clicarSalvar();
+    expect(service.criarUsuario).toHaveBeenCalledWith(expect.objectContaining({
+      endereco: {
+        cep: '01001-000',
+        logradouro: 'Praça da Sé',
+        numero: '10',
+        complemento: 'Apto 1',
+        bairro: 'Sé',
+        localidade: 'São Paulo',
+        uf: 'SP',
+        estado: 'São Paulo',
+        ibge: '3550308',
+      },
+    }));
+  });
+
+  it('não consulta CEP incompleto e mantém o endereço manual ao falhar a busca', async () => {
+    service.consultarCep.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+    await setup();
+
+    component.form.patchValue({ cep: '1234', logradouro: 'Rua Manual', bairro: 'Centro' });
+    fixture.detectChanges();
+    expect(service.consultarCep).not.toHaveBeenCalled();
+    expect(component.form.controls.logradouro.value).toBe('Rua Manual');
+
+    component.form.controls.cep.setValue('01001-000');
+    await new Promise(resolve => setTimeout(resolve, 400));
+    fixture.detectChanges();
+
+    expect(component.form.controls.logradouro.value).toBe('Rua Manual');
+    expect(component.form.controls.bairro.value).toBe('Centro');
+    expect(host.querySelector('.address-feedback')?.textContent).toContain('Preencha o endereço manualmente');
+  });
+
+  it('ignora a resposta de um CEP anterior quando o usuário informa outro CEP', async () => {
+    const primeiraConsulta = new Subject<UserAddress>();
+    service.consultarCep.mockImplementation((cep: string) =>
+      cep === '11111111'
+        ? primeiraConsulta
+        : of({ cep: '22222-222', logradouro: 'Rua Nova', bairro: 'Bairro Novo' }),
+    );
+    await setup();
+
+    component.form.controls.cep.setValue('11111-111');
+    await new Promise(resolve => setTimeout(resolve, 400));
+    expect(service.consultarCep).toHaveBeenCalledWith('11111111');
+
+    component.form.controls.cep.setValue('22222-222');
+    await new Promise(resolve => setTimeout(resolve, 400));
+    primeiraConsulta.next({ cep: '11111-111', logradouro: 'Rua Antiga', bairro: 'Bairro Antigo' });
+    primeiraConsulta.complete();
+
+    expect(component.form.controls.logradouro.value).toBe('Rua Nova');
+    expect(component.form.controls.bairro.value).toBe('Bairro Novo');
   });
 
   it('não envia formulário inválido e mostra os erros dos campos', async () => {
@@ -159,6 +294,13 @@ describe('UserRegister', () => {
       senha: SENHA_VALIDA,
       confirmarSenha: SENHA_VALIDA,
       cargoId: 'c-sec',
+      tipoSanguineo: '',
+      doencasAlergias: '',
+      cep: '',
+      logradouro: '',
+      bairro: '',
+      numero: '',
+      complemento: '',
     });
     expect(navigate).not.toHaveBeenCalled();
     expect(component.saving()).toBe(false);
@@ -192,8 +334,16 @@ describe('UserRegister', () => {
     expect(component.form.controls.nome.value).toBe('Ana Souza');
     expect(component.form.controls.email.value).toBe('ana@example.com');
     expect(component.form.controls.cargoId.value).toBe('c-sec');
+    expect(component.form.controls.tipoSanguineo.value).toBe('O+');
+    expect(component.form.controls.doencasAlergias.value).toBe('Asma');
+    expect(component.form.controls.cep.value).toBe('01001-000');
+    expect(component.form.controls.logradouro.value).toBe('Praça da Sé');
+    expect(component.form.controls.bairro.value).toBe('Sé');
+    expect(component.form.controls.numero.value).toBe('10');
+    expect(component.form.controls.complemento.value).toBe('Apto 1');
     expect(component.form.controls.senha.disabled).toBe(true);
-    const select = host.querySelector<HTMLSelectElement>('app-primary-select select')!;
+    const select = Array.from(host.querySelectorAll<HTMLSelectElement>('app-primary-select select'))
+      .find(candidate => candidate.querySelector('option[value="c-sec"]'))!;
     expect(select.value).toBe('c-sec');
   });
 
@@ -218,6 +368,9 @@ describe('UserRegister', () => {
       nome: 'Ana Maria Souza',
       email: 'ana@example.com',
       cargoId: 'c-dir',
+      tipoSanguineo: 'O+',
+      doencasAlergias: 'Asma',
+      endereco: usuario.endereco,
     });
     expect(navigate).toHaveBeenCalledWith(['/desbravadores'], {
       state: { feedback: 'Cadastro de Ana Maria Souza atualizado com sucesso.' },

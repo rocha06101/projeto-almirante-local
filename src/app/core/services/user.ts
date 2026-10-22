@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   Cargo,
+  CepLookupResponse,
   CreateUserRequest,
   ListUsersOptions,
   UpdateUserRequest,
@@ -40,5 +41,9 @@ export class User {
 
   listarCargos(): Observable<Cargo[]> {
     return this.api.get<Cargo[]>('/Cargos');
+  }
+
+  consultarCep(cep: string): Observable<CepLookupResponse> {
+    return this.api.get<CepLookupResponse>(`/Cep/${encodeURIComponent(cep)}`);
   }
 }

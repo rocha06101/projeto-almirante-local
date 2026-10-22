@@ -61,6 +61,15 @@
             mask="cpf"
           >
           </app-primary-input>
+
+          <app-primary-input
+            label="RG"
+            placeholder="00.000.000-0"
+            type="text"
+            mask="rg"
+          >
+          </app-primary-input>
+
           <app-primary-input
             label="Data de Nascimento"
             placeholder="dd/mm/aaaa"
@@ -75,7 +84,75 @@
             mask="telefone"
             autocomplete="tel"
           ></app-primary-input>
+
+          <app-primary-select
+            label="Tipo sanguíneo"
+            placeholder="Selecione o tipo sanguíneo"
+            [options]="tipoSanguineoOptions"
+            formControlName="tipoSanguineo"
+            [invalid]="!!fieldError('tipoSanguineo')"
+            describedBy="user-register-tipo-sanguineo-error"
+          >
+          </app-primary-select>
+          @if (fieldError('tipoSanguineo'); as erro) {
+            <p class="field-error" id="user-register-tipo-sanguineo-error">{{ erro }}</p>
+          }
+
+          <div class="medical-notes">
+            <label for="user-register-doencas-alergias">Doenças e alergias</label>
+            <textarea
+              id="user-register-doencas-alergias"
+              formControlName="doencasAlergias"
+              rows="4"
+              maxlength="2000"
+              placeholder="Informe doenças, alergias ou observações importantes"
+              [attr.aria-invalid]="!!fieldError('doencasAlergias') || null"
+              [attr.aria-describedby]="fieldError('doencasAlergias') ? 'user-register-doencas-alergias-error' : null"
+            ></textarea>
+          </div>
+          @if (fieldError('doencasAlergias'); as erro) {
+            <p class="field-error" id="user-register-doencas-alergias-error">{{ erro }}</p>
+          }
+
+        </form>
+      </div>
+
+      <div class="form-container-right">
+        <form [formGroup]="form" (ngSubmit)="salvar()" novalidate>
           <app-primary-input
+            label="Nome do responsável"
+          ></app-primary-input>
+          <app-primary-input
+            label="Telefone do responsável"
+            placeholder="(00) 00000-0000"
+            type="tel"
+            mask="telefone"
+          ></app-primary-input>
+          <app-primary-input
+            label="Email do responsável"
+            placeholder=""
+            type="email"
+          ></app-primary-input>
+          <app-primary-select
+            label="cargo/ Função"
+            [placeholder]="isLoadingCargos() ? 'Carregando cargos...' : 'Selecione o cargo'"
+            [options]="cargoOptions()"
+            formControlName="cargoId"
+            [invalid]="!!fieldError('cargoId')"
+            describedBy="user-register-cargo-error"
+            >
+          </app-primary-select>
+          @if (fieldError('cargoId'); as erro) {
+            <p class="field-error" id="user-register-cargo-error">{{ erro }}</p>
+          }
+          @if (cargosError()) {
+            <p class="field-error" role="alert">
+              {{ cargosError() }}
+              <button type="button" class="link-button" (click)="carregarCargos()">Tentar novamente</button>
+            </p>
+          }
+
+           <app-primary-input
             label="Email"
             placeholder=""
             type="email"
@@ -129,46 +206,62 @@
           @if (fieldError('confirmarSenha'); as erro) {
             <p class="field-error" id="user-register-confirmar-senha-error">{{ erro }}</p>
           }
+
         </form>
       </div>
 
-      <div class="form-container-right">
+      <div class="form-container-center">
         <form [formGroup]="form" (ngSubmit)="salvar()" novalidate>
-          <app-primary-input
-            label="Nome do responsável"
-          ></app-primary-input>
-          <app-primary-input
-            label="Telefone do responsável"
-            placeholder="(00) 00000-0000"
-            type="tel"
-            mask="telefone"
-          ></app-primary-input>
-          <app-primary-input
-            label="Email do responsável"
-            placeholder=""
-            type="email"
-          ></app-primary-input>
-          <app-primary-select
-            label="cargo/ Função"
-            [placeholder]="isLoadingCargos() ? 'Carregando cargos...' : 'Selecione o cargo'"
-            [options]="cargoOptions()"
-            formControlName="cargoId"
-            [invalid]="!!fieldError('cargoId')"
-            describedBy="user-register-cargo-error"
-            >
-          </app-primary-select>
-          @if (fieldError('cargoId'); as erro) {
-            <p class="field-error" id="user-register-cargo-error">{{ erro }}</p>
-          }
-          @if (cargosError()) {
-            <p class="field-error" role="alert">
-              {{ cargosError() }}
-              <button type="button" class="link-button" (click)="carregarCargos()">Tentar novamente</button>
-            </p>
-          }
+          <section class="address-section" aria-labelledby="user-register-address-title">
+            <h2 id="user-register-address-title">Endereço</h2>
+            <div class="address-fields">
+              <app-primary-input
+                label="CEP"
+                placeholder="00000-000"
+                formControlName="cep"
+                autocomplete="postal-code"
+                mask="cep"
+                [invalid]="cepFormatoInvalido()"
+                describedBy="user-register-cep-feedback"
+              ></app-primary-input>
+                            <app-primary-input
+                label="Rua"
+                formControlName="logradouro"
+                autocomplete="address-line1"
+              ></app-primary-input>
+              <app-primary-input
+                label="Bairro"
+                formControlName="bairro"
+                autocomplete="address-level3"
+              ></app-primary-input>
+              <app-primary-input
+                label="Número"
+                formControlName="numero"
+                autocomplete="address-line2"
+              ></app-primary-input>
+              <app-primary-input
+                label="Complemento"
+                formControlName="complemento"
+                autocomplete="address-line2"
+              ></app-primary-input>
+            </div>
+            @if (cepFormatoInvalido()) {
+              <p class="address-feedback error" id="user-register-cep-feedback" role="status">
+                Digite os 8 dígitos do CEP para consultar.
+              </p>
+            } @else if (cepLoading() || cepFeedback()) {
+              <p
+                class="address-feedback"
+                id="user-register-cep-feedback"
+                [class.error]="cepFeedback().startsWith('CEP não encontrado') || cepFeedback().startsWith('Não foi possível')"
+                role="status"
+              >
+                {{ cepFeedback() }}
+              </p>
+            }
+          </section>
         </form>
       </div>
-
 
     </div>
 

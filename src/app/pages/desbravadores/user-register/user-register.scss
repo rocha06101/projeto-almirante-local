@@ -118,9 +118,9 @@
   }
 
   .container-form {
-    // Os dois blocos de campos ficam lado a lado quando cabem (>= 20rem cada) e empilham quando não.
+    // Dados pessoais e conta ocupam a primeira linha; o endereço ocupa toda a linha seguinte.
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
     min-width: 0;
     padding: 0.5rem;
@@ -130,6 +130,99 @@
 
     form {
       min-width: 0;
+    }
+
+    .form-container-left,
+    .form-container-right {
+      min-width: 0;
+    }
+
+    .form-container-center {
+      grid-column: 1 / -1;
+      min-width: 0;
+    }
+
+    .medical-notes {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      min-width: 0;
+      margin: 0.8rem 1rem;
+
+      label {
+        color: #374151;
+        font-weight: 500;
+      }
+
+      textarea {
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
+        padding: 0.5rem 0.75rem;
+        border: 2px solid #eaebed;
+        border-radius: 10px;
+        font: inherit;
+        resize: vertical;
+      }
+    }
+
+    .address-section {
+      min-width: 0;
+      margin: 0.8rem 1rem 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid #dfe3e8;
+
+      h2 {
+        margin: 0 0 0.25rem;
+        color: #374151;
+        font-size: 1rem;
+        font-weight: 700;
+      }
+
+      .address-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+          "cep numero"
+          "rua complemento"
+          "bairro .";
+        align-items: start;
+        gap: 0 0.5rem;
+
+        app-primary-input {
+          min-width: 0;
+
+          &:nth-child(1) {
+            grid-area: cep;
+          }
+
+          &:nth-child(2) {
+            grid-area: rua;
+          }
+
+          &:nth-child(3) {
+            grid-area: bairro;
+          }
+
+          &:nth-child(4) {
+            grid-area: numero;
+          }
+
+          &:nth-child(5) {
+            grid-area: complemento;
+          }
+        }
+      }
+
+      .address-feedback {
+        margin: 0 1rem 0.25rem;
+        color: #4b5563;
+        font-size: 0.85rem;
+
+        &.error {
+          color: #b91c1c;
+        }
+      }
     }
   }
 
@@ -232,8 +325,24 @@
 }
 
 @media (max-width: 575.98px) {
+  .container-center .container-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .field-error,
   .password-policy {
     margin-inline: 0.5rem;
+  }
+
+  .container-center .container-form .medical-notes {
+    margin-inline: 0.5rem;
+  }
+
+  .container-center .container-form .address-section {
+    margin-inline: 0.5rem;
+
+    .address-fields {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 }

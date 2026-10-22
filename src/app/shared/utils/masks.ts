@@ -1,9 +1,11 @@
-export type InputMask = 'cpf' | 'telefone' | 'data';
+export type InputMask = 'cpf' | 'rg' | 'telefone' | 'data' | 'cep';
 
 export const MASK_MAX_DIGITS: Record<InputMask, number> = {
   cpf: 11,
+  rg: 9,
   telefone: 11,
   data: 8,
+  cep: 8,
 };
 
 export function onlyDigits(value: string | null | undefined): string {
@@ -20,8 +22,15 @@ export function applyMask(value: string | null | undefined, mask: InputMask): st
         .replace(/^(\d{3})(\d)/, '$1.$2')
         .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
         .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4');
+    case 'rg':
+      return digits
+        .replace(/^(\d{2})(\d)/, '$1.$2')
+        .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4');
     case 'data':
       return digits.replace(/^(\d{2})(\d)/, '$1/$2').replace(/^(\d{2})\/(\d{2})(\d)/, '$1/$2/$3');
+    case 'cep':
+      return digits.replace(/^(\d{5})(\d)/, '$1-$2');
     case 'telefone': {
       if (digits.length <= 2) {
         return digits.length ? `(${digits}` : '';

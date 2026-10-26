@@ -34,6 +34,16 @@ export class User {
     return this.api.put<UserModel>(`/Usuarios/${encodeURIComponent(id)}`, payload);
   }
 
+  enviarFoto(usuarioId: string, arquivo: File): Observable<UserModel> {
+    const formData = new FormData();
+    formData.append('arquivo', arquivo);
+    return this.api.put<UserModel>(`/Usuarios/${encodeURIComponent(usuarioId)}/foto`, formData);
+  }
+
+  obterFoto(usuarioId: string): Observable<Blob> {
+    return this.api.getBlob(`/Usuarios/${encodeURIComponent(usuarioId)}/foto`);
+  }
+
   /** Exclusão lógica (204). 409 se o usuário estiver vinculado a eventos futuros, já inativo ou for o próprio solicitante. */
   excluirUsuario(id: string): Observable<void> {
     return this.api.delete<void>(`/Usuarios/${encodeURIComponent(id)}`);

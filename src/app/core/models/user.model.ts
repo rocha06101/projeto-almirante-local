@@ -43,6 +43,8 @@ export interface User {
   nome: string;
   email: string;
   dataCriacao: string;
+  /** Rota autenticada da foto; o frontend deve buscá-la como blob, não usar diretamente em <img src>. */
+  fotoUrl?: string | null;
   tipoSanguineo?: string | null;
   doencasAlergias?: string | null;
   endereco?: UserAddress | null;

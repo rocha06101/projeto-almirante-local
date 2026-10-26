@@ -26,6 +26,10 @@ export class ApiService {
     return this.http.get<T>(this.resolveUrl(url), options);
   }
 
+  getBlob(url: string): Observable<Blob> {
+    return this.http.get(this.resolveUrl(url), { responseType: 'blob' });
+  }
+
   put<T>(url: string, body: unknown, options?: ApiRequestOptions): Observable<T> {
     return this.http.put<T>(this.resolveUrl(url), body, options);
   }

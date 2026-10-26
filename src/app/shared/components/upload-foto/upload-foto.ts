@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, ElementRef, EventEmitter, Output, ViewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 
 @Component({
   selector: 'app-upload-foto',
@@ -9,16 +9,21 @@ import { Component, ElementRef, EventEmitter, Output, ViewChild } from '@angular
   styleUrls: ['./upload-foto.scss'],
 })
 export class UploadFoto {
-  @Output() fotoSelecionada = new EventEmitter<File>();
+  @Output() fotoSelecionada = new EventEmitter<File | null>();
+  @Input() disabled = false;
+  @Input() enviando = false;
   @ViewChild('fileInput') fileInput?: ElementRef<HTMLInputElement>;
 
   isDragOver = false;
   erro: string | null = null;
 
-  private readonly allowedTypes = ['image/jpeg', 'image/png'];
-  private readonly maxSizeBytes = 2 * 1024 * 1024;
+  private readonly allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  private readonly maxSizeBytes = 10 * 1024 * 1024;
 
   onContainerClick(): void {
+    if (this.disabled || this.enviando) {
+      return;
+    }
     this.erro = null;
     this.fileInput?.nativeElement.click();
   }
@@ -32,12 +37,12 @@ export class UploadFoto {
 
   handleDragEnter(event: DragEvent): void {
     this.preventDefaults(event);
-    this.isDragOver = true;
+    this.isDragOver = !this.disabled && !this.enviando;
   }
 
   handleDragOver(event: DragEvent): void {
     this.preventDefaults(event);
-    this.isDragOver = true;
+    this.isDragOver = !this.disabled && !this.enviando;
   }
 
   handleDragLeave(event: DragEvent): void {
@@ -53,22 +58,28 @@ export class UploadFoto {
   }
 
   private processFile(file: File | null): void {
-    if (!file) {
+    if (!file || this.disabled || this.enviando) {
       return;
     }
 
     if (!this.allowedTypes.includes(file.type)) {
-      this.erro = 'Apenas JPG ou PNG são permitidos.';
+      this.erro = 'Selecione uma imagem JPEG, PNG ou WebP.';
+      this.limparSelecao();
       return;
     }
 
     if (file.size > this.maxSizeBytes) {
-      this.erro = 'O arquivo ultrapassa o tamanho máximo de 2MB.';
+      this.erro = 'O arquivo ultrapassa o limite de 10 MB.';
+      this.limparSelecao();
       return;
     }
 
     this.erro = null;
     this.fotoSelecionada.emit(file);
+  }
+
+  private limparSelecao(): void {
+    this.fotoSelecionada.emit(null);
   }
 
   private preventDefaults(event: Event): void {

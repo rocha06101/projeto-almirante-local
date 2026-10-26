@@ -13,7 +13,7 @@
     <div class="header-actions">
       <button type="button" class="refresh-button" (click)="salvar()" [disabled]="saving() || form.disabled">
         <img src="/icons/save-icon.svg" alt="" width="24" height="24">
-        {{ saving() ? 'Salvando...' : 'Salvar Cadastro' }}
+        {{ saving() ? (fotoEnviando() ? 'Enviando foto...' : 'Salvando...') : (usuarioPendenteFoto() ? 'Reenviar foto' : 'Salvar Cadastro') }}
       </button>
 
       <button type="button" class="button-cancel" (click)="cancelar()">
@@ -32,7 +32,7 @@
     <div class="header-actions-down">
     <button type="button" class="refresh-button" (click)="salvar()" [disabled]="saving() || form.disabled">
       <img src="/icons/save-icon.svg" alt="" width="24" height="24">
-      {{ saving() ? 'Salvando...' : 'Salvar Cadastro' }}
+      {{ saving() ? (fotoEnviando() ? 'Enviando foto...' : 'Salvando...') : (usuarioPendenteFoto() ? 'Reenviar foto' : 'Salvar Cadastro') }}
     </button>
 
     <button type="button" class="button-cancel" (click)="cancelar()">
@@ -269,10 +269,18 @@
         <strong>Foto do Membro</strong>
         <div class="container-image-center">
           <div>
-            <img src="/icons/camera-icon.svg" alt="" width="50" height="50">
+            @if (fotoPreview() ?? fotoAtual(); as foto) {
+              <img class="profile-photo" [src]="foto" alt="Foto de perfil" />
+            } @else {
+              <img src="/icons/camera-icon.svg" alt="" width="50" height="50">
+            }
           </div>
         </div>
-        <app-upload-foto (fotoSelecionada)="onFotoSelecionada($event)"></app-upload-foto>
+        <app-upload-foto
+          [disabled]="!podeGerenciarCadastros() || saving()"
+          [enviando]="fotoEnviando()"
+          (fotoSelecionada)="onFotoSelecionada($event)"
+        ></app-upload-foto>
       </div>
     </div>
 </section>

@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
+import { AuthService } from '../../../core/services/auth';
 import { of, Subject, throwError } from 'rxjs';
 
 import { UserRegister } from './user-register';
@@ -45,8 +46,11 @@ describe('UserRegister', () => {
     consultarCep: ReturnType<typeof vi.fn>;
     criarUsuario: ReturnType<typeof vi.fn>;
     atualizarUsuario: ReturnType<typeof vi.fn>;
+    enviarFoto: ReturnType<typeof vi.fn>;
+    obterFoto: ReturnType<typeof vi.fn>;
   };
   let navigate: ReturnType<typeof vi.spyOn>;
+  let loggedInRole = 'SEC';
 
   const setup = async (modo?: 'editar') => {
     TestBed.configureTestingModule({
@@ -54,6 +58,7 @@ describe('UserRegister', () => {
       providers: [
         provideRouter([]),
         { provide: UserService, useValue: service },
+        { provide: AuthService, useValue: { user: () => ({ cargo: { role: loggedInRole } }) } },
         ...(modo ? [{ provide: ActivatedRoute, useValue: { snapshot: { data: { modo } } } }] : []),
       ],
     });
@@ -96,7 +101,10 @@ describe('UserRegister', () => {
       })),
       criarUsuario: vi.fn(),
       atualizarUsuario: vi.fn(),
+      enviarFoto: vi.fn(),
+      obterFoto: vi.fn(),
     };
+    loggedInRole = 'SEC';
   });
 
   afterEach(() => history.replaceState(null, ''));
@@ -172,6 +180,69 @@ describe('UserRegister', () => {
     expect(navigate).toHaveBeenCalledWith(['/desbravadores'], {
       state: { feedback: 'Ana Souza cadastrado com sucesso.' },
     });
+  });
+
+  it('cria o usuário antes do upload e permite reenviar somente a foto após falha', async () => {
+    const criado = { ...usuario, id: 'novo' };
+    service.criarUsuario.mockReturnValue(of(criado));
+    service.enviarFoto
+      .mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500 })))
+      .mockReturnValueOnce(of({ ...criado, fotoUrl: '/api/Usuarios/novo/foto' }));
+    await setup();
+    preencher({
+      nome: 'Ana Souza',
+      email: 'ana@example.com',
+      senha: SENHA_VALIDA,
+      confirmarSenha: SENHA_VALIDA,
+      cargoId: 'c-sec',
+    });
+    const arquivo = new File(['foto'], 'perfil.webp', { type: 'image/webp' });
+    component.onFotoSelecionada(arquivo);
+
+    clicarSalvar();
+
+    expect(service.criarUsuario).toHaveBeenCalledTimes(1);
+    expect(service.enviarFoto).toHaveBeenCalledWith('novo', arquivo);
+    expect(component.usuarioPendenteFoto()?.id).toBe('novo');
+    expect(host.querySelector('.form-feedback.error')?.textContent).toContain('servidor');
+    expect(navigate).not.toHaveBeenCalled();
+
+    clicarSalvar();
+
+    expect(service.criarUsuario).toHaveBeenCalledTimes(1);
+    expect(service.enviarFoto).toHaveBeenCalledTimes(2);
+    expect(navigate).toHaveBeenCalledWith(['/desbravadores'], {
+      state: { feedback: 'Ana Souza cadastrado com sucesso.' },
+    });
+  });
+
+  it('desabilita o upload para perfis sem permissão de gestão de cadastros', async () => {
+    loggedInRole = 'DS';
+    await setup();
+
+    expect(host.querySelector<HTMLElement>('app-upload-foto .upload-foto-container')?.getAttribute('aria-disabled'))
+      .toBe('true');
+  });
+
+  it('exibe a seleção apenas no avatar e limpa a prévia ao cancelar a seleção', async () => {
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:foto-local');
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    await setup();
+
+    component.onFotoSelecionada(new File(['imagem'], 'perfil.webp', { type: 'image/webp' }));
+    fixture.detectChanges();
+
+    expect(host.querySelector('.container-image-center .profile-photo')).toBeTruthy();
+    expect(host.querySelector('app-upload-foto .upload-foto-preview')).toBeNull();
+
+    component.onFotoSelecionada(null);
+    fixture.detectChanges();
+
+    expect(host.querySelector('.container-image-center .profile-photo')).toBeNull();
+    expect(host.querySelector('.container-image-center img[src="/icons/camera-icon.svg"]')).toBeTruthy();
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:foto-local');
+    createObjectUrl.mockRestore();
+    revokeObjectUrl.mockRestore();
   });
 
   it('consulta CEP completo com atraso, preenche rua e bairro e envia os metadados retornados', async () => {

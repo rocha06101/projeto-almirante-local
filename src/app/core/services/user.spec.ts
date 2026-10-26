@@ -71,6 +71,29 @@ describe('User', () => {
     req.flush({ id: 'u1' });
   });
 
+  it('envia foto como multipart no campo arquivo sem definir Content-Type', () => {
+    const arquivo = new File(['foto'], 'perfil.webp', { type: 'image/webp' });
+    let usuario: unknown;
+    service.enviarFoto('u/1', arquivo).subscribe(resultado => (usuario = resultado));
+
+    const req = http.expectOne(r => r.method === 'PUT' && r.url === '/api/Usuarios/u%2F1/foto');
+    expect(req.request.body).toBeInstanceOf(FormData);
+    expect((req.request.body as FormData).get('arquivo')).toBe(arquivo);
+    expect(req.request.headers.has('Content-Type')).toBe(false);
+    req.flush({ id: 'u/1', nome: 'Ana', fotoUrl: '/api/Usuarios/u%2F1/foto' });
+    expect(usuario).toEqual({ id: 'u/1', nome: 'Ana', fotoUrl: '/api/Usuarios/u%2F1/foto' });
+  });
+
+  it('obtém a foto como blob pelo GET autenticável', () => {
+    let foto: Blob | undefined;
+    service.obterFoto('u1').subscribe(resultado => (foto = resultado));
+
+    const req = http.expectOne(r => r.method === 'GET' && r.url === '/api/Usuarios/u1/foto');
+    expect(req.request.responseType).toBe('blob');
+    req.flush(new Blob(['imagem'], { type: 'image/webp' }));
+    expect(foto).toBeInstanceOf(Blob);
+  });
+
   it('exclui (logicamente) com DELETE /api/Usuarios/{id} sem corpo', () => {
     let concluido = false;
     service.excluirUsuario('u1').subscribe(() => (concluido = true));

@@ -104,6 +104,17 @@ describe('User', () => {
     expect(foto).toBeInstanceOf(Blob);
   });
 
+  it('resolve fotoUrl pelo proxy /api e busca a imagem como blob', () => {
+    let foto: Blob | undefined;
+    service.obterFotoPorUrl('https://desbravadores-gestao.onrender.com/api/Usuarios/u1/foto?versao=2')
+      .subscribe(resultado => (foto = resultado));
+
+    const req = http.expectOne(r => r.method === 'GET' && r.urlWithParams === '/api/Usuarios/u1/foto?versao=2');
+    expect(req.request.responseType).toBe('blob');
+    req.flush(new Blob(['imagem'], { type: 'image/webp' }));
+    expect(foto).toBeInstanceOf(Blob);
+  });
+
   it('exclui (logicamente) com DELETE /api/Usuarios/{id} sem corpo', () => {
     let concluido = false;
     service.excluirUsuario('u1').subscribe(() => (concluido = true));

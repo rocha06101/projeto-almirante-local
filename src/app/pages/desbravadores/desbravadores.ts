@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { A11yModule } from '@angular/cdk/a11y';
 import { finalize, take } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { User as UserModel } from '../../core/models/user.model';
 import { User as UserService } from '../../core/services/user';
 import { Router, RouterModule } from '@angular/router';
@@ -20,6 +21,11 @@ const normalizar = (texto: string) => texto.normalize('NFD').replace(/\p{Diacrit
 export class Desbravadores implements OnInit {
   private userService = inject(UserService);
   private router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly fotosCache = new Map<string, { fotoUrl: string; objectUrl: string }>();
+  private readonly fotosEmCarregamento = new Map<string, string>();
+  fotoSources = signal<Record<string, string>>({});
+  fotosFalhas = signal<Record<string, string>>({});
 
   usuarios = signal<UserModel[]>([]);
   isLoading = signal(true);
@@ -47,6 +53,12 @@ export class Desbravadores implements OnInit {
   deleteError = signal('');
 
   ngOnInit(): void {
+    this.destroyRef.onDestroy(() => {
+      for (const { objectUrl } of this.fotosCache.values()) {
+        URL.revokeObjectURL(objectUrl);
+      }
+      this.fotosCache.clear();
+    });
     this.carregarUsuarios();
   }
 
@@ -61,12 +73,107 @@ export class Desbravadores implements OnInit {
         finalize(() => this.isLoading.set(false)),
       )
       .subscribe({
-        next: usuarios => this.usuarios.set(usuarios),
+        next: usuarios => {
+          this.usuarios.set(usuarios);
+          this.carregarFotos(usuarios);
+        },
         error: error => {
           this.usuarios.set([]);
           this.errorMessage.set(describeUsuarioError(error, 'Nao foi possivel carregar os usuarios.'));
         },
       });
+  }
+
+  fotoExibicao(usuario: UserModel): string | null {
+    const fotoUrl = usuario.fotoUrl;
+    if (!fotoUrl || this.fotosFalhas()[usuario.id] === fotoUrl) {
+      return null;
+    }
+    return this.fotoSources()[usuario.id] ?? null;
+  }
+
+  onFotoError(usuarioId: string): void {
+    const foto = this.fotosCache.get(usuarioId);
+    if (foto) {
+      URL.revokeObjectURL(foto.objectUrl);
+      this.fotosCache.delete(usuarioId);
+      this.fotoSources.update(sources => {
+        const updated = { ...sources };
+        delete updated[usuarioId];
+        return updated;
+      });
+      this.fotosFalhas.update(falhas => ({ ...falhas, [usuarioId]: foto.fotoUrl }));
+    }
+  }
+
+  private carregarFotos(usuarios: UserModel[]): void {
+    const usuariosPorId = new Map(usuarios.map(usuario => [usuario.id, usuario]));
+
+    for (const [usuarioId, foto] of this.fotosCache) {
+      if (usuariosPorId.get(usuarioId)?.fotoUrl !== foto.fotoUrl) {
+        URL.revokeObjectURL(foto.objectUrl);
+        this.fotosCache.delete(usuarioId);
+        this.fotoSources.update(sources => {
+          const updated = { ...sources };
+          delete updated[usuarioId];
+          return updated;
+        });
+      }
+    }
+
+    for (const [usuarioId, fotoUrl] of this.fotosEmCarregamento) {
+      if (usuariosPorId.get(usuarioId)?.fotoUrl !== fotoUrl) {
+        this.fotosEmCarregamento.delete(usuarioId);
+      }
+    }
+
+    this.fotosFalhas.update(falhas => {
+      const updated = { ...falhas };
+      for (const [usuarioId, fotoUrl] of Object.entries(updated)) {
+        if (usuariosPorId.get(usuarioId)?.fotoUrl !== fotoUrl) {
+          delete updated[usuarioId];
+        }
+      }
+      return updated;
+    });
+
+    for (const usuario of usuarios) {
+      const fotoUrl = usuario.fotoUrl;
+      if (
+        !fotoUrl ||
+        this.fotosCache.get(usuario.id)?.fotoUrl === fotoUrl ||
+        this.fotosEmCarregamento.get(usuario.id) === fotoUrl ||
+        this.fotosFalhas()[usuario.id] === fotoUrl
+      ) {
+        continue;
+      }
+
+      this.fotosEmCarregamento.set(usuario.id, fotoUrl);
+      this.userService
+        .obterFotoPorUrl(fotoUrl)
+        .pipe(take(1), takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: foto => {
+            if (this.fotosEmCarregamento.get(usuario.id) !== fotoUrl) {
+              return;
+            }
+            this.fotosEmCarregamento.delete(usuario.id);
+            if (this.usuarios().find(atual => atual.id === usuario.id)?.fotoUrl !== fotoUrl) {
+              return;
+            }
+
+            const objectUrl = URL.createObjectURL(foto);
+            this.fotosCache.set(usuario.id, { fotoUrl, objectUrl });
+            this.fotoSources.update(sources => ({ ...sources, [usuario.id]: objectUrl }));
+          },
+          error: () => {
+            if (this.fotosEmCarregamento.get(usuario.id) === fotoUrl) {
+              this.fotosEmCarregamento.delete(usuario.id);
+              this.fotosFalhas.update(falhas => ({ ...falhas, [usuario.id]: fotoUrl }));
+            }
+          },
+        });
+    }
   }
 
   alternarInativos(event: Event): void {

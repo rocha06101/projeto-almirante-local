@@ -45,6 +45,12 @@ export class User {
     return this.api.getBlob(`/Usuarios/${encodeURIComponent(usuarioId)}/foto`);
   }
 
+  obterFotoPorUrl(fotoUrl: string): Observable<Blob> {
+    const url = new URL(fotoUrl, globalThis.location.origin);
+    const path = url.pathname.replace(/^\/api(?=\/|$)/, '');
+    return this.api.getBlob(`${path}${url.search}`);
+  }
+
   /** Exclusão lógica (204). 409 se o usuário estiver vinculado a eventos futuros, já inativo ou for o próprio solicitante. */
   excluirUsuario(id: string): Observable<void> {
     return this.api.delete<void>(`/Usuarios/${encodeURIComponent(id)}`);

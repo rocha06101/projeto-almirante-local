@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Observable, catchError, throwError } from 'rxjs';
 import {
   Cargo,
   CepLookupResponse,
@@ -54,6 +55,20 @@ export class User {
   }
 
   consultarCep(cep: string): Observable<CepLookupResponse> {
-    return this.api.get<CepLookupResponse>(`/Cep/${encodeURIComponent(cep)}`);
+    return this.api.get<CepLookupResponse>(`/Cep/${encodeURIComponent(cep)}`).pipe(
+      catchError((error: unknown) => {
+        const podeUsarViaCep =
+          error instanceof HttpErrorResponse &&
+          (error.status === 0 || error.status === 404 || error.status >= 500);
+
+        if (!podeUsarViaCep) {
+          return throwError(() => error);
+        }
+
+        return this.api.get<CepLookupResponse>(
+          `https://viacep.com.br/ws/${encodeURIComponent(cep)}/json/`,
+        );
+      }),
+    );
   }
 }

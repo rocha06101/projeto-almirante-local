@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
@@ -39,6 +40,9 @@ describe('User', () => {
       email: 'ana@example.com',
       senha: 'Kx9#pLm2@vQz',
       cargoId: 'c1',
+      cpf: '529.982.247-25',
+      ehCin: false,
+      rg: '12.345.678-9',
       tipoSanguineo: 'O+',
       doencasAlergias: 'Alergia a amendoim',
     };
@@ -56,6 +60,9 @@ describe('User', () => {
       nome: 'Ana',
       email: 'ana@example.com',
       cargoId: 'c2',
+      cpf: '529.982.247-25',
+      rg: '12.345.678-9',
+      ehCin: false,
       tipoSanguineo: null,
       doencasAlergias: null,
     }).subscribe();
@@ -65,6 +72,9 @@ describe('User', () => {
       nome: 'Ana',
       email: 'ana@example.com',
       cargoId: 'c2',
+      cpf: '529.982.247-25',
+      rg: '12.345.678-9',
+      ehCin: false,
       tipoSanguineo: null,
       doencasAlergias: null,
     });
@@ -120,5 +130,34 @@ describe('User', () => {
     const req = http.expectOne(r => r.method === 'GET' && r.url === '/api/Cep/01001000');
     req.flush({ cep: '01001-000', logradouro: 'Praça da Sé', bairro: 'Sé', uf: 'SP' });
     expect(endereco).toEqual({ cep: '01001-000', logradouro: 'Praça da Sé', bairro: 'Sé', uf: 'SP' });
+  });
+
+  it('usa ViaCEP quando a rota interna de consulta não está disponível', () => {
+    let endereco: unknown;
+    service.consultarCep('01001000').subscribe(resultado => (endereco = resultado));
+
+    http.expectOne('/api/Cep/01001000').flush({}, { status: 404, statusText: 'Not Found' });
+
+    const req = http.expectOne('https://viacep.com.br/ws/01001000/json/');
+    expect(req.request.method).toBe('GET');
+    expect(req.request.withCredentials).toBe(false);
+    req.flush({ cep: '01001-000', logradouro: 'Praça da Sé', bairro: 'Sé', uf: 'SP' });
+
+    expect(endereco).toEqual({
+      cep: '01001-000',
+      logradouro: 'Praça da Sé',
+      bairro: 'Sé',
+      uf: 'SP',
+    });
+  });
+
+  it('não usa ViaCEP para erros de autenticação da API', () => {
+    let erro: unknown;
+    service.consultarCep('01001000').subscribe({ error: resultado => (erro = resultado) });
+
+    http.expectOne('/api/Cep/01001000').flush({}, { status: 401, statusText: 'Unauthorized' });
+
+    expect(erro).toBeInstanceOf(HttpErrorResponse);
+    http.expectNone('https://viacep.com.br/ws/01001000/json/');
   });
 });

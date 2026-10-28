@@ -54,21 +54,36 @@
           @if (fieldError('nome'); as erro) {
             <p class="field-error" id="user-register-nome-error">{{ erro }}</p>
           }
+          <app-toggle-switch
+            label="Documento é CIN (Carteira de Identidade Nacional)"
+            formControlName="ehCin"
+          ></app-toggle-switch>
           <app-primary-input
             label="CPF"
             placeholder="000.000.000-00"
             type="text"
             mask="cpf"
-          >
-          </app-primary-input>
+            formControlName="cpf"
+            [invalid]="!!fieldError('cpf')"
+            describedBy="user-register-cpf-error"
+          ></app-primary-input>
+          @if (fieldError('cpf'); as erro) {
+            <p class="field-error" id="user-register-cpf-error">{{ erro }}</p>
+          }
 
           <app-primary-input
             label="RG"
             placeholder="00.000.000-0"
             type="text"
             mask="rg"
-          >
-          </app-primary-input>
+            formControlName="rg"
+            [style.--primary-input-background]="form.controls.ehCin.value ? '#f1f2f5' : null"
+            [invalid]="!!fieldError('rg')"
+            describedBy="user-register-rg-error"
+          ></app-primary-input>
+          @if (fieldError('rg'); as erro) {
+            <p class="field-error" id="user-register-rg-error">{{ erro }}</p>
+          }
 
           <app-primary-input
             label="Data de Nascimento"
@@ -253,7 +268,7 @@
               <p
                 class="address-feedback"
                 id="user-register-cep-feedback"
-                [class.error]="cepFeedback().startsWith('CEP não encontrado') || cepFeedback().startsWith('Não foi possível')"
+                [class.error]="cepFeedback().startsWith('CEP não encontrado') || cepFeedback().startsWith('CEP inválido') || cepFeedback().startsWith('Sua sessão') || cepFeedback().startsWith('Você não tem permissão') || cepFeedback().startsWith('O serviço de consulta') || cepFeedback().startsWith('Sem conexão') || cepFeedback().startsWith('Não foi possível')"
                 role="status"
               >
                 {{ cepFeedback() }}

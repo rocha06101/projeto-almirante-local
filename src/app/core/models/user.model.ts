@@ -43,6 +43,9 @@ export interface User {
   nome: string;
   email: string;
   dataCriacao: string;
+  cpf?: string | null;
+  rg?: string | null;
+  ehCin?: boolean;
   /** Rota autenticada da foto; o frontend deve buscá-la como blob, não usar diretamente em <img src>. */
   fotoUrl?: string | null;
   tipoSanguineo?: string | null;
@@ -81,6 +84,9 @@ export interface CreateUserRequest {
   email: string;
   senha: string;
   cargoId: string;
+  cpf: string;
+  rg?: string | null;
+  ehCin: boolean;
   tipoSanguineo: string | null;
   doencasAlergias: string | null;
   endereco?: UserAddressRequest;
@@ -91,6 +97,9 @@ export interface UpdateUserRequest {
   nome: string;
   email: string;
   cargoId: string;
+  cpf?: string;
+  rg?: string | null;
+  ehCin: boolean;
   tipoSanguineo: string | null;
   doencasAlergias: string | null;
   endereco?: UserAddressRequest;

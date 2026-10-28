@@ -1,0 +1,76 @@
+:host {
+  display: block;
+}
+
+.toggle-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0.8rem 1rem;
+  color: #374151;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.toggle-control {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 1.5rem;
+
+  input {
+    position: absolute;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: inherit;
+  }
+}
+
+.toggle-track {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0.2rem;
+  border: 1px solid #9ca3af;
+  border-radius: 999px;
+  background: #e5e7eb;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.toggle-thumb {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
+  transition: transform 0.15s ease;
+}
+
+input:checked + .toggle-track {
+  border-color: var(--primary-button-color, #2563eb);
+  background: var(--primary-button-color, #2563eb);
+
+  .toggle-thumb {
+    transform: translateX(1.25rem);
+  }
+}
+
+input:focus-visible + .toggle-track {
+  outline: 2px solid var(--primary-button-color, #2563eb);
+  outline-offset: 2px;
+}
+
+input:disabled + .toggle-track {
+  opacity: 0.55;
+}
+
+@media (max-width: 575.98px) {
+  .toggle-switch {
+    margin-inline: 0.5rem;
+  }
+}

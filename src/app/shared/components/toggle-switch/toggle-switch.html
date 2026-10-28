@@ -1,0 +1,19 @@
+<label class="toggle-switch" [for]="id">
+  <span class="toggle-label">{{ label }}</span>
+  <span class="toggle-control">
+    <input
+      [id]="id"
+      type="checkbox"
+      role="switch"
+      [checked]="checked()"
+      [disabled]="disabled()"
+      [attr.aria-checked]="checked()"
+      (change)="handleChange($event)"
+      (keydown)="handleKeydown($event)"
+      (blur)="handleBlur()"
+    >
+    <span class="toggle-track" aria-hidden="true">
+      <span class="toggle-thumb"></span>
+    </span>
+  </span>
+</label>

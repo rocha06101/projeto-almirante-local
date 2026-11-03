@@ -22,7 +22,11 @@ describe('Desbravadores', () => {
   let fixture: ComponentFixture<Desbravadores>;
   let component: Desbravadores;
   let host: HTMLElement;
-  let service: { listarUsuarios: ReturnType<typeof vi.fn>; excluirUsuario: ReturnType<typeof vi.fn> };
+  let service: {
+    listarUsuarios: ReturnType<typeof vi.fn>;
+    obterFotoPorUrl: ReturnType<typeof vi.fn>;
+    excluirUsuario: ReturnType<typeof vi.fn>;
+  };
   let navigate: ReturnType<typeof vi.spyOn>;
 
   const render = () => fixture.detectChanges();
@@ -46,7 +50,7 @@ describe('Desbravadores', () => {
 
   beforeEach(() => {
     history.replaceState(null, '');
-    service = { listarUsuarios: vi.fn(), excluirUsuario: vi.fn() };
+    service = { listarUsuarios: vi.fn(), obterFotoPorUrl: vi.fn(), excluirUsuario: vi.fn() };
     TestBed.configureTestingModule({
       imports: [Desbravadores],
       providers: [provideRouter([]), { provide: UserService, useValue: service }],
@@ -62,6 +66,55 @@ describe('Desbravadores', () => {
     expect(primeiraLinha.textContent).not.toContain('ana@example.com');
     expect(primeiraLinha.textContent).not.toContain('01/09/2026');
     expect(primeiraLinha.querySelector('.role-pill')?.textContent?.trim()).toBe('Secretário');
+  });
+
+  it('exibe a foto autenticada no avatar e revoga a URL ao destruir a listagem', async () => {
+    const fotoUrl = '/api/Usuarios/u1/foto';
+    const objectUrl = 'blob:foto-ana';
+    const foto = new Blob(['imagem'], { type: 'image/webp' });
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue(objectUrl);
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL');
+    service.obterFotoPorUrl.mockReturnValue(of(foto));
+
+    await create([usuario({ fotoUrl })]);
+
+    const imagem = host.querySelector<HTMLImageElement>('.avatar-photo')!;
+    expect(service.obterFotoPorUrl).toHaveBeenCalledWith(fotoUrl);
+    expect(imagem.getAttribute('src')).toBe(objectUrl);
+    expect(imagem.getAttribute('alt')).toBe('Ana Souza');
+    expect(imagem.getAttribute('loading')).toBe('lazy');
+
+    fixture.destroy();
+    expect(revokeObjectUrl).toHaveBeenCalledWith(objectUrl);
+    createObjectUrl.mockRestore();
+    revokeObjectUrl.mockRestore();
+  });
+
+  it('mantém a inicial se a foto protegida falhar ao carregar', async () => {
+    service.obterFotoPorUrl.mockReturnValue(
+      throwError(() => new HttpErrorResponse({ status: 401, statusText: 'Unauthorized' })),
+    );
+
+    await create([usuario({ fotoUrl: '/api/Usuarios/u1/foto' })]);
+
+    expect(host.querySelector('img.avatar-photo')).toBeNull();
+    expect(host.querySelector('.avatar')?.textContent?.trim()).toBe('A');
+  });
+
+  it('volta à inicial se a imagem blob não puder ser exibida pelo navegador', async () => {
+    const objectUrl = 'blob:foto-invalida';
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL');
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue(objectUrl);
+    service.obterFotoPorUrl.mockReturnValue(of(new Blob(['invalida'])));
+    await create([usuario({ fotoUrl: '/api/Usuarios/u1/foto' })]);
+
+    host.querySelector<HTMLImageElement>('.avatar-photo')!.dispatchEvent(new Event('error'));
+    render();
+
+    expect(host.querySelector('img.avatar-photo')).toBeNull();
+    expect(host.querySelector('.avatar')?.textContent?.trim()).toBe('A');
+    expect(revokeObjectUrl).toHaveBeenCalledWith(objectUrl);
+    revokeObjectUrl.mockRestore();
   });
 
   it('não tem botão "Atualizar"', async () => {

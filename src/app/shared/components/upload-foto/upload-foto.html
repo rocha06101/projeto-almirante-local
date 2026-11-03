@@ -2,22 +2,25 @@
   <div
     class="upload-foto-container"
     [class.drag-over]="isDragOver"
+    [class.disabled]="disabled || enviando"
+    [attr.aria-disabled]="disabled || enviando"
     (click)="onContainerClick()"
     (dragenter)="handleDragEnter($event)"
     (dragover)="handleDragOver($event)"
     (dragleave)="handleDragLeave($event)"
     (drop)="handleDrop($event)"
     role="button"
-    tabindex="0"
-    aria-label="Enviar foto do membro (JPG ou PNG, até 2MB)"
+    [attr.tabindex]="disabled || enviando ? -1 : 0"
+    aria-label="Enviar foto do membro (JPEG, PNG ou WebP, até 10 MB)"
     (keydown.enter)="onContainerClick()"
     (keydown.space)="$event.preventDefault(); onContainerClick()"
   >
     <input
       #fileInput
       type="file"
-      accept="image/jpeg,image/png"
+      accept="image/jpeg,image/png,image/webp"
       hidden
+      [disabled]="disabled || enviando"
       (change)="onFileSelected($event)"
     />
 
@@ -27,11 +30,17 @@
       </div>
 
       <p class="upload-foto-label">
-        <span class="upload-foto-action">Clique para enviar</span>
-        <span class="upload-foto-or">ou arraste uma foto</span>
+        @if (enviando) {
+          <span class="upload-foto-action">Enviando foto...</span>
+        } @else if (disabled) {
+          <span class="upload-foto-action">Envio de foto indisponível</span>
+        } @else {
+          <span class="upload-foto-action">Clique para enviar ou substituir</span>
+          <span class="upload-foto-or">ou arraste uma foto</span>
+        }
       </p>
 
-      <p class="upload-foto-help">JPG, PNG — máx. 2MB</p>
+      <p class="upload-foto-help">JPEG, PNG ou WebP — máx. 10 MB</p>
     </div>
   </div>
 

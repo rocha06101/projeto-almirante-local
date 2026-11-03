@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
 import { AuthService } from '../../core/services/auth';
 import { Component, inject, signal } from '@angular/core';
@@ -13,7 +13,7 @@ import { emailFormatValidator } from '../../shared/validators/email.validator';
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, InputComponent, ButtonComponent, PasswordToggleComponent],
+  imports: [CommonModule, ReactiveFormsModule, InputComponent, ButtonComponent, PasswordToggleComponent],
   templateUrl: './login.html',
   styleUrl: './login.scss',
 })

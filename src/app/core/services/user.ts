@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Observable, catchError, throwError } from 'rxjs';
 import {
   Cargo,
   CepLookupResponse,
@@ -34,6 +35,22 @@ export class User {
     return this.api.put<UserModel>(`/Usuarios/${encodeURIComponent(id)}`, payload);
   }
 
+  enviarFoto(usuarioId: string, arquivo: File): Observable<UserModel> {
+    const formData = new FormData();
+    formData.append('arquivo', arquivo);
+    return this.api.put<UserModel>(`/Usuarios/${encodeURIComponent(usuarioId)}/foto`, formData);
+  }
+
+  obterFoto(usuarioId: string): Observable<Blob> {
+    return this.api.getBlob(`/Usuarios/${encodeURIComponent(usuarioId)}/foto`);
+  }
+
+  obterFotoPorUrl(fotoUrl: string): Observable<Blob> {
+    const url = new URL(fotoUrl, globalThis.location.origin);
+    const path = url.pathname.replace(/^\/api(?=\/|$)/, '');
+    return this.api.getBlob(`${path}${url.search}`);
+  }
+
   /** Exclusão lógica (204). 409 se o usuário estiver vinculado a eventos futuros, já inativo ou for o próprio solicitante. */
   excluirUsuario(id: string): Observable<void> {
     return this.api.delete<void>(`/Usuarios/${encodeURIComponent(id)}`);
@@ -44,6 +61,20 @@ export class User {
   }
 
   consultarCep(cep: string): Observable<CepLookupResponse> {
-    return this.api.get<CepLookupResponse>(`/Cep/${encodeURIComponent(cep)}`);
+    return this.api.get<CepLookupResponse>(`/Cep/${encodeURIComponent(cep)}`).pipe(
+      catchError((error: unknown) => {
+        const podeUsarViaCep =
+          error instanceof HttpErrorResponse &&
+          (error.status === 0 || error.status === 404 || error.status >= 500);
+
+        if (!podeUsarViaCep) {
+          return throwError(() => error);
+        }
+
+        return this.api.get<CepLookupResponse>(
+          `https://viacep.com.br/ws/${encodeURIComponent(cep)}/json/`,
+        );
+      }),
+    );
   }
 }

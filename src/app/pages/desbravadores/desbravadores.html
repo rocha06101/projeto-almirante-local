@@ -87,7 +87,19 @@
               <tr role="row" [class.inactive-row]="usuario.ativo === false">
                 <td class="cell-name" role="cell">
                   <div class="user-cell">
-                    <span class="avatar">{{ usuario.nome.charAt(0).toUpperCase() }}</span>
+                    @if (fotoExibicao(usuario); as foto) {
+                      <span class="avatar avatar-image">
+                        <img
+                          class="avatar-photo"
+                          [src]="foto"
+                          [alt]="usuario.nome"
+                          loading="lazy"
+                          (error)="onFotoError(usuario.id)"
+                        >
+                      </span>
+                    } @else {
+                      <span class="avatar">{{ usuario.nome.charAt(0).toUpperCase() }}</span>
+                    }
                     <div>
                       <!-- O id do usuário fica só no estado do Angular (editar/excluir); nunca é renderizado. -->
                       <strong>{{ usuario.nome }}</strong>

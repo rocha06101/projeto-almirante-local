@@ -344,6 +344,18 @@ tbody tr {
   width: 42px;
 }
 
+.avatar-image {
+  overflow: hidden;
+}
+
+.avatar-photo {
+  border-radius: 50%;
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
 .role-pill {
   background: #ecfdf5;
   border: 1px solid #bbf7d0;

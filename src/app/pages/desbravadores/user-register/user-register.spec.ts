@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
+import { AuthService } from '../../../core/services/auth';
 import { of, Subject, throwError } from 'rxjs';
 
 import { UserRegister } from './user-register';
@@ -17,6 +18,9 @@ const usuario: UserModel = {
   id: 'u1',
   nome: 'Ana Souza',
   email: 'ana@example.com',
+  cpf: '529.982.247-25',
+  rg: '12.345.678-9',
+  ehCin: false,
   tipoSanguineo: 'O+',
   doencasAlergias: 'Asma',
   endereco: {
@@ -45,8 +49,11 @@ describe('UserRegister', () => {
     consultarCep: ReturnType<typeof vi.fn>;
     criarUsuario: ReturnType<typeof vi.fn>;
     atualizarUsuario: ReturnType<typeof vi.fn>;
+    enviarFoto: ReturnType<typeof vi.fn>;
+    obterFoto: ReturnType<typeof vi.fn>;
   };
   let navigate: ReturnType<typeof vi.spyOn>;
+  let loggedInRole = 'SEC';
 
   const setup = async (modo?: 'editar') => {
     TestBed.configureTestingModule({
@@ -54,6 +61,7 @@ describe('UserRegister', () => {
       providers: [
         provideRouter([]),
         { provide: UserService, useValue: service },
+        { provide: AuthService, useValue: { user: () => ({ cargo: { role: loggedInRole } }) } },
         ...(modo ? [{ provide: ActivatedRoute, useValue: { snapshot: { data: { modo } } } }] : []),
       ],
     });
@@ -69,10 +77,18 @@ describe('UserRegister', () => {
 
   const preencher = (
     valores: Partial<
-      Record<'nome' | 'email' | 'senha' | 'confirmarSenha' | 'cargoId' | 'tipoSanguineo' | 'doencasAlergias', string>
-    >,
+      Record<
+        'nome' | 'email' | 'senha' | 'confirmarSenha' | 'cargoId' | 'cpf' | 'rg' | 'tipoSanguineo' | 'doencasAlergias',
+        string
+      >
+    > & { ehCin?: boolean },
   ) => {
-    component.form.patchValue(valores);
+    component.form.patchValue({
+      cpf: '529.982.247-25',
+      rg: '12.345.678-9',
+      ehCin: false,
+      ...valores,
+    });
     fixture.detectChanges();
   };
 
@@ -96,7 +112,10 @@ describe('UserRegister', () => {
       })),
       criarUsuario: vi.fn(),
       atualizarUsuario: vi.fn(),
+      enviarFoto: vi.fn(),
+      obterFoto: vi.fn(),
     };
+    loggedInRole = 'SEC';
   });
 
   afterEach(() => history.replaceState(null, ''));
@@ -124,6 +143,7 @@ describe('UserRegister', () => {
       expect.arrayContaining([
         'CPF',
         'RG',
+        'Documento é CIN (Carteira de Identidade Nacional)',
         'Telefone',
         'Tipo sanguíneo',
         'Doenças e alergias',
@@ -164,6 +184,9 @@ describe('UserRegister', () => {
     expect(service.criarUsuario).toHaveBeenCalledWith({
       nome: 'Ana Souza',
       email: 'ana@example.com',
+      cpf: '529.982.247-25',
+      rg: '12.345.678-9',
+      ehCin: false,
       senha: SENHA_VALIDA,
       cargoId: 'c-sec',
       tipoSanguineo: 'O+',
@@ -174,6 +197,129 @@ describe('UserRegister', () => {
     });
   });
 
+  it('cria o usuário antes do upload e permite reenviar somente a foto após falha', async () => {
+    const criado = { ...usuario, id: 'novo' };
+    service.criarUsuario.mockReturnValue(of(criado));
+    service.enviarFoto
+      .mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500 })))
+      .mockReturnValueOnce(of({ ...criado, fotoUrl: '/api/Usuarios/novo/foto' }));
+    await setup();
+    preencher({
+      nome: 'Ana Souza',
+      email: 'ana@example.com',
+      cpf: '529.982.247-25',
+      rg: '12.345.678-9',
+      ehCin: false,
+      senha: SENHA_VALIDA,
+      confirmarSenha: SENHA_VALIDA,
+      cargoId: 'c-sec',
+    });
+    const arquivo = new File(['foto'], 'perfil.webp', { type: 'image/webp' });
+    component.onFotoSelecionada(arquivo);
+
+    clicarSalvar();
+
+    expect(service.criarUsuario).toHaveBeenCalledTimes(1);
+    expect(service.enviarFoto).toHaveBeenCalledWith('novo', arquivo);
+    expect(component.usuarioPendenteFoto()?.id).toBe('novo');
+    expect(host.querySelector('.form-feedback.error')?.textContent).toContain('servidor');
+    expect(navigate).not.toHaveBeenCalled();
+
+    clicarSalvar();
+
+    expect(service.criarUsuario).toHaveBeenCalledTimes(1);
+    expect(service.enviarFoto).toHaveBeenCalledTimes(2);
+    expect(navigate).toHaveBeenCalledWith(['/desbravadores'], {
+      state: { feedback: 'Ana Souza cadastrado com sucesso.' },
+    });
+  });
+
+  it('CIN ligado desabilita o RG e permite salvar sem enviá-lo', async () => {
+    service.criarUsuario.mockReturnValue(of({ ...usuario, id: 'novo', ehCin: true, rg: null }));
+    await setup();
+
+    preencher({
+      nome: 'Ana Souza',
+      email: 'ana@example.com',
+      senha: SENHA_VALIDA,
+      confirmarSenha: SENHA_VALIDA,
+      cargoId: 'c-sec',
+      ehCin: true,
+    });
+
+    expect(component.form.controls.rg.disabled).toBe(true);
+    expect(component.form.controls.rg.value).toBe('');
+    expect(host.querySelector<HTMLInputElement>('app-primary-input input[placeholder="00.000.000-0"]')?.disabled)
+      .toBe(true);
+    expect(
+      host.querySelector('app-primary-input[formcontrolname="rg"]')?.getAttribute('style'),
+    ).toContain('--primary-input-background: #f1f2f5');
+    expect(
+      host.querySelector('app-primary-input[formcontrolname="rg"] label')?.textContent?.trim(),
+    ).toBe('RG');
+
+    clicarSalvar();
+
+    expect(service.criarUsuario).toHaveBeenCalledWith(expect.objectContaining({
+      cpf: '529.982.247-25',
+      ehCin: true,
+    }));
+    expect(service.criarUsuario.mock.calls[0][0]).not.toHaveProperty('rg');
+  });
+
+  it('CIN desligado mantém RG obrigatório e impede o envio sem RG', async () => {
+    await setup();
+
+    preencher({
+      nome: 'Ana Souza',
+      email: 'ana@example.com',
+      senha: SENHA_VALIDA,
+      confirmarSenha: SENHA_VALIDA,
+      cargoId: 'c-sec',
+      ehCin: false,
+      rg: '',
+    });
+
+    expect(component.form.controls.rg.enabled).toBe(true);
+    expect(
+      host.querySelector<HTMLElement>('app-primary-input[formcontrolname="rg"]')
+        ?.style.getPropertyValue('--primary-input-background'),
+    ).toBe('');
+    clicarSalvar();
+
+    expect(service.criarUsuario).not.toHaveBeenCalled();
+    expect(host.querySelector('#user-register-rg-error')?.textContent).toContain('Informe o RG.');
+  });
+
+  it('desabilita o upload para perfis sem permissão de gestão de cadastros', async () => {
+    loggedInRole = 'DS';
+    await setup();
+
+    expect(host.querySelector<HTMLElement>('app-upload-foto .upload-foto-container')?.getAttribute('aria-disabled'))
+      .toBe('true');
+  });
+
+  it('exibe a seleção apenas no avatar e limpa a prévia ao cancelar a seleção', async () => {
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:foto-local');
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    await setup();
+
+    component.onFotoSelecionada(new File(['imagem'], 'perfil.webp', { type: 'image/webp' }));
+    fixture.detectChanges();
+
+    expect(host.querySelector('.container-image-center .profile-photo')).toBeTruthy();
+    expect(host.querySelector('app-upload-foto .upload-foto-preview')).toBeNull();
+
+    component.onFotoSelecionada(null);
+    fixture.detectChanges();
+
+    expect(host.querySelector('.container-image-center .profile-photo')).toBeNull();
+    expect(host.querySelector('.container-image-center img[src="/icons/camera-icon.svg"]')).toBeTruthy();
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:foto-local');
+    createObjectUrl.mockRestore();
+    revokeObjectUrl.mockRestore();
+  });
+
   it('consulta CEP completo com atraso, preenche rua e bairro e envia os metadados retornados', async () => {
     service.criarUsuario.mockReturnValue(of({ ...usuario, id: 'novo' }));
     await setup();
@@ -181,6 +327,8 @@ describe('UserRegister', () => {
     component.form.patchValue({
       nome: 'Ana Souza',
       email: 'ana@example.com',
+      cpf: '529.982.247-25',
+      rg: '12.345.678-9',
       senha: SENHA_VALIDA,
       confirmarSenha: SENHA_VALIDA,
       cargoId: 'c-sec',
@@ -228,6 +376,66 @@ describe('UserRegister', () => {
     expect(component.form.controls.logradouro.value).toBe('Rua Manual');
     expect(component.form.controls.bairro.value).toBe('Centro');
     expect(host.querySelector('.address-feedback')?.textContent).toContain('Preencha o endereço manualmente');
+  });
+
+  it.each([
+    [404, 'O serviço de consulta de CEP não está disponível. Preencha o endereço manualmente.'],
+    [503, 'O serviço de consulta de CEP está indisponível no momento. Tente novamente ou preencha manualmente.'],
+    [401, 'Sua sessão expirou. Entre novamente.'],
+  ])('mostra a mensagem correta para erro HTTP %i na consulta de CEP', async (status, mensagem) => {
+    service.consultarCep.mockReturnValue(
+      throwError(() => new HttpErrorResponse({ status, url: '/api/Cep/01001000' })),
+    );
+    await setup();
+
+    component.form.controls.cep.setValue('01001-000');
+    await new Promise(resolve => setTimeout(resolve, 400));
+    fixture.detectChanges();
+
+    expect(host.querySelector('.address-feedback')?.textContent?.trim()).toBe(mensagem);
+    expect(component.form.controls.logradouro.enabled).toBe(true);
+    expect(component.form.controls.bairro.enabled).toBe(true);
+  });
+
+  it('permite consultar novamente o mesmo CEP após uma falha', async () => {
+    service.consultarCep
+      .mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 503 })))
+      .mockReturnValueOnce(of({
+        cep: '01001-000',
+        logradouro: 'Praça da Sé',
+        bairro: 'Sé',
+      }));
+    await setup();
+
+    component.form.controls.cep.setValue('01001-000');
+    await new Promise(resolve => setTimeout(resolve, 400));
+    expect(host.querySelector('.address-feedback')?.textContent).toContain('indisponível');
+
+    component.form.controls.logradouro.setValue('Rua digitada');
+    component.form.controls.bairro.setValue('Bairro digitado');
+    component.form.controls.cep.setValue('01001-000');
+    await new Promise(resolve => setTimeout(resolve, 400));
+    fixture.detectChanges();
+
+    expect(service.consultarCep).toHaveBeenCalledTimes(2);
+    expect(component.form.controls.logradouro.value).toBe('Rua digitada');
+    expect(component.form.controls.bairro.value).toBe('Bairro digitado');
+  });
+
+  it('não sobrescreve rua e bairro digitados enquanto a consulta está pendente', async () => {
+    const resposta = new Subject<UserAddress>();
+    service.consultarCep.mockReturnValue(resposta);
+    await setup();
+
+    component.form.controls.cep.setValue('01001-000');
+    await new Promise(resolve => setTimeout(resolve, 400));
+    component.form.controls.logradouro.setValue('Rua digitada');
+    component.form.controls.bairro.setValue('Bairro digitado');
+    resposta.next({ cep: '01001-000', logradouro: 'Praça da Sé', bairro: 'Sé' });
+    resposta.complete();
+
+    expect(component.form.controls.logradouro.value).toBe('Rua digitada');
+    expect(component.form.controls.bairro.value).toBe('Bairro digitado');
   });
 
   it('ignora a resposta de um CEP anterior quando o usuário informa outro CEP', async () => {
@@ -291,6 +499,9 @@ describe('UserRegister', () => {
     expect(component.form.getRawValue()).toEqual({
       nome: 'Ana Souza',
       email: 'ana@example.com',
+      ehCin: false,
+      cpf: '529.982.247-25',
+      rg: '12.345.678-9',
       senha: SENHA_VALIDA,
       confirmarSenha: SENHA_VALIDA,
       cargoId: 'c-sec',
@@ -326,6 +537,30 @@ describe('UserRegister', () => {
     expect(host.querySelector('.form-feedback.error')?.textContent).toContain('Verifique os campos destacados.');
   });
 
+  it('associa erros 400 do backend aos campos de CPF e RG', async () => {
+    service.criarUsuario.mockReturnValue(
+      throwError(() => new HttpErrorResponse({
+        status: 400,
+        error: { errors: { Cpf: ['CPF inválido.'], Rg: ['RG inválido.'] } },
+      })),
+    );
+    await setup();
+
+    preencher({
+      nome: 'Ana Souza',
+      email: 'ana@example.com',
+      senha: SENHA_VALIDA,
+      confirmarSenha: SENHA_VALIDA,
+      cargoId: 'c-sec',
+    });
+    clicarSalvar();
+
+    expect(component.form.controls.cpf.errors?.['server']).toBe('CPF inválido.');
+    expect(component.form.controls.rg.errors?.['server']).toBe('RG inválido.');
+    expect(host.querySelector('#user-register-cpf-error')?.textContent).toContain('CPF inválido.');
+    expect(host.querySelector('#user-register-rg-error')?.textContent).toContain('RG inválido.');
+  });
+
   it('edição carrega os valores do usuário selecionado e desabilita a senha', async () => {
     history.replaceState({ usuario }, '');
     await setup('editar');
@@ -333,6 +568,10 @@ describe('UserRegister', () => {
     expect(component.isEdicao()).toBe(true);
     expect(component.form.controls.nome.value).toBe('Ana Souza');
     expect(component.form.controls.email.value).toBe('ana@example.com');
+    expect(component.form.controls.cpf.value).toBe('529.982.247-25');
+    expect(component.form.controls.ehCin.value).toBe(false);
+    expect(component.form.controls.rg.value).toBe('12.345.678-9');
+    expect(component.form.controls.rg.enabled).toBe(true);
     expect(component.form.controls.cargoId.value).toBe('c-sec');
     expect(component.form.controls.tipoSanguineo.value).toBe('O+');
     expect(component.form.controls.doencasAlergias.value).toBe('Asma');
@@ -368,6 +607,9 @@ describe('UserRegister', () => {
       nome: 'Ana Maria Souza',
       email: 'ana@example.com',
       cargoId: 'c-dir',
+      cpf: '529.982.247-25',
+      rg: '12.345.678-9',
+      ehCin: false,
       tipoSanguineo: 'O+',
       doencasAlergias: 'Asma',
       endereco: usuario.endereco,
@@ -375,6 +617,26 @@ describe('UserRegister', () => {
     expect(navigate).toHaveBeenCalledWith(['/desbravadores'], {
       state: { feedback: 'Cadastro de Ana Maria Souza atualizado com sucesso.' },
     });
+  });
+
+  it('edição CIN ligada carrega o estado e envia PUT sem RG com ehCin boolean', async () => {
+    const usuarioCin = { ...usuario, ehCin: true, rg: null };
+    service.atualizarUsuario.mockReturnValue(of(usuarioCin));
+    history.replaceState({ usuario: usuarioCin }, '');
+    await setup('editar');
+
+    expect(component.form.controls.ehCin.value).toBe(true);
+    expect(component.form.controls.rg.disabled).toBe(true);
+    expect(component.form.controls.rg.value).toBe('');
+
+    preencher({ nome: 'Ana Souza', ehCin: true });
+    clicarSalvar();
+
+    expect(service.atualizarUsuario).toHaveBeenCalledWith('u1', expect.objectContaining({
+      cpf: '529.982.247-25',
+      ehCin: true,
+    }));
+    expect(service.atualizarUsuario.mock.calls[0][1]).not.toHaveProperty('rg');
   });
 
   it('edição sem usuário selecionado (ex.: acesso direto) não permite salvar', async () => {

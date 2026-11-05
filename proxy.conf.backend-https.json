@@ -4,5 +4,12 @@
     "secure": false,
     "changeOrigin": true,
     "logLevel": "debug"
+  },
+  "/hubs": {
+    "target": "https://localhost:8444",
+    "secure": false,
+    "changeOrigin": true,
+    "ws": true,
+    "logLevel": "debug"
   }
 }

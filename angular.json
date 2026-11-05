@@ -62,24 +62,26 @@
           "defaultConfiguration": "production"
         },
         "serve": {
-          "builder": "@angular/build:dev-server",
-          "options": {
-            "proxyConfig": "proxy.conf.mjs",
-            "ssl": true
-          },
-          "configurations": {
-            "production": {
-              "buildTarget": "almirante-tamandare-frontend:build:production"
-            },
-            "development": {
-              "buildTarget": "almirante-tamandare-frontend:build:development"
-            }
-          },
-          "defaultConfiguration": "development"
-        },
-        "test": {
-          "builder": "@angular/build:unit-test"
-        }
+  "builder": "@angular/build:dev-server",
+  "options": {
+    "proxyConfig": "proxy.conf.mjs",
+    "ssl": true,
+    "sslCert": "certs/localhost.crt",
+    "sslKey": "certs/localhost.key"
+  },
+  "configurations": {
+    "production": {
+      "buildTarget": "almirante-tamandare-frontend:build:production"
+    },
+    "development": {
+      "buildTarget": "almirante-tamandare-frontend:build:development"
+    }
+  },
+  "defaultConfiguration": "development"
+},
+"test": {
+  "builder": "@angular/build:unit-test"
+}
       }
     }
   }

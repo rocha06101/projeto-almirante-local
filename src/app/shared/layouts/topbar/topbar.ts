@@ -1,8 +1,11 @@
+import { HttpErrorResponse } from '@angular/common/http';
+import { CommonModule, DatePipe } from '@angular/common';
 import { Component, ElementRef, HostListener, ViewChild, computed, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { Notificacao } from '../../../core/models/notificacao.model';
 import { AuthService } from '../../../core/services/auth';
+import { NotificacoesService } from '../../../core/services/notificacoes';
 
 @Component({
   selector: 'app-topbar',
@@ -10,10 +13,14 @@ import { AuthService } from '../../../core/services/auth';
   imports: [CommonModule, FormsModule],
   templateUrl: './topbar.html',
   styleUrl: './topbar.scss',
+  providers: [DatePipe],
 })
 export class TopbarComponent {
-  private router = inject(Router);
-  private auth = inject(AuthService);
+  private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
+  private readonly notificacoesService = inject(NotificacoesService);
+  private readonly datePipe = inject(DatePipe);
+  private readonly readingIds = new Set<string>();
 
   @ViewChild('profileWrapper') profileWrapper?: ElementRef<HTMLElement>;
   @ViewChild('notificationWrapper') notificationWrapper?: ElementRef<HTMLElement>;
@@ -21,11 +28,11 @@ export class TopbarComponent {
   searchQuery = signal('');
   profileOpen = signal(false);
   notificationOpen = signal(false);
-
-  notifications = signal([
-    { id: 1, message: 'Nova atividade atribuída', type: 'info', timestamp: 'há 5 minutos' },
-    { id: 2, message: 'Desbravador registrado com sucesso', type: 'success', timestamp: 'há 1 hora' },
-  ]);
+  notifications = this.notificacoesService.notifications;
+  unreadCount = this.notificacoesService.unreadCount;
+  isLoading = this.notificacoesService.isLoading;
+  isEmpty = this.notificacoesService.isEmpty;
+  loadError = this.notificacoesService.loadError;
 
   /** Dados do usuário autenticado (vindos de /Auth/Me). */
   userInfo = computed(() => {
@@ -81,10 +88,59 @@ export class TopbarComponent {
 
   logout() {
     this.profileOpen.set(false);
+    void this.notificacoesService.stopRealtime();
     this.auth.logout().subscribe(() => this.router.navigate(['/login']));
   }
 
   clearNotifications() {
-    this.notifications.set([]);
+    this.notificacoesService.limparPendenciasLocais();
+  }
+
+  formatNotificationDate(value?: string | null): string {
+    if (!value) {
+      return 'Data indisponível';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return 'Data indisponível';
+    }
+
+    return (
+      this.datePipe.transform(date, 'dd/MM/yyyy HH:mm') ??
+      new Intl.DateTimeFormat('pt-BR', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(date)
+    );
+  }
+
+  markNotificationAsRead(notification: Notificacao) {
+    if (!notification.id || this.readingIds.has(notification.id)) {
+      return;
+    }
+
+    this.readingIds.add(notification.id);
+
+    this.notificacoesService.marcarComoLida(notification.id).subscribe({
+      next: response => {
+        this.notificacoesService.confirmarLeitura(
+          notification.id,
+          response.naoLidas ?? this.unreadCount() - 1,
+        );
+        this.readingIds.delete(notification.id);
+      },
+      error: (error: unknown) => {
+        if (error instanceof HttpErrorResponse && error.status === 404) {
+          this.notificacoesService.removerNotificacaoInexistente(notification.id);
+        }
+
+        this.readingIds.delete(notification.id);
+      },
+    });
+  }
+
+  isNotificationReading(id: string): boolean {
+    return this.readingIds.has(id);
   }
 }

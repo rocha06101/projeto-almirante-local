@@ -245,38 +245,76 @@
   .notification-item {
     padding: 1rem;
     border-bottom: 1px solid #f3f4f6;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
 
     &:last-child {
       border-bottom: none;
     }
 
-    .notif-message {
-      display: block;
-      margin-bottom: 0.25rem;
-      color: #1f2937;
+    .notification-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .notif-title {
+      color: #111827;
       font-size: 0.9rem;
-      font-weight: 500;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .notif-message {
+      color: #374151;
+      font-size: 0.82rem;
+      line-height: 1.5;
     }
 
     .notif-time {
       display: block;
       color: #6b7280;
-      font-size: 0.8rem;
+      font-size: 0.75rem;
     }
 
-    &.info .notif-message {
+    .mark-read-btn {
+      align-self: flex-start;
+      min-height: var(--tap-target);
+      padding: 0.25rem 0.75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 999px;
+      background: #fff;
+      color: #1f2937;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+
+      &:hover:not(:disabled) {
+        background: #f3f4f6;
+        border-color: #9ca3af;
+      }
+
+      &:disabled {
+        opacity: 0.6;
+        cursor: wait;
+      }
+    }
+
+    &.info .notif-title {
       color: #0369a1;
     }
 
-    &.success .notif-message {
+    &.success .notif-title {
       color: #15803d;
     }
 
-    &.warning .notif-message {
+    &.warning .notif-title {
       color: #b45309;
     }
 
-    &.error .notif-message {
+    &.error .notif-title {
       color: #dc2626;
     }
   }

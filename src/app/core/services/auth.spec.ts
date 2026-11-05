@@ -131,4 +131,22 @@ describe('AuthService', () => {
 
     await expect(Promise.all([a, b])).resolves.toEqual(['jwt-4', 'jwt-4']);
   });
+
+  it('accessTokenForSignalR renova uma credencial expirada usando a sessão atual', async () => {
+    const login = firstValueFrom(auth.login('maria@example.com', 'segredo'));
+
+    (await next('/Auth/csrf')).flush({ csrfToken: 'login-csrf' });
+    (await next('/Auth/login', 'POST')).flush(tokenBody('jwt-expired', -1));
+    (await next('/Auth/Me')).flush(me);
+    await login;
+
+    const token = auth.accessTokenForSignalR();
+    (await next('/Auth/csrf')).flush({ csrfToken: 'refresh-csrf' });
+    const refresh = await next('/Auth/refresh', 'POST');
+    expect(refresh.request.body).toEqual({});
+    refresh.flush(tokenBody('jwt-current'));
+
+    await expect(token).resolves.toBe('jwt-current');
+    expect(auth.accessToken()).toBe('jwt-current');
+  });
 });

@@ -13,9 +13,10 @@
 `secure: false` no `proxy.conf.backend-https.json` aceita o certificado **autoassinado do nginx local** e existe
 somente para desenvolvimento. Nada disso é usado no build de produção.
 
-O navegador fala sempre com o **mesmo origin** do frontend (`/api/...`); o proxy encaminha ao backend. Assim os
-cookies `__Host-almirante-csrf` e `__Host-almirante-refresh` (Secure, HttpOnly, SameSite=Strict, sem `Domain`) ficam
-no site do frontend e o CORS não é necessário.
+Nos modos de desenvolvimento com proxy, o navegador fala com o **mesmo origin** do frontend (`/api/...` e `/hubs/...`);
+o proxy encaminha HTTP e WebSocket ao backend. Assim os cookies `__Host-almirante-csrf` e
+`__Host-almirante-refresh` (Secure, HttpOnly, SameSite=Strict, sem `Domain`) ficam no site do frontend e o CORS não é
+necessário nesses modos. Em produção, os endpoints usam o host calculado por `resolveApiBaseUrl()`.
 
 ## Contrato de autenticação (backend `Desbravadores.Backend`)
 
@@ -29,6 +30,20 @@ no site do frontend e o CORS não é necessário.
 - `401` em endpoint de negócio: uma renovação (compartilhada entre chamadas simultâneas e abas via Web Locks) e uma repetição;
   se falhar, a sessão local é encerrada e o usuário volta ao `/login`. `403` **não** encerra a sessão. `429` mostra o `Retry-After`.
 - `withCredentials` e `Authorization` são aplicados **apenas** a URLs da API (`core/config/api-base.ts`), nunca a domínios externos.
+
+## Notificações em tempo real
+
+- O `NotificacoesService` mantém uma única conexão `/hubs/notificacoes` enquanto há sessão autenticada. O access token
+  vem do `AuthService` em memória; a API REST continua sendo a fonte dos dados (`GET /api/Notificacoes/Pendentes?pageSize=20`).
+- O proxy de desenvolvimento encaminha `/hubs` com suporte a WebSocket para o mesmo backend de `/api`. O modo mock não
+  oferece SignalR; use `npm run start:local` contra o backend real.
+- Para testar: inicie o backend e `npm run start:local`, autentique um usuário destinatário e abra outra aba na mesma
+  conta. Em uma sessão de gestão, gere uma notificação para esse usuário (por exemplo, registre uma Entrada para ele ou
+  inclua-o como participante de um evento). A notificação e o contador devem aparecer sem recarregar a página.
+- Marque-a como lida na outra aba: ela deve sair da lista e o contador deve atualizar também na aba original. Em
+  DevTools → Network, confirme o handshake em `/hubs/notificacoes` e as consultas REST no início/reconexão; não copie
+  nem compartilhe URLs/parâmetros do handshake, pois o navegador pode transportar o token de autenticação na query do
+  WebSocket.
 
 ## PWA
 

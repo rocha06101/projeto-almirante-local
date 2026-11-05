@@ -66,6 +66,19 @@ export class AuthService {
     return this.token;
   }
 
+  async accessTokenForSignalR(): Promise<string> {
+    const token = this.token;
+    if (token && this.hasFreshToken()) {
+      return token;
+    }
+
+    if (!this.isLoggedIn()) {
+      throw new Error('Não há uma sessão autenticada para conectar às notificações.');
+    }
+
+    return firstValueFrom(this.refreshSession());
+  }
+
   login(email: string, password: string): Observable<CurrentUser> {
     return this.csrfToken(false).pipe(
       switchMap(csrf =>

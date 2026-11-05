@@ -27,15 +27,18 @@ const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/.test(target);
 const tenantId =
   process.env.TENANT_ID ?? (isLocal ? undefined : '0b7f1f70-e9b1-4f0f-aed8-9109f6c967f8');
 
-console.log(`[proxy] /api -> ${target}`);
+console.log(`[proxy] /api e /hubs -> ${target}`);
+
+const proxyOptions = {
+  target,
+  // Backend local usa certificado autoassinado.
+  secure: !isLocal,
+  changeOrigin: true,
+  logLevel: 'debug',
+  headers: tenantId ? { 'x-tenant-id': tenantId } : {},
+};
 
 export default {
-  '/api': {
-    target,
-    // Backend local usa certificado autoassinado.
-    secure: !isLocal,
-    changeOrigin: true,
-    logLevel: 'debug',
-    headers: tenantId ? { 'x-tenant-id': tenantId } : {},
-  },
+  '/api': proxyOptions,
+  '/hubs': { ...proxyOptions, ws: true },
 };

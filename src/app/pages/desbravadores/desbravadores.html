@@ -16,13 +16,9 @@
         Exibir inativos
       </label>
 
-      <button
-        type="button"
-        class="refresh-button register"
-        [routerLink]="['/desbravadores/cadastrar']"
-      >
+      <app-refresh-button [routerLink]="['/desbravadores/cadastrar']">
         Cadastrar
-      </button>
+      </app-refresh-button>
     </div>
   </header>
 
@@ -101,7 +97,6 @@
                       <span class="avatar">{{ usuario.nome.charAt(0).toUpperCase() }}</span>
                     }
                     <div>
-                      <!-- O id do usuário fica só no estado do Angular (editar/excluir); nunca é renderizado. -->
                       <strong>{{ usuario.nome }}</strong>
                       @if (usuario.ativo === false) {
                         <span class="status-pill inactive">Inativo</span>

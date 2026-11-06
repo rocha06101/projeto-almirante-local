@@ -17,6 +17,7 @@ import { AuthService } from '../../../core/services/auth';
 import { User as UserService } from '../../../core/services/user';
 import { PrimaryInput } from '../../../shared/components/primary-input/primary-input';
 import { PrimarySelect } from '../../../shared/components/primary-select/primary-select';
+import { PrimaryTextarea } from '../../../shared/components/primary-textarea/primary-textarea';
 import { ToggleSwitch } from '../../../shared/components/toggle-switch/toggle-switch';
 import { UploadFoto } from '../../../shared/components/upload-foto/upload-foto';
 import { cpfValidator } from '../../../shared/validators/cpf.validator';
@@ -84,7 +85,7 @@ function descreverErroFoto(error: unknown, fallback: string): string {
 @Component({
   selector: 'app-user-register',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterModule, PrimaryInput, PrimarySelect, ToggleSwitch, UploadFoto],
+  imports: [CommonModule, ReactiveFormsModule, RouterModule, PrimaryInput, PrimarySelect, PrimaryTextarea, ToggleSwitch, UploadFoto],
   templateUrl: './user-register.html',
   styleUrls: ['./user-register.scss'],
 })

@@ -11,6 +11,10 @@ let nextPrimaryInputId = 0;
   imports: [CommonModule],
   templateUrl: './primary-input.html',
   styleUrl: './primary-input.scss',
+  host: {
+    '[class.compact]': 'compact',
+    '[class.inactive]': 'inactive',
+  },
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -28,6 +32,8 @@ export class PrimaryInput implements ControlValueAccessor {
   @Input() invalid = false;
   @Input() describedBy = '';
   @Input() mask: InputMask | '' = '';
+  @Input() compact = false;
+  @Input() inactive = false;
 
   readonly value = signal('');
   readonly disabled = signal(false);
@@ -52,6 +58,10 @@ export class PrimaryInput implements ControlValueAccessor {
   }
 
   handleInput(event: Event): void {
+    if (this.inactive || this.disabled()) {
+      return;
+    }
+
     const input = event.target as HTMLInputElement;
     const raw = input.value ?? '';
 

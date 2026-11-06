@@ -81,4 +81,20 @@ describe('PrimaryInput', () => {
     expect(onChange).toHaveBeenCalledWith('Ana 123');
     expect(input.hasAttribute('inputmode')).toBe(false);
   });
+
+  it('estado inativo desabilita o campo e ignora eventos de digitação', () => {
+    const onChange = vi.fn();
+    component.registerOnChange(onChange);
+    fixture.componentRef.setInput('inactive', true);
+    fixture.detectChanges();
+
+    const input: HTMLInputElement = fixture.nativeElement.querySelector('input');
+    expect(input.disabled).toBe(true);
+    expect(fixture.nativeElement.classList.contains('inactive')).toBe(true);
+
+    input.value = 'não permitido';
+    input.dispatchEvent(new Event('input'));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(component.value()).toBe('');
+  });
 });

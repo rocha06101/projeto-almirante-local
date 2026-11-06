@@ -161,7 +161,7 @@ describe('UserRegister', () => {
     expect(Array.from(host.querySelectorAll('app-primary-select option')).map(option => option.textContent?.trim()))
       .toEqual(expect.arrayContaining(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']));
     expect(host.querySelector('input[placeholder="00.000.000-0"]')).toBeTruthy();
-    expect(host.querySelector('textarea[formControlName="doencasAlergias"]')).toBeTruthy();
+    expect(host.querySelector('app-primary-textarea[formControlName="doencasAlergias"] textarea')).toBeTruthy();
     expect(host.querySelector('app-upload-foto')).toBeTruthy();
   });
 

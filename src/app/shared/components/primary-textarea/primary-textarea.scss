@@ -1,0 +1,48 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.primary-textarea {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  margin: 0.8rem 1rem;
+
+  label {
+    color: #374151;
+    font-weight: 500;
+  }
+
+  textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 6rem;
+    padding: 0.5rem 0.75rem;
+    border: 2px solid #eaebed;
+    border-radius: 10px;
+    background-color: #fff;
+    font: inherit;
+    resize: vertical;
+  }
+}
+
+:host(.compact) .primary-textarea {
+  margin: 0;
+}
+
+:host(.inactive) textarea {
+  background-color: #D9D9D9;
+  cursor: not-allowed;
+  opacity: 1;
+  pointer-events: none;
+}
+
+@media (max-width: 575.98px) {
+  .primary-textarea {
+    margin-inline: 0.5rem;
+  }
+}

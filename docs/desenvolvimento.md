@@ -68,11 +68,11 @@ E2E_EMAIL=... E2E_PASSWORD=... npx playwright test --project=real-backend   # lo
 ```
 
 - `e2e/responsive.spec.ts`: 17 viewports (celulares, tablets retrato/paisagem, notebooks, desktop) × login, cadastro, home, desbravadores,
-  cadastro de membro, tesouraria, lançamentos: sem overflow horizontal global, navegação/menus dentro da viewport, alvos de toque,
+  cadastro de membro e tesouraria (incluindo a grid de lançamentos): sem overflow horizontal global, navegação/menus dentro da viewport, alvos de toque,
   dropdowns dentro da viewport, ausência de erros de console. Screenshots em `test-results/screens/` (`E2E_FULL=0` para só a viewport).
 - `e2e/shell.spec.ts`: sidebar (completa/trilho/barra inferior), cliques de navegação, logout, teclado, rotação.
 - `e2e/auth.real.spec.ts`: contra `https://localhost:8444` (o backend limita login a 3/min por IP: não repita em rajada).
-- `e2e/lancamentos.real.spec.ts`: menu lateral → Lançamentos e ida e volta real na API (registrar → detalhe → editar → excluir com motivo).
+- `e2e/lancamentos.real.spec.ts`: Tesouraria e ida e volta real na API (registrar → detalhe → editar → excluir com motivo).
   Cria um lançamento com descrição `E2E-TESTE` e o exclui; remove resíduos de execuções interrompidas.
 
 ## Lançamentos (`/api/Lancamentos`, política GestaoFinanceira: só diretoria; 403 para os demais)
@@ -88,4 +88,4 @@ E2E_EMAIL=... E2E_PASSWORD=... npx playwright test --project=real-backend   # lo
 Regras da API refletidas na UI: `finalidade` é lista fechada (Mensalidade, Campori, Acampamento, Uniflash, Doação, Evento, Outros);
 `categoria` Evento/Clube; `tipoFluxo` Entrada/Saida; vencimento (`yyyy-MM-dd`) não pode estar no passado ao registrar;
 lançamentos gerados por evento (`eventoId`) só se alteram em `/api/Eventos`. O beneficiário vem de `GET /api/Usuarios`.
-O menu lateral lista apenas destinos com página: Dashboard, Desbravadores, Tesouraria e Lançamentos.
+O menu lateral lista apenas destinos com página: Dashboard, Desbravadores e Tesouraria. A rota antiga `/lancamentos` redireciona para Tesouraria.

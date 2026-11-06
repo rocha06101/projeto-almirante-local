@@ -6,7 +6,7 @@
       [type]="type"
       [placeholder]="placeholder"
       [value]="value()"
-      [disabled]="disabled()"
+      [disabled]="disabled() || inactive"
       [attr.autocomplete]="autocomplete || null"
       [attr.inputmode]="mask ? 'numeric' : null"      [attr.aria-invalid]="invalid || null"
       [attr.aria-describedby]="describedBy || null"

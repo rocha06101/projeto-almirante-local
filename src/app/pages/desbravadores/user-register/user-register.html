@@ -113,18 +113,16 @@
             <p class="field-error" id="user-register-tipo-sanguineo-error">{{ erro }}</p>
           }
 
-          <div class="medical-notes">
-            <label for="user-register-doencas-alergias">Doenças e alergias</label>
-            <textarea
-              id="user-register-doencas-alergias"
-              formControlName="doencasAlergias"
-              rows="4"
-              maxlength="2000"
-              placeholder="Informe doenças, alergias ou observações importantes"
-              [attr.aria-invalid]="!!fieldError('doencasAlergias') || null"
-              [attr.aria-describedby]="fieldError('doencasAlergias') ? 'user-register-doencas-alergias-error' : null"
-            ></textarea>
-          </div>
+          <app-primary-textarea
+            id="user-register-doencas-alergias"
+            label="Doenças e alergias"
+            formControlName="doencasAlergias"
+            placeholder="Informe doenças, alergias ou observações importantes"
+            [rows]="4"
+            [maxlength]="2000"
+            [invalid]="!!fieldError('doencasAlergias')"
+            [describedBy]="fieldError('doencasAlergias') ? 'user-register-doencas-alergias-error' : ''"
+          ></app-primary-textarea>
           @if (fieldError('doencasAlergias'); as erro) {
             <p class="field-error" id="user-register-doencas-alergias-error">{{ erro }}</p>
           }

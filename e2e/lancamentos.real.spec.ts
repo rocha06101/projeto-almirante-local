@@ -47,7 +47,7 @@ async function limparResiduos(page: Page) {
   await page.getByRole('searchbox', { name: 'Pesquisar lançamentos' }).fill('');
 }
 
-test('menu lateral → Lançamentos → registrar, ver, editar e excluir pela API real', async ({ page }) => {
+test('Tesouraria → registrar, ver, editar e excluir lançamento pela API real', async ({ page }) => {
   test.setTimeout(180_000);
   const calls: string[] = [];
   page.on('response', r => {
@@ -57,9 +57,9 @@ test('menu lateral → Lançamentos → registrar, ver, editar e excluir pela AP
 
   await login(page);
 
-  // Item do menu lateral
-  await page.locator('aside.sidebar').getByRole('link', { name: 'Lançamentos' }).click();
-  await expect(page).toHaveURL(/\/lancamentos$/);
+  // Os lançamentos são gerenciados na própria tela de Tesouraria.
+  await page.locator('aside.sidebar').getByRole('link', { name: 'Tesouraria' }).click();
+  await expect(page).toHaveURL(/\/treasury$/);
   await expect(page.locator('app-financial-entries-component table')).toBeVisible();
   await expect.poll(() => calls.some(c => c.startsWith('GET /api/Lancamentos 200'))).toBe(true);
 

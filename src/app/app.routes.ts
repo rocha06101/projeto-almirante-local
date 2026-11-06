@@ -28,6 +28,12 @@ export const routes: Routes = [
         .then(m => m.Home),
       },
       {
+        path: 'perfil',
+        loadComponent: () =>
+          import('./pages/my-profile/my-profile')
+          .then(m => m.MyProfile),
+      },
+      {
         path: 'desbravadores',
         loadComponent: () =>
           import('./pages/desbravadores/desbravadores')
@@ -55,9 +61,8 @@ export const routes: Routes = [
       },
       {
         path: 'lancamentos',
-        loadComponent: () =>
-          import('./shared/components/financial-entries-component/financial-entries-component')
-            .then(m => m.FinancialEntriesComponent),
+        redirectTo: '/treasury',
+        pathMatch: 'full',
       },
     ]
   },

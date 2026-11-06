@@ -6,6 +6,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { User as UserModel } from '../../core/models/user.model';
 import { User as UserService } from '../../core/services/user';
 import { Router, RouterModule } from '@angular/router';
+import { RefreshButton } from '../../shared/components/refresh-button/refresh-button';
 import { UsuarioNavigationState, readNavigationState } from './usuario-navigation';
 import { describeUsuarioError } from './usuarios-api-errors';
 
@@ -14,7 +15,7 @@ const normalizar = (texto: string) => texto.normalize('NFD').replace(/\p{Diacrit
 @Component({
   selector: 'app-desbravadores',
   standalone: true,
-  imports: [CommonModule, RouterModule, A11yModule],
+  imports: [CommonModule, RouterModule, A11yModule, RefreshButton],
   templateUrl: './desbravadores.html',
   styleUrl: './desbravadores.scss',
 })

@@ -1,0 +1,165 @@
+<div class="section-container">
+  <div class="header-content">
+    <p>Editar Usuário</p>
+    <div class="header-button">
+      <app-refresh-button>Salvar</app-refresh-button>
+      <button class="cancel-button" (click)="cancel()">Cancelar</button>
+    </div>
+  </div>
+
+  <div class="container-center">
+
+    <div class="container-left">
+
+      <div class="container-up">
+        <div class="container-up-left">
+          <div class="image-back">
+            <div class="image-front">
+            </div>
+          </div>
+          <button class="button-image">Alterar Foto</button>
+        </div>
+
+        <div class="container-up-right">
+          <app-primary-input
+          label="Nome"
+          [inactive]="true"
+          ></app-primary-input>
+          <app-primary-input
+          label="E-mail"
+          [inactive]="true"
+          >
+          </app-primary-input>
+          <app-primary-input
+          label="Cargo"
+          [inactive]="true"
+          ></app-primary-input>
+        </div>
+      </div>
+
+      <div class="container-down">
+
+        <p>Credenciais</p>
+        <app-primary-input
+        label="Email"
+        [inactive]="true"
+        ></app-primary-input>
+        <app-primary-input
+        label="Senha"
+        [inactive]="true"
+        ></app-primary-input>
+        <div class="container-down-button">
+          <app-refresh-button (click)="openPasswordModal()">Editar</app-refresh-button>
+        </div>
+      </div>
+    </div>
+
+    <div class="container-rigth">
+      <h2>Informações Pessoais</h2>
+      <div class="inputs-columns">
+        <div class="inputs-left">
+          <app-primary-input
+            label="Nome"
+            placeholder="Nome completo"
+            autocomplete="name"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+          ></app-primary-input>
+          <app-primary-input
+            label="CPF"
+            placeholder="000.000.000-00"
+            mask="cpf"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+          ></app-primary-input>
+          <app-primary-input
+            label="RG"
+            placeholder="00.000.000-0"
+            mask="rg"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+          ></app-primary-input>
+          <app-primary-input
+            label="Data de nascimento"
+            placeholder="dd/mm/aaaa"
+            mask="data"
+            autocomplete="bday"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+          ></app-primary-input>
+          <app-primary-input
+            label="CEP"
+            placeholder="00000-000"
+            mask="cep"
+            autocomplete="postal-code"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+          ></app-primary-input>
+          <app-primary-input
+            label="Bairro"
+            autocomplete="address-level3"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+          ></app-primary-input>
+          <app-primary-input
+            label="Rua"
+            autocomplete="street-address"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+          ></app-primary-input>
+        </div>
+
+        <div class="inputs-rigth">
+          <app-primary-input
+            label="Telefone"
+            placeholder="(00) 00000-0000"
+            type="tel"
+            mask="telefone"
+            autocomplete="tel"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+          ></app-primary-input>
+          <app-primary-select
+            label="Tipo sanguíneo"
+            placeholder="Selecione o tipo sanguíneo"
+            [options]="tipoSanguineoOptions"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+          ></app-primary-select>
+          <app-primary-textarea
+            label="Alergias/ Doenças"
+            placeholder="Descreva alergias e doenças"
+            [maxlength]="2000"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+            minHeight="13.6rem"
+          ></app-primary-textarea>
+          <app-primary-input
+            label="Número"
+            type="number"
+            autocomplete="address-line2"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+          ></app-primary-input>
+          <app-primary-input
+            label="Complemento"
+            autocomplete="address-line2"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+          ></app-primary-input>
+          <div class="profile-edit-button">
+            <app-refresh-button (click)="enablePersonalInfoEditing()">Editar</app-refresh-button>
+          </div>
+        </div>
+
+        @if (passwordModalOpen()) {
+          <app-password-change-modal
+            [currentEmail]="currentEmail"
+            (closed)="closePasswordModal()"
+          />
+        }
+      </div>
+
+    </div>
+  </div>
+</div>

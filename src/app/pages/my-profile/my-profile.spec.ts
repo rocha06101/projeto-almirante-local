@@ -54,6 +54,42 @@ describe('MyProfile', () => {
     expect(fixture.componentInstance.personalInfoInactive()).toBe(false);
   });
 
+  it('abre o modal de alteração de senha e fecha pelo botão cancelar', () => {
+    const page = fixture.nativeElement as HTMLElement;
+
+    page.querySelector<HTMLButtonElement>('.container-down-button button')?.click();
+    fixture.detectChanges();
+
+    const dialog = page.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain('Alterar senha');
+    expect(dialog?.querySelectorAll('input[type="password"]')).toHaveLength(3);
+    expect(dialog?.textContent).toContain('Salvar');
+
+    page.querySelector<HTMLButtonElement>('.password-modal-cancel')?.click();
+    fixture.detectChanges();
+
+    expect(page.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('avança para a etapa de e-mail opcional e informa que a gravação não está conectada', () => {
+    const page = fixture.nativeElement as HTMLElement;
+    page.querySelector<HTMLButtonElement>('.container-down-button button')?.click();
+    fixture.detectChanges();
+
+    page.querySelector<HTMLButtonElement>('.password-modal-save')?.click();
+    fixture.detectChanges();
+
+    const emailInput = page.querySelector<HTMLInputElement>('#profile-email');
+    expect(emailInput?.type).toBe('email');
+    expect(emailInput?.value).toBe('ana@example.com');
+    expect(page.textContent).toContain('Se não alterar o e-mail, o atual será mantido.');
+
+    page.querySelector<HTMLButtonElement>('.password-modal-save')?.click();
+    fixture.detectChanges();
+
+    expect(page.querySelector('[role="alert"]')?.textContent).toContain('a integração com a API');
+  });
+
   it('volta para a Home ao clicar em Cancelar', () => {
     const router = TestBed.inject(Router);
     const navigateSpy = vi.spyOn(router, 'navigate');

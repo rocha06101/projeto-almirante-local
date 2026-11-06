@@ -50,8 +50,8 @@ export const routes: Routes = [
         path: 'desbravadores/editar',
         data: { modo: 'editar' },
         loadComponent: () =>
-          import('./pages/desbravadores/user-register/user-register')
-          .then(m => m.UserRegister),
+          import('./pages/desbravadores/user-edit/user-edit')
+          .then(m => m.UserEdit),
       },
       {
         path: 'treasury',

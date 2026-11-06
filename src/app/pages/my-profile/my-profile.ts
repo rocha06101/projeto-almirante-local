@@ -5,13 +5,14 @@ import { RefreshButton } from '../../shared/components/refresh-button/refresh-bu
 import { PrimaryInput } from '../../shared/components/primary-input/primary-input';
 import { PrimarySelect } from '../../shared/components/primary-select/primary-select';
 import { PrimaryTextarea } from '../../shared/components/primary-textarea/primary-textarea';
+import { PasswordChangeModal } from '../../shared/components/password-change-modal/password-change-modal';
 
 @Component({
   selector: 'app-my-profile',
   standalone: true,
   templateUrl: './my-profile.html',
   styleUrl: './my-profile.scss',
-  imports: [ RefreshButton, PrimaryInput, PrimarySelect, PrimaryTextarea ]
+  imports: [ RefreshButton, PrimaryInput, PrimarySelect, PrimaryTextarea, PasswordChangeModal ]
 })
 export class MyProfile {
   private readonly auth = inject(AuthService);
@@ -19,6 +20,7 @@ export class MyProfile {
 
   readonly user = this.auth.user;
   readonly personalInfoInactive = signal(true);
+  readonly passwordModalOpen = signal(false);
   readonly tipoSanguineoOptions = [
     { label: 'A+', value: 'A+' },
     { label: 'A-', value: 'A-' },
@@ -32,6 +34,14 @@ export class MyProfile {
 
   enablePersonalInfoEditing(): void {
     this.personalInfoInactive.set(false);
+  }
+
+  openPasswordModal(): void {
+    this.passwordModalOpen.set(true);
+  }
+
+  closePasswordModal(): void {
+    this.passwordModalOpen.set(false);
   }
 
   cancel(): void {

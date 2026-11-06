@@ -49,7 +49,7 @@
         [inactive]="true"
         ></app-primary-input>
         <div class="container-down-button">
-          <app-refresh-button>Editar</app-refresh-button>
+          <app-refresh-button (click)="openPasswordModal()">Editar</app-refresh-button>
         </div>
       </div>
     </div>
@@ -152,6 +152,13 @@
           </div>
         </div>
       </div>
+
+      @if (passwordModalOpen()) {
+        <app-password-change-modal
+          [currentEmail]="user()?.email ?? ''"
+          (closed)="closePasswordModal()"
+        />
+      }
 
     </div>
   </div>

@@ -14,12 +14,15 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, filter, finalize, map, of, switchMap, take, timer } from 'rxjs';
 import { Cargo, UserAddress, UserAddressRequest, User as UserModel } from '../../../core/models/user.model';
 import { AuthService } from '../../../core/services/auth';
+import { ToastService } from '../../../core/services/toast.service';
 import { User as UserService } from '../../../core/services/user';
 import { PrimaryInput } from '../../../shared/components/primary-input/primary-input';
 import { PrimarySelect } from '../../../shared/components/primary-select/primary-select';
 import { PrimaryTextarea } from '../../../shared/components/primary-textarea/primary-textarea';
 import { ToggleSwitch } from '../../../shared/components/toggle-switch/toggle-switch';
 import { UploadFoto } from '../../../shared/components/upload-foto/upload-foto';
+import { onlyDigits } from '../../../shared/utils/masks';
+import { apiDateToForm, formDateToApi, isValidFormDate } from '../../../shared/utils/profile-form';
 import { cpfValidator } from '../../../shared/validators/cpf.validator';
 import { emailFormatValidator } from '../../../shared/validators/email.validator';
 import { UsuarioNavigationState, readNavigationState } from '../usuario-navigation';
@@ -38,11 +41,25 @@ type FieldName =
   | 'cargoId'
   | 'cpf'
   | 'rg'
+  | 'dataNascimento'
+  | 'telefone'
   | 'tipoSanguineo'
   | 'doencasAlergias';
 
 function notBlank(control: AbstractControl): ValidationErrors | null {
   return String(control.value ?? '').trim() ? null : { required: true };
+}
+
+function telefoneValido(control: AbstractControl): ValidationErrors | null {
+  const value = String(control.value ?? '');
+  if (!value.trim()) {
+    return null;
+  }
+
+  const digits = onlyDigits(value);
+  return /^[\d\s()+-]+$/.test(value) && (digits.length === 10 || digits.length === 11)
+    ? null
+    : { telefoneInvalido: true };
 }
 
 function senhasIguais(group: AbstractControl): ValidationErrors | null {
@@ -96,6 +113,7 @@ export class UserRegister implements OnInit, OnDestroy {
   private userService = inject(UserService);
   private destroyRef = inject(DestroyRef);
   private auth = inject(AuthService);
+  private toast = inject(ToastService);
   private sanitizer = inject(DomSanitizer);
 
   readonly senhaMinimo = SENHA_MINIMO;
@@ -110,7 +128,23 @@ export class UserRegister implements OnInit, OnDestroy {
       email: ['', [notBlank, Validators.maxLength(EMAIL_MAXIMO), emailFormatValidator]],
       ehCin: [false],
       cpf: ['', [Validators.required, cpfValidator]],
-      rg: ['', [Validators.required, Validators.maxLength(20), Validators.pattern(/\d/)]],
+      rg: [
+        '',
+        [
+          Validators.required,
+          Validators.maxLength(20),
+          Validators.pattern(/^(?=.*[A-Za-z0-9])[A-Za-z0-9.-]+$/),
+        ],
+      ],
+      dataNascimento: [
+        '',
+        [
+          Validators.maxLength(10),
+          (control: AbstractControl) =>
+            isValidFormDate(String(control.value ?? '')) ? null : { dateInvalid: true },
+        ],
+      ],
+      telefone: ['', [Validators.maxLength(15), telefoneValido]],
       senha: ['', [Validators.required, Validators.minLength(SENHA_MINIMO), Validators.maxLength(SENHA_MAXIMO)]],
       confirmarSenha: ['', Validators.required],
       cargoId: ['', Validators.required],
@@ -220,13 +254,14 @@ export class UserRegister implements OnInit, OnDestroy {
     }
 
     const {
-      nome, email, senha, cargoId, cpf, rg, ehCin, tipoSanguineo, doencasAlergias,
+      nome, email, senha, cargoId, cpf, rg, ehCin, dataNascimento, telefone, tipoSanguineo, doencasAlergias,
       cep, logradouro, bairro, numero, complemento,
     } = this.form.getRawValue();
     const dadosSaude = {
       tipoSanguineo: tipoSanguineo || null,
       doencasAlergias: doencasAlergias.trim() || null,
     };
+    const dataNascimentoApi = formDateToApi(dataNascimento);
     const usuario = this.usuarioEmEdicao();
     const endereco = this.criarEndereco(
       cep,
@@ -244,6 +279,12 @@ export class UserRegister implements OnInit, OnDestroy {
           ...(cpf.trim() ? { cpf: cpf.trim() } : {}),
           ehCin,
           ...(!ehCin ? { rg: rg.trim() } : {}),
+          ...(dataNascimento !== apiDateToForm(usuario.dataNascimento)
+            ? { dataNascimento: dataNascimentoApi }
+            : {}),
+          ...(onlyDigits(telefone) !== onlyDigits(usuario.telefone)
+            ? { telefone: onlyDigits(telefone) || null }
+            : {}),
           ...dadosSaude,
           ...(endereco ? { endereco } : {}),
         })
@@ -255,6 +296,8 @@ export class UserRegister implements OnInit, OnDestroy {
           cpf: cpf.trim(),
           ehCin,
           ...(!ehCin ? { rg: rg.trim() } : {}),
+          ...(dataNascimentoApi ? { dataNascimento: dataNascimentoApi } : {}),
+          ...(telefone.trim() ? { telefone: onlyDigits(telefone) } : {}),
           ...dadosSaude,
           ...(endereco ? { endereco } : {}),
         });
@@ -303,6 +346,8 @@ export class UserRegister implements OnInit, OnDestroy {
         email: 'Informe o e-mail.',
         cpf: 'Informe o CPF.',
         rg: 'Informe o RG.',
+        dataNascimento: 'Informe uma data válida.',
+        telefone: 'Informe um telefone válido.',
         senha: 'Informe a senha.',
         confirmarSenha: 'Confirme a senha.',
         cargoId: 'Selecione o cargo.',
@@ -317,7 +362,13 @@ export class UserRegister implements OnInit, OnDestroy {
       return 'Digite um CPF válido.';
     }
     if (name === 'rg' && control.hasError('pattern')) {
-      return 'Informe ao menos um dígito no RG.';
+      return 'Use letras ASCII, números, pontos ou hífens no RG.';
+    }
+    if (name === 'dataNascimento' && control.hasError('dateInvalid')) {
+      return 'Informe uma data válida no formato dd/mm/aaaa.';
+    }
+    if (name === 'telefone' && control.hasError('telefoneInvalido')) {
+      return 'Informe um telefone com DDD e 10 ou 11 dígitos.';
     }
     if (control.hasError('minlength')) {
       return `A senha deve ter ao menos ${SENHA_MINIMO} caracteres.`;
@@ -361,6 +412,8 @@ export class UserRegister implements OnInit, OnDestroy {
       ehCin: usuario.ehCin ?? false,
       cpf: usuario.cpf ?? '',
       rg: usuario.rg ?? '',
+      dataNascimento: apiDateToForm(usuario.dataNascimento),
+      telefone: usuario.telefone ?? '',
       cargoId: usuario.cargo?.id ?? '',
       tipoSanguineo: usuario.tipoSanguineo ?? '',
       doencasAlergias: usuario.doencasAlergias ?? '',
@@ -424,7 +477,9 @@ export class UserRegister implements OnInit, OnDestroy {
           this.voltarParaListagem(atualizado, cadastroExistente);
         },
         error: error => {
-          this.errorMessage.set(descreverErroFoto(error, 'Não foi possível enviar a foto. Tente novamente.'));
+          const message = descreverErroFoto(error, 'Não foi possível enviar a foto. Tente novamente.');
+          this.errorMessage.set(message);
+          this.toast.error(message);
         },
       });
   }
@@ -533,7 +588,11 @@ export class UserRegister implements OnInit, OnDestroy {
       rg.setValue('', { emitEvent: false });
       rg.disable({ emitEvent: false });
     } else {
-      rg.setValidators([Validators.required, Validators.maxLength(20), Validators.pattern(/\d/)]);
+      rg.setValidators([
+        Validators.required,
+        Validators.maxLength(20),
+        Validators.pattern(/^(?=.*[A-Za-z0-9])[A-Za-z0-9.-]+$/),
+      ]);
       if (!this.form.disabled) {
         rg.enable({ emitEvent: false });
       }
@@ -628,10 +687,14 @@ export class UserRegister implements OnInit, OnDestroy {
     }
 
     const hasFieldErrors = Object.keys(fields).length > 0;
-    this.errorMessage.set(
+    const message =
       hasFieldErrors && !naoMapeados
         ? 'Verifique os campos destacados.'
-        : describeUsuarioError(error, 'Não foi possível salvar o cadastro. Tente novamente.'),
-    );
+        : describeUsuarioError(error, 'Não foi possível salvar o cadastro. Tente novamente.');
+
+    this.errorMessage.set(message);
+    if (!hasFieldErrors || naoMapeados) {
+      this.toast.error(message);
+    }
   }
 }

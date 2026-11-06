@@ -21,6 +21,8 @@ const usuario: UserModel = {
   cpf: '529.982.247-25',
   rg: '12.345.678-9',
   ehCin: false,
+  dataNascimento: '2005-04-15',
+  telefone: '11987654321',
   tipoSanguineo: 'O+',
   doencasAlergias: 'Asma',
   endereco: {
@@ -78,7 +80,17 @@ describe('UserRegister', () => {
   const preencher = (
     valores: Partial<
       Record<
-        'nome' | 'email' | 'senha' | 'confirmarSenha' | 'cargoId' | 'cpf' | 'rg' | 'tipoSanguineo' | 'doencasAlergias',
+        | 'nome'
+        | 'email'
+        | 'senha'
+        | 'confirmarSenha'
+        | 'cargoId'
+        | 'cpf'
+        | 'rg'
+        | 'dataNascimento'
+        | 'telefone'
+        | 'tipoSanguineo'
+        | 'doencasAlergias',
         string
       >
     > & { ehCin?: boolean },
@@ -177,6 +189,8 @@ describe('UserRegister', () => {
       cargoId: 'c-sec',
       tipoSanguineo: 'O+',
       doencasAlergias: 'Alergia a amendoim',
+      dataNascimento: '15/04/2005',
+      telefone: '(11) 98765-4321',
     });
 
     clicarSalvar();
@@ -187,6 +201,8 @@ describe('UserRegister', () => {
       cpf: '529.982.247-25',
       rg: '12.345.678-9',
       ehCin: false,
+      dataNascimento: '2005-04-15',
+      telefone: '11987654321',
       senha: SENHA_VALIDA,
       cargoId: 'c-sec',
       tipoSanguineo: 'O+',
@@ -195,6 +211,98 @@ describe('UserRegister', () => {
     expect(navigate).toHaveBeenCalledWith(['/desbravadores'], {
       state: { feedback: 'Ana Souza cadastrado com sucesso.' },
     });
+  });
+
+  it('omite data de nascimento e telefone opcionais quando vazios', async () => {
+    service.criarUsuario.mockReturnValue(of({ ...usuario, id: 'novo' }));
+    await setup();
+    preencher({
+      nome: 'Ana Souza',
+      email: 'ana@example.com',
+      senha: SENHA_VALIDA,
+      confirmarSenha: SENHA_VALIDA,
+      cargoId: 'c-sec',
+    });
+
+    clicarSalvar();
+
+    const payload = service.criarUsuario.mock.calls[0][0];
+    expect(payload).not.toHaveProperty('dataNascimento');
+    expect(payload).not.toHaveProperty('telefone');
+  });
+
+  it('aplica as máscaras de data e telefone e envia a data ISO sem conversão de fuso', async () => {
+    service.criarUsuario.mockReturnValue(of({ ...usuario, id: 'novo' }));
+    await setup();
+
+    const dataNascimento = host.querySelector<HTMLInputElement>(
+      'app-primary-input[formcontrolname="dataNascimento"] input',
+    )!;
+    dataNascimento.value = '15042005';
+    dataNascimento.dispatchEvent(new Event('input', { bubbles: true }));
+    const telefone = host.querySelector<HTMLInputElement>(
+      'app-primary-input[formcontrolname="telefone"] input',
+    )!;
+    telefone.value = '11987654321';
+    telefone.dispatchEvent(new Event('input', { bubbles: true }));
+    preencher({
+      nome: 'Ana Souza',
+      email: 'ana@example.com',
+      senha: SENHA_VALIDA,
+      confirmarSenha: SENHA_VALIDA,
+      cargoId: 'c-sec',
+    });
+
+    expect(component.form.controls.dataNascimento.value).toBe('15/04/2005');
+    expect(component.form.controls.telefone.value).toBe('(11) 98765-4321');
+
+    clicarSalvar();
+
+    expect(service.criarUsuario).toHaveBeenCalledWith(expect.objectContaining({
+      dataNascimento: '2005-04-15',
+      telefone: '11987654321',
+    }));
+  });
+
+  it('bloqueia datas impossíveis e telefones incompletos sem descartar os valores', async () => {
+    await setup();
+    preencher({
+      nome: 'Ana Souza',
+      email: 'ana@example.com',
+      senha: SENHA_VALIDA,
+      confirmarSenha: SENHA_VALIDA,
+      cargoId: 'c-sec',
+      dataNascimento: '31/04/2005',
+      telefone: '(11) 1234',
+    });
+
+    clicarSalvar();
+
+    expect(service.criarUsuario).not.toHaveBeenCalled();
+    expect(component.form.controls.dataNascimento.value).toBe('31/04/2005');
+    expect(component.form.controls.telefone.value).toBe('(11) 1234');
+    expect(host.querySelector('#user-register-data-nascimento-error')?.textContent)
+      .toContain('data válida');
+    expect(host.querySelector('#user-register-telefone-error')?.textContent)
+      .toContain('10 ou 11 dígitos');
+  });
+
+  it('aceita RG alfanumérico até o limite do contrato e envia o valor informado', async () => {
+    service.criarUsuario.mockReturnValue(of({ ...usuario, id: 'novo' }));
+    await setup();
+    const rg = 'AB-12345678901234567';
+    preencher({
+      nome: 'Ana Souza',
+      email: 'ana@example.com',
+      senha: SENHA_VALIDA,
+      confirmarSenha: SENHA_VALIDA,
+      cargoId: 'c-sec',
+      rg,
+    });
+
+    clicarSalvar();
+
+    expect(service.criarUsuario).toHaveBeenCalledWith(expect.objectContaining({ rg }));
   });
 
   it('cria o usuário antes do upload e permite reenviar somente a foto após falha', async () => {
@@ -507,6 +615,8 @@ describe('UserRegister', () => {
       cargoId: 'c-sec',
       tipoSanguineo: '',
       doencasAlergias: '',
+      dataNascimento: '',
+      telefone: '',
       cep: '',
       logradouro: '',
       bairro: '',
@@ -572,6 +682,8 @@ describe('UserRegister', () => {
     expect(component.form.controls.ehCin.value).toBe(false);
     expect(component.form.controls.rg.value).toBe('12.345.678-9');
     expect(component.form.controls.rg.enabled).toBe(true);
+    expect(component.form.controls.dataNascimento.value).toBe('15/04/2005');
+    expect(component.form.controls.telefone.value).toBe('11987654321');
     expect(component.form.controls.cargoId.value).toBe('c-sec');
     expect(component.form.controls.tipoSanguineo.value).toBe('O+');
     expect(component.form.controls.doencasAlergias.value).toBe('Asma');

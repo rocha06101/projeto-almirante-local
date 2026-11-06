@@ -81,6 +81,47 @@ describe('User', () => {
     req.flush({ id: 'u1' });
   });
 
+  it('carrega o perfil completo autenticado com GET /api/Me', () => {
+    let profile: unknown;
+    service.obterMeuPerfil().subscribe(resultado => (profile = resultado));
+
+    const req = http.expectOne(r => r.method === 'GET' && r.url === '/api/Me');
+    req.flush({ id: 'u1', nome: 'Ana', email: 'ana@example.com', cpf: '52998224725' });
+    expect(profile).toEqual({ id: 'u1', nome: 'Ana', email: 'ana@example.com', cpf: '52998224725' });
+  });
+
+  it('atualiza o perfil autenticado com PUT /api/Me e somente o payload informado', () => {
+    const payload = {
+      ehCin: false,
+      rg: '12.345.678-9',
+      telefone: '11999999999',
+      endereco: { cep: '01001000', numero: '100', complemento: null },
+    };
+    service.atualizarMeuPerfil(payload).subscribe();
+
+    const req = http.expectOne(r => r.method === 'PUT' && r.url === '/api/Me');
+    expect(req.request.body).toEqual(payload);
+    req.flush({ id: 'u1', nome: 'Ana', email: 'ana@example.com' });
+  });
+
+  it('envia e obtém a foto do perfil próprio em endpoints separados', () => {
+    const arquivo = new File(['foto'], 'perfil.webp', { type: 'image/webp' });
+    service.enviarMinhaFoto(arquivo).subscribe();
+
+    const upload = http.expectOne(r => r.method === 'PUT' && r.url === '/api/Me/foto');
+    expect(upload.request.body).toBeInstanceOf(FormData);
+    expect((upload.request.body as FormData).get('arquivo')).toBe(arquivo);
+    expect(upload.request.headers.has('Content-Type')).toBe(false);
+    upload.flush({ id: 'u1', nome: 'Ana', email: 'ana@example.com' });
+
+    let foto: Blob | undefined;
+    service.obterMinhaFoto().subscribe(resultado => (foto = resultado));
+    const download = http.expectOne(r => r.method === 'GET' && r.url === '/api/Me/foto');
+    expect(download.request.responseType).toBe('blob');
+    download.flush(new Blob(['imagem'], { type: 'image/webp' }));
+    expect(foto).toBeInstanceOf(Blob);
+  });
+
   it('envia foto como multipart no campo arquivo sem definir Content-Type', () => {
     const arquivo = new File(['foto'], 'perfil.webp', { type: 'image/webp' });
     let usuario: unknown;

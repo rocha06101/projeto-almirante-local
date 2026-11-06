@@ -6,6 +6,7 @@ import { of, throwError } from 'rxjs';
 import { Desbravadores } from './desbravadores';
 import { User as UserModel } from '../../core/models/user.model';
 import { User as UserService } from '../../core/services/user';
+import { ToastService } from '../../core/services/toast.service';
 
 const usuario = (over: Partial<UserModel> = {}): UserModel => ({
   id: 'u1',
@@ -26,6 +27,10 @@ describe('Desbravadores', () => {
     listarUsuarios: ReturnType<typeof vi.fn>;
     obterFotoPorUrl: ReturnType<typeof vi.fn>;
     excluirUsuario: ReturnType<typeof vi.fn>;
+  };
+  let toast: {
+    success: ReturnType<typeof vi.fn>;
+    error: ReturnType<typeof vi.fn>;
   };
   let navigate: ReturnType<typeof vi.spyOn>;
 
@@ -51,9 +56,14 @@ describe('Desbravadores', () => {
   beforeEach(() => {
     history.replaceState(null, '');
     service = { listarUsuarios: vi.fn(), obterFotoPorUrl: vi.fn(), excluirUsuario: vi.fn() };
+    toast = { success: vi.fn(), error: vi.fn() };
     TestBed.configureTestingModule({
       imports: [Desbravadores],
-      providers: [provideRouter([]), { provide: UserService, useValue: service }],
+      providers: [
+        provideRouter([]),
+        { provide: UserService, useValue: service },
+        { provide: ToastService, useValue: toast },
+      ],
     });
   });
 
@@ -226,7 +236,7 @@ describe('Desbravadores', () => {
     expect(service.excluirUsuario).toHaveBeenCalledWith('u1');
     expect(service.listarUsuarios).toHaveBeenCalledTimes(2);
     expect(host.querySelector('[role="alertdialog"]')).toBeNull();
-    expect(host.querySelector('.feedback-banner.success')?.textContent).toContain('Ana Souza foi excluído com sucesso.');
+    expect(toast.success).toHaveBeenCalledWith('Ana Souza foi excluído com sucesso.');
     expect(host.querySelector('tbody')?.textContent).not.toContain('Ana Souza');
   });
 
@@ -283,7 +293,7 @@ describe('Desbravadores', () => {
     history.replaceState({ feedback: 'Ana Souza cadastrado com sucesso.' }, '');
     await create();
 
-    expect(host.querySelector('.feedback-banner.success')?.textContent).toContain('Ana Souza cadastrado com sucesso.');
+    expect(toast.success).toHaveBeenCalledWith('Ana Souza cadastrado com sucesso.');
     history.replaceState(null, '');
   });
 });

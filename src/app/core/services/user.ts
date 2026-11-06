@@ -6,6 +6,8 @@ import {
   CepLookupResponse,
   CreateUserRequest,
   ListUsersOptions,
+  MyProfileResponse,
+  UpdateMyProfileRequest,
   UpdateUserRequest,
   User as UserModel,
 } from '../models/user.model';
@@ -33,6 +35,24 @@ export class User {
   /** Altera nome, e-mail e cargo de um usuário ativo. */
   atualizarUsuario(id: string, payload: UpdateUserRequest): Observable<UserModel> {
     return this.api.put<UserModel>(`/Usuarios/${encodeURIComponent(id)}`, payload);
+  }
+
+  obterMeuPerfil(): Observable<MyProfileResponse> {
+    return this.api.get<MyProfileResponse>('/Me');
+  }
+
+  atualizarMeuPerfil(payload: UpdateMyProfileRequest): Observable<MyProfileResponse> {
+    return this.api.put<MyProfileResponse>('/Me', payload);
+  }
+
+  enviarMinhaFoto(arquivo: File): Observable<void> {
+    const formData = new FormData();
+    formData.append('arquivo', arquivo);
+    return this.api.put<void>('/Me/foto', formData);
+  }
+
+  obterMinhaFoto(): Observable<Blob> {
+    return this.api.getBlob('/Me/foto');
   }
 
   enviarFoto(usuarioId: string, arquivo: File): Observable<UserModel> {

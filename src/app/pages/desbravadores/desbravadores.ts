@@ -5,6 +5,7 @@ import { finalize, take } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { User as UserModel } from '../../core/models/user.model';
 import { User as UserService } from '../../core/services/user';
+import { ToastService } from '../../core/services/toast.service';
 import { Router, RouterModule } from '@angular/router';
 import { RefreshButton } from '../../shared/components/refresh-button/refresh-button';
 import { UsuarioNavigationState, readNavigationState } from './usuario-navigation';
@@ -22,6 +23,7 @@ const normalizar = (texto: string) => texto.normalize('NFD').replace(/\p{Diacrit
 export class Desbravadores implements OnInit {
   private userService = inject(UserService);
   private router = inject(Router);
+  private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly fotosCache = new Map<string, { fotoUrl: string; objectUrl: string }>();
   private readonly fotosEmCarregamento = new Map<string, string>();
@@ -60,6 +62,12 @@ export class Desbravadores implements OnInit {
       }
       this.fotosCache.clear();
     });
+
+    const feedback = readNavigationState(this.router).feedback;
+    if (feedback) {
+      this.toast.success(feedback);
+    }
+
     this.carregarUsuarios();
   }
 
@@ -219,9 +227,14 @@ export class Desbravadores implements OnInit {
         next: () => {
           this.usuarioParaExcluir.set(null);
           this.successMessage.set(`${usuario.nome} foi excluído com sucesso.`);
+          this.toast.success(`${usuario.nome} foi excluído com sucesso.`);
           this.carregarUsuarios();
         },
-        error: error => this.deleteError.set(describeUsuarioError(error, 'Não foi possível excluir o usuário. Tente novamente.')),
+        error: error => {
+          const message = describeUsuarioError(error, 'Não foi possível excluir o usuário. Tente novamente.');
+          this.deleteError.set(message);
+          this.toast.error(message);
+        },
       });
   }
 }

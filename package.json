@@ -55,6 +55,7 @@
     "@angular/cli": "^21.2.7",
     "@angular/compiler-cli": "^21.2.9",
     "@playwright/test": "^1.63.0",
+    "@vitest/browser-playwright": "^4.1.12",
     "jsdom": "^27.1.0",
     "typescript": "~5.9.2",
     "vitest": "^4.0.8"

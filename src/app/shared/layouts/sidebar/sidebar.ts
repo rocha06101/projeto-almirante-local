@@ -39,11 +39,6 @@ export class SidebarComponent {
       icon: 'wallet',
       route: '/treasury',
     },
-    {
-      label: 'Lançamentos',
-      icon: 'list',
-      route: '/lancamentos',
-    },
   ]);
 
   toggleSidebar() {

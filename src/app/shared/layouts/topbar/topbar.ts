@@ -93,7 +93,9 @@ export class TopbarComponent {
   }
 
   clearNotifications() {
-    this.notificacoesService.limparPendenciasLocais();
+    for (const notification of this.notifications()) {
+      this.markNotificationAsRead(notification);
+    }
   }
 
   formatNotificationDate(value?: string | null): string {

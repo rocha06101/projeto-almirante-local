@@ -36,6 +36,8 @@ export function describeUsuarioError(error: unknown, fallback: string): string {
       return body.detail ?? body.title ?? 'Usuário não encontrado.';
     case 409:
       return body.detail ?? body.title ?? 'A operação conflita com o estado atual do cadastro.';
+    case 503:
+      return body.detail ?? body.title ?? 'O serviço está temporariamente indisponível. Tente novamente.';
     default:
       return fallback;
   }

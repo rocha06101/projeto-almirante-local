@@ -109,7 +109,7 @@ for (const viewport of ALL_VIEWPORTS) {
 
     if (viewport.name === 'phone-320x568' || viewport.name === 'laptop-1366x768') {
       test('modal de lançamento alterna os tipos sem overflow e mantém as ações acessíveis', async ({ page }) => {
-        await page.goto('/lancamentos');
+        await page.goto('/treasury');
         await page.locator('app-financial-entries-component').waitFor();
         await page.locator('.toolbar .primary-button').click();
 

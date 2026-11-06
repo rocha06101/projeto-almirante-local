@@ -1,0 +1,29 @@
+<div class="toast-root" aria-live="polite" aria-atomic="false">
+  @for (position of positions; track position) {
+    @if (positionGroups()[position].length) {
+      <div class="toast-stack toast-stack--{{ position }}" aria-live="polite">
+        @for (toast of positionGroups()[position]; track toast.id) {
+          <article
+            class="toast toast--{{ toast.type }}"
+            [attr.role]="roleFor(toast.type)"
+            [style.background-color]="toast.backgroundColor ?? ''"
+            [style.color]="toast.textColor ?? ''"
+          >
+            <span class="toast__icon" aria-hidden="true">{{ iconFor(toast.type) }}</span>
+            <div class="toast__content">
+              <p class="toast__message">{{ toast.message }}</p>
+            </div>
+            <button
+              type="button"
+              class="toast__close"
+              [attr.aria-label]="'Fechar notificação: ' + toast.message"
+              (click)="dismiss(toast.id)"
+            >
+              ×
+            </button>
+          </article>
+        }
+      </div>
+    }
+  }
+</div>

@@ -92,12 +92,6 @@ export class NotificacoesService {
     this.unreadCount.update(count => Math.max(0, count - 1));
   }
 
-  limparPendenciasLocais(): void {
-    this.notifications.set([]);
-    this.unreadCount.set(0);
-    this.isEmpty.set(true);
-  }
-
   async stopRealtime(): Promise<void> {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);

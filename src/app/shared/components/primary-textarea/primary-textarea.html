@@ -1,0 +1,17 @@
+<div class="primary-textarea">
+  <label [for]="id">{{ label }}</label>
+  <textarea
+    [id]="id"
+    [value]="value()"
+    [rows]="rows"
+    [attr.maxlength]="maxlength"
+    [placeholder]="placeholder"
+    [disabled]="disabled() || inactive"
+    [style.min-height]="minHeight || null"
+    [attr.aria-invalid]="invalid || null"
+    [attr.aria-describedby]="describedBy || null"
+    [attr.aria-disabled]="disabled() || inactive"
+    (input)="handleInput($event)"
+    (blur)="handleBlur()"
+  ></textarea>
+</div>

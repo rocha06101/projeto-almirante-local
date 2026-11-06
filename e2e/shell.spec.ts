@@ -33,6 +33,11 @@ test.describe('desktop 1366x768', () => {
     await page.goto('/');
     await page.locator('aside.sidebar').getByRole('link', { name: 'Tesouraria' }).click();
     await expect(page).toHaveURL(/\/treasury$/);
+    await expect(page.locator('aside.sidebar').getByRole('link', { name: 'Lançamentos' })).toHaveCount(0);
+
+    await page.goto('/lancamentos');
+    await expect(page).toHaveURL(/\/treasury$/);
+    await expect(page.locator('app-financial-entries-component table')).toBeVisible();
 
     const logout = page.waitForRequest(r => r.url().endsWith('/api/Auth/logout') && r.method() === 'POST');
     await page.locator('.profile-btn').click();

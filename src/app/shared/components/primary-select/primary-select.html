@@ -3,7 +3,7 @@
     <label [for]="id">{{ label }}</label>
     <select
       [id]="id"
-      [disabled]="disabled()"
+      [disabled]="disabled() || inactive"
       [attr.aria-invalid]="invalid || null"
       [attr.aria-describedby]="describedBy || null"
       (change)="handleChange($event)"

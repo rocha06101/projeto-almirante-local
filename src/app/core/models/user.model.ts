@@ -37,6 +37,13 @@ export interface UserAddressRequest extends UserAddress {
   bairro: string;
 }
 
+/** Endereço aceito pelos endpoints de atualização de perfil. Metadados do ViaCEP não são enviados. */
+export interface UserAddressUpdate {
+  cep?: string;
+  numero?: string | null;
+  complemento?: string | null;
+}
+
 /** Item de `GET /api/Usuarios` (UsuarioListItemDto); também é a resposta de POST e PUT. */
 export interface User {
   id: string;
@@ -46,18 +53,31 @@ export interface User {
   cpf?: string | null;
   rg?: string | null;
   ehCin?: boolean;
+  dataNascimento?: string | null;
+  telefone?: string | null;
+  dataExpiracao?: string | null;
+  responsavelNome?: string | null;
+  responsavelEmail?: string | null;
+  responsavelCpf?: string | null;
+  responsavelTelefone?: string | null;
   /** Rota autenticada da foto; o frontend deve buscá-la como blob, não usar diretamente em <img src>. */
   fotoUrl?: string | null;
   tipoSanguineo?: string | null;
   doencasAlergias?: string | null;
   endereco?: UserAddress | null;
-  cargo?: UserCargo;
+  cargo?: UserCargo | null;
+  cargoId?: string;
   /** Nome do cargo (ex.: "Diretor"), igual a `cargo.nome`. */
   funcao?: string;
   /** `false` para usuários excluídos logicamente (só aparecem com `includeInactive=true`). */
   ativo?: boolean;
   /** Campo legado retornado por versões anteriores da API. */
   roles?: string;
+}
+
+/** Perfil completo retornado por `GET /api/Me`; não é o perfil básico de `GET /api/Auth/Me`. */
+export interface MyProfileResponse extends Omit<User, 'dataCriacao'> {
+  dataCriacao?: string;
 }
 
 /** Perfil retornado por `GET /api/Auth/Me`. */
@@ -87,6 +107,8 @@ export interface CreateUserRequest {
   cpf: string;
   rg?: string | null;
   ehCin: boolean;
+  dataNascimento?: string | null;
+  telefone?: string | null;
   tipoSanguineo: string | null;
   doencasAlergias: string | null;
   endereco?: UserAddressRequest;
@@ -98,11 +120,25 @@ export interface UpdateUserRequest {
   email: string;
   cargoId: string;
   cpf?: string;
+  dataNascimento?: string | null;
+  telefone?: string | null;
   rg?: string | null;
   ehCin: boolean;
-  tipoSanguineo: string | null;
-  doencasAlergias: string | null;
-  endereco?: UserAddressRequest;
+  tipoSanguineo?: string | null;
+  doencasAlergias?: string | null;
+  endereco?: UserAddressUpdate;
+}
+
+/** Corpo de `PUT /api/Me`; propriedades ausentes preservam os valores armazenados. */
+export interface UpdateMyProfileRequest {
+  cpf?: string;
+  dataNascimento?: string | null;
+  telefone?: string | null;
+  rg?: string | null;
+  ehCin: boolean;
+  tipoSanguineo?: string | null;
+  doencasAlergias?: string | null;
+  endereco?: UserAddressUpdate;
 }
 
 export interface ListUsersOptions {

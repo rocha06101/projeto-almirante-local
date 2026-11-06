@@ -15,11 +15,12 @@ describe('App', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('renderiza o outlet de rotas e o aviso de atualização do PWA (oculto sem nova versão)', async () => {
+  it('renderiza o outlet de rotas, o toast global e o aviso de atualização do PWA (oculto sem nova versão)', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('router-outlet')).toBeTruthy();
+    expect(compiled.querySelector('app-toast')).toBeTruthy();
     expect(compiled.querySelector('app-update-banner')).toBeTruthy();
     expect(compiled.querySelector('.update-banner')).toBeNull();
   });

@@ -11,31 +11,27 @@
     </div>
 
     <div class="header-actions">
-      <button type="button" class="refresh-button" (click)="salvar()" [disabled]="saving() || form.disabled">
+      <button type="button" class="refresh-button" (click)="salvar()" [disabled]="saving() || redirecting() || form.disabled">
         <img src="/icons/save-icon.svg" alt="" width="24" height="24">
-        {{ saving() ? (fotoEnviando() ? 'Enviando foto...' : 'Salvando...') : (usuarioPendenteFoto() ? 'Reenviar foto' : 'Salvar Cadastro') }}
+        {{ saving() ? (fotoEnviando() ? 'Enviando foto...' : 'Salvando...') : redirecting() ? 'Redirecionando...' : (usuarioPendenteFoto() ? 'Reenviar foto' : 'Salvar Cadastro') }}
       </button>
 
-      <button type="button" class="button-cancel" (click)="cancelar()">
+      <button type="button" class="button-cancel" (click)="cancelar()" [disabled]="redirecting()">
         <img src="/icons/cancel-icon.svg" alt="" width="24" height="24">
         Cancelar
       </button>
     </div>
   </header>
 
-  @if (errorMessage()) {
-    <p class="form-feedback error" role="alert">{{ errorMessage() }}</p>
-  }
-
   <div class="container-center">
 
     <div class="header-actions-down">
-    <button type="button" class="refresh-button" (click)="salvar()" [disabled]="saving() || form.disabled">
+    <button type="button" class="refresh-button" (click)="salvar()" [disabled]="saving() || redirecting() || form.disabled">
       <img src="/icons/save-icon.svg" alt="" width="24" height="24">
-      {{ saving() ? (fotoEnviando() ? 'Enviando foto...' : 'Salvando...') : (usuarioPendenteFoto() ? 'Reenviar foto' : 'Salvar Cadastro') }}
+      {{ saving() ? (fotoEnviando() ? 'Enviando foto...' : 'Salvando...') : redirecting() ? 'Redirecionando...' : (usuarioPendenteFoto() ? 'Reenviar foto' : 'Salvar Cadastro') }}
     </button>
 
-    <button type="button" class="button-cancel" (click)="cancelar()">
+    <button type="button" class="button-cancel" (click)="cancelar()" [disabled]="redirecting()">
       <img src="/icons/cancel-icon.svg" alt="" width="24" height="24">
       Cancelar
     </button>
@@ -75,7 +71,6 @@
             label="RG"
             placeholder="00.000.000-0"
             type="text"
-            mask="rg"
             formControlName="rg"
             [style.--primary-input-background]="form.controls.ehCin.value ? '#f1f2f5' : null"
             [invalid]="!!fieldError('rg')"
@@ -90,15 +85,27 @@
             placeholder="dd/mm/aaaa"
             type="text"
             mask="data"
+            formControlName="dataNascimento"
             autocomplete="bday"
+            [invalid]="!!fieldError('dataNascimento')"
+            describedBy="user-register-data-nascimento-error"
           ></app-primary-input>
+          @if (fieldError('dataNascimento'); as erro) {
+            <p class="field-error" id="user-register-data-nascimento-error">{{ erro }}</p>
+          }
           <app-primary-input
             label="Telefone"
             placeholder="(00) 00000-0000"
             type="tel"
             mask="telefone"
+            formControlName="telefone"
             autocomplete="tel"
+            [invalid]="!!fieldError('telefone')"
+            describedBy="user-register-telefone-error"
           ></app-primary-input>
+          @if (fieldError('telefone'); as erro) {
+            <p class="field-error" id="user-register-telefone-error">{{ erro }}</p>
+          }
 
           <app-primary-select
             label="Tipo sanguíneo"
@@ -113,18 +120,16 @@
             <p class="field-error" id="user-register-tipo-sanguineo-error">{{ erro }}</p>
           }
 
-          <div class="medical-notes">
-            <label for="user-register-doencas-alergias">Doenças e alergias</label>
-            <textarea
-              id="user-register-doencas-alergias"
-              formControlName="doencasAlergias"
-              rows="4"
-              maxlength="2000"
-              placeholder="Informe doenças, alergias ou observações importantes"
-              [attr.aria-invalid]="!!fieldError('doencasAlergias') || null"
-              [attr.aria-describedby]="fieldError('doencasAlergias') ? 'user-register-doencas-alergias-error' : null"
-            ></textarea>
-          </div>
+          <app-primary-textarea
+            id="user-register-doencas-alergias"
+            label="Doenças e alergias"
+            formControlName="doencasAlergias"
+            placeholder="Informe doenças, alergias ou observações importantes"
+            [rows]="4"
+            [maxlength]="2000"
+            [invalid]="!!fieldError('doencasAlergias')"
+            [describedBy]="fieldError('doencasAlergias') ? 'user-register-doencas-alergias-error' : ''"
+          ></app-primary-textarea>
           @if (fieldError('doencasAlergias'); as erro) {
             <p class="field-error" id="user-register-doencas-alergias-error">{{ erro }}</p>
           }

@@ -10,6 +10,10 @@ let nextPrimarySelectId = 0;
   imports: [CommonModule],
   templateUrl: './primary-select.html',
   styleUrl: './primary-select.scss',
+  host: {
+    '[class.compact]': 'compact',
+    '[class.inactive]': 'inactive',
+  },
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -28,6 +32,8 @@ export class PrimarySelect implements ControlValueAccessor {
   @Input() invalid = false;
   /** id do elemento com a mensagem de erro/ajuda associada ao campo. */
   @Input() describedBy = '';
+  @Input() compact = false;
+  @Input() inactive = false;
 
   // Signals: writeValue/setDisabledState chegam fora do template e precisam atualizar a view (app zoneless).
   readonly value = signal('');
@@ -53,6 +59,10 @@ export class PrimarySelect implements ControlValueAccessor {
   }
 
   handleChange(event: Event): void {
+    if (this.inactive || this.disabled()) {
+      return;
+    }
+
     this.value.set((event.target as HTMLSelectElement).value ?? '');
     this.onChange(this.value());
   }

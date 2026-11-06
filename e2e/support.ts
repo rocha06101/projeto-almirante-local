@@ -43,7 +43,6 @@ export const ROUTES = [
   { path: '/desbravadores', name: 'desbravadores', ready: 'app-desbravadores table' },
   { path: '/desbravadores/cadastrar', name: 'cadastro-membro', ready: 'app-user-register' },
   { path: '/treasury', name: 'tesouraria', ready: 'app-treasury app-financial-entries-component table' },
-  { path: '/lancamentos', name: 'lancamentos', ready: 'app-financial-entries-component table' },
 ];
 
 const json = (route: Route, body: unknown, status = 200) =>

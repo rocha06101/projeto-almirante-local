@@ -28,6 +28,12 @@ export const routes: Routes = [
         .then(m => m.Home),
       },
       {
+        path: 'perfil',
+        loadComponent: () =>
+          import('./pages/my-profile/my-profile')
+          .then(m => m.MyProfile),
+      },
+      {
         path: 'desbravadores',
         loadComponent: () =>
           import('./pages/desbravadores/desbravadores')
@@ -44,8 +50,8 @@ export const routes: Routes = [
         path: 'desbravadores/editar',
         data: { modo: 'editar' },
         loadComponent: () =>
-          import('./pages/desbravadores/user-register/user-register')
-          .then(m => m.UserRegister),
+          import('./pages/desbravadores/user-edit/user-edit')
+          .then(m => m.UserEdit),
       },
       {
         path: 'treasury',
@@ -55,9 +61,8 @@ export const routes: Routes = [
       },
       {
         path: 'lancamentos',
-        loadComponent: () =>
-          import('./shared/components/financial-entries-component/financial-entries-component')
-            .then(m => m.FinancialEntriesComponent),
+        redirectTo: '/treasury',
+        pathMatch: 'full',
       },
     ]
   },

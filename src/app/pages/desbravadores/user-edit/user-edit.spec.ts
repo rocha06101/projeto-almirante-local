@@ -4,6 +4,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { provideRouter, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { User as UserModel } from '../../../core/models/user.model';
+import { ToastService } from '../../../core/services/toast.service';
 import { User as UserService } from '../../../core/services/user';
 import { UserEdit } from './user-edit';
 
@@ -91,6 +92,8 @@ describe('UserEdit', () => {
     };
   });
 
+  afterEach(() => vi.useRealTimers());
+
   it('preenche o usuário selecionado e mantém os dados de endereço e cargo', async () => {
     await createComponent();
     const component = fixture.componentInstance;
@@ -161,13 +164,16 @@ describe('UserEdit', () => {
 
     expect(fixture.componentInstance.isLoaded()).toBe(false);
     expect(page.querySelector('.container-center')).toBeNull();
-    expect(page.querySelector('[role="alert"]')?.textContent).toContain('identificar o usuário');
+    expect(fixture.componentInstance.errorMessage()).toContain('identificar o usuário');
     expect(service.atualizarUsuario).not.toHaveBeenCalled();
   });
 
   it('salva com o ID e cargo originais e não envia metadados nem dados ocultos', async () => {
     await createComponent();
     const component = fixture.componentInstance;
+    const toast = TestBed.inject(ToastService);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    vi.useFakeTimers();
 
     component.enablePersonalInfoEditing();
     component.form.controls.telefone.setValue('(21) 98765-4321');
@@ -193,7 +199,18 @@ describe('UserEdit', () => {
     expect(payload).not.toHaveProperty('responsavelNome');
     expect(payload).not.toHaveProperty('endereco');
     expect(component.successMessage()).toContain('atualizados com sucesso');
+    expect(toast.toasts().find(record => record.type === 'success')).toMatchObject({
+      message: 'Os dados do usuário foram atualizados com sucesso.',
+      type: 'success',
+      duration: 2000,
+    });
+    expect(navigate).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1999);
+    expect(navigate).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(navigate).toHaveBeenCalledWith(['/desbravadores']);
     expect(component.personalInfoInactive()).toBe(true);
+    vi.useRealTimers();
   });
 
   it('salva data e telefone nulos como valores válidos e mantém RG bloqueado com ehCin', async () => {

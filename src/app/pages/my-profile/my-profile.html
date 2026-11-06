@@ -12,9 +12,6 @@
   @if (isLoading()) {
     <p role="status">Carregando perfil...</p>
   }
-  @if (errorMessage()) {
-    <p role="alert">{{ errorMessage() }}</p>
-  }
   @if (isLoaded()) {
     <div class="container-center">
       <div class="container-left">

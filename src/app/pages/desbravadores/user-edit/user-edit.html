@@ -2,16 +2,13 @@
   <div class="header-content">
     <p>Editar Usuário</p>
     <div class="header-button">
-      <app-refresh-button [disabled]="!isLoaded() || saving()" (click)="salvar()">
-        {{ saving() ? 'Salvando...' : 'Salvar' }}
+      <app-refresh-button [disabled]="!isLoaded() || saving() || redirecting()" (click)="salvar()">
+        {{ saving() ? 'Salvando...' : redirecting() ? 'Redirecionando...' : 'Salvar' }}
       </app-refresh-button>
-      <button class="cancel-button" type="button" (click)="cancel()">Cancelar</button>
+      <button class="cancel-button" type="button" (click)="cancel()" [disabled]="redirecting()">Cancelar</button>
     </div>
   </div>
 
-  @if (errorMessage()) {
-    <p role="alert">{{ errorMessage() }}</p>
-  }
   @if (isLoaded()) {
     <div class="container-center">
       <div class="container-left">

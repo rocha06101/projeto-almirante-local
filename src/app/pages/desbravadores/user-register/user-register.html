@@ -11,31 +11,27 @@
     </div>
 
     <div class="header-actions">
-      <button type="button" class="refresh-button" (click)="salvar()" [disabled]="saving() || form.disabled">
+      <button type="button" class="refresh-button" (click)="salvar()" [disabled]="saving() || redirecting() || form.disabled">
         <img src="/icons/save-icon.svg" alt="" width="24" height="24">
-        {{ saving() ? (fotoEnviando() ? 'Enviando foto...' : 'Salvando...') : (usuarioPendenteFoto() ? 'Reenviar foto' : 'Salvar Cadastro') }}
+        {{ saving() ? (fotoEnviando() ? 'Enviando foto...' : 'Salvando...') : redirecting() ? 'Redirecionando...' : (usuarioPendenteFoto() ? 'Reenviar foto' : 'Salvar Cadastro') }}
       </button>
 
-      <button type="button" class="button-cancel" (click)="cancelar()">
+      <button type="button" class="button-cancel" (click)="cancelar()" [disabled]="redirecting()">
         <img src="/icons/cancel-icon.svg" alt="" width="24" height="24">
         Cancelar
       </button>
     </div>
   </header>
 
-  @if (errorMessage()) {
-    <p class="form-feedback error" role="alert">{{ errorMessage() }}</p>
-  }
-
   <div class="container-center">
 
     <div class="header-actions-down">
-    <button type="button" class="refresh-button" (click)="salvar()" [disabled]="saving() || form.disabled">
+    <button type="button" class="refresh-button" (click)="salvar()" [disabled]="saving() || redirecting() || form.disabled">
       <img src="/icons/save-icon.svg" alt="" width="24" height="24">
-      {{ saving() ? (fotoEnviando() ? 'Enviando foto...' : 'Salvando...') : (usuarioPendenteFoto() ? 'Reenviar foto' : 'Salvar Cadastro') }}
+      {{ saving() ? (fotoEnviando() ? 'Enviando foto...' : 'Salvando...') : redirecting() ? 'Redirecionando...' : (usuarioPendenteFoto() ? 'Reenviar foto' : 'Salvar Cadastro') }}
     </button>
 
-    <button type="button" class="button-cancel" (click)="cancelar()">
+    <button type="button" class="button-cancel" (click)="cancelar()" [disabled]="redirecting()">
       <img src="/icons/cancel-icon.svg" alt="" width="24" height="24">
       Cancelar
     </button>

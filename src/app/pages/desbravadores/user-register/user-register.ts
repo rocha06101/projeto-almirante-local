@@ -25,7 +25,7 @@ import { onlyDigits } from '../../../shared/utils/masks';
 import { apiDateToForm, formDateToApi, isValidFormDate } from '../../../shared/utils/profile-form';
 import { cpfValidator } from '../../../shared/validators/cpf.validator';
 import { emailFormatValidator } from '../../../shared/validators/email.validator';
-import { UsuarioNavigationState, readNavigationState } from '../usuario-navigation';
+import { readNavigationState } from '../usuario-navigation';
 import { describeUsuarioError, usuarioFieldErrors } from '../usuarios-api-errors';
 
 export const NOME_MAXIMO = 200;
@@ -166,6 +166,7 @@ export class UserRegister implements OnInit, OnDestroy {
   readonly isLoadingCargos = signal(true);
   readonly cargosError = signal('');
   readonly saving = signal(false);
+  readonly redirecting = signal(false);
   readonly fotoEnviando = signal(false);
   readonly usuarioPendenteFoto = signal<UserModel | null>(null);
   readonly fotoAtual = signal<SafeUrl | null>(null);
@@ -232,7 +233,7 @@ export class UserRegister implements OnInit, OnDestroy {
   }
 
   salvar(): void {
-    if (this.saving()) {
+    if (this.saving() || this.redirecting()) {
       return;
     }
 
@@ -326,6 +327,9 @@ export class UserRegister implements OnInit, OnDestroy {
   }
 
   cancelar(): void {
+    if (this.redirecting()) {
+      return;
+    }
     this.router.navigate(['/desbravadores']);
   }
 
@@ -488,7 +492,11 @@ export class UserRegister implements OnInit, OnDestroy {
     const feedback = cadastroExistente
       ? `Cadastro de ${usuario.nome} atualizado com sucesso.`
       : `${usuario.nome} cadastrado com sucesso.`;
-    this.router.navigate(['/desbravadores'], { state: { feedback } satisfies UsuarioNavigationState });
+    this.redirecting.set(true);
+    this.toast.success(feedback, { duration: 2000 });
+    timer(2000)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => void this.router.navigate(['/desbravadores']));
   }
 
   private revogarFotoAtual(): void {

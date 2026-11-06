@@ -4,7 +4,7 @@ import { Component, DestroyRef, OnDestroy, inject, signal } from '@angular/core'
 import { AbstractControl, FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
-import { catchError, distinctUntilChanged, finalize, map, of, switchMap, take } from 'rxjs';
+import { catchError, distinctUntilChanged, finalize, map, of, switchMap, take, timer } from 'rxjs';
 import { User as UserModel } from '../../../core/models/user.model';
 import { User as UserService } from '../../../core/services/user';
 import { ToastService } from '../../../core/services/toast.service';
@@ -58,6 +58,7 @@ export class UserEdit implements OnDestroy {
   readonly personalInfoInactive = signal(true);
   readonly passwordModalOpen = signal(false);
   readonly saving = signal(false);
+  readonly redirecting = signal(false);
   readonly photoSaving = signal(false);
   readonly photoLoading = signal(false);
   readonly errorMessage = signal('');
@@ -131,7 +132,7 @@ export class UserEdit implements OnDestroy {
 
   salvar(): void {
     const usuario = this.usuario();
-    if (!usuario || !this.isLoaded() || this.saving()) {
+    if (!usuario || !this.isLoaded() || this.saving() || this.redirecting()) {
       return;
     }
 
@@ -203,7 +204,11 @@ export class UserEdit implements OnDestroy {
           this.form.markAsPristine();
           this.personalInfoInactive.set(true);
           this.successMessage.set('Os dados do usuário foram atualizados com sucesso.');
-          this.toast.success('Os dados do usuário foram atualizados com sucesso.');
+          this.redirecting.set(true);
+          this.toast.success('Os dados do usuário foram atualizados com sucesso.', { duration: 2000 });
+          timer(2000)
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe(() => void this.router.navigate(['/desbravadores']));
         },
         error: error => this.handleSaveError(error),
       });
@@ -272,6 +277,9 @@ export class UserEdit implements OnDestroy {
   }
 
   cancel(): void {
+    if (this.redirecting()) {
+      return;
+    }
     void this.router.navigate(['/desbravadores']);
   }
 

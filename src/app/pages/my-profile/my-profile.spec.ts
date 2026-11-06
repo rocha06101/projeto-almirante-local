@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { MyProfileResponse } from '../../core/models/user.model';
+import { ToastService } from '../../core/services/toast.service';
 import { User as UserService } from '../../core/services/user';
 import { MyProfile } from './my-profile';
 
@@ -122,6 +123,8 @@ describe('MyProfile', () => {
 
   it('envia somente campos permitidos alterados a PUT /api/Me', () => {
     const component = fixture.componentInstance;
+    const toast = TestBed.inject(ToastService);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     component.enablePersonalInfoEditing();
     component.form.controls.telefone.setValue('(21) 98765-4321');
     component.form.controls.tipoSanguineo.setValue('');
@@ -149,6 +152,12 @@ describe('MyProfile', () => {
       expect(payload).not.toHaveProperty(forbidden);
     }
     expect(component.successMessage()).toContain('atualizado com sucesso');
+    expect(toast.toasts()[0]).toMatchObject({
+      message: 'Seu perfil foi atualizado com sucesso.',
+      type: 'success',
+      duration: 2000,
+    });
+    expect(navigate).not.toHaveBeenCalled();
     expect(component.personalInfoInactive()).toBe(true);
     fixture.detectChanges();
     const page = fixture.nativeElement as HTMLElement;

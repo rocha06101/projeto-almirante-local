@@ -170,7 +170,7 @@ export class MyProfile implements OnInit, OnDestroy {
           this.form.markAsPristine();
           this.personalInfoInactive.set(true);
           this.successMessage.set('Seu perfil foi atualizado com sucesso.');
-          this.toast.success('Seu perfil foi atualizado com sucesso.');
+          this.toast.success('Seu perfil foi atualizado com sucesso.', { duration: 2000 });
         },
         error: error => this.handleSaveError(error),
       });

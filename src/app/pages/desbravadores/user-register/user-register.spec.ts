@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
 import { AuthService } from '../../../core/services/auth';
+import { ToastService } from '../../../core/services/toast.service';
 import { of, Subject, throwError } from 'rxjs';
 
 import { UserRegister } from './user-register';
@@ -130,7 +131,10 @@ describe('UserRegister', () => {
     loggedInRole = 'SEC';
   });
 
-  afterEach(() => history.replaceState(null, ''));
+  afterEach(() => {
+    vi.useRealTimers();
+    history.replaceState(null, '');
+  });
 
   it('carrega os cargos da API exibindo o nome (não a role) e somente os ativos', async () => {
     await setup();
@@ -177,9 +181,10 @@ describe('UserRegister', () => {
     expect(host.querySelector('app-upload-foto')).toBeTruthy();
   });
 
-  it('cadastra enviando os dados de saúde junto da conta e volta para a listagem', async () => {
+  it('cadastra os dados, mostra o toast de sucesso e redireciona após 2 segundos', async () => {
     service.criarUsuario.mockReturnValue(of({ ...usuario, id: 'novo' }));
     await setup();
+    const toast = TestBed.inject(ToastService);
 
     preencher({
       nome: '  Ana Souza ',
@@ -193,6 +198,7 @@ describe('UserRegister', () => {
       telefone: '(11) 98765-4321',
     });
 
+    vi.useFakeTimers();
     clicarSalvar();
 
     expect(service.criarUsuario).toHaveBeenCalledWith({
@@ -208,9 +214,18 @@ describe('UserRegister', () => {
       tipoSanguineo: 'O+',
       doencasAlergias: 'Alergia a amendoim',
     });
-    expect(navigate).toHaveBeenCalledWith(['/desbravadores'], {
-      state: { feedback: 'Ana Souza cadastrado com sucesso.' },
+    expect(toast.toasts().find(record => record.type === 'success')).toMatchObject({
+      message: 'Ana Souza cadastrado com sucesso.',
+      type: 'success',
+      duration: 2000,
     });
+    expect(navigate).not.toHaveBeenCalled();
+    expect(component.redirecting()).toBe(true);
+    vi.advanceTimersByTime(1999);
+    expect(navigate).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(navigate).toHaveBeenCalledWith(['/desbravadores']);
+    vi.useRealTimers();
   });
 
   it('omite data de nascimento e telefone opcionais quando vazios', async () => {
@@ -330,16 +345,24 @@ describe('UserRegister', () => {
     expect(service.criarUsuario).toHaveBeenCalledTimes(1);
     expect(service.enviarFoto).toHaveBeenCalledWith('novo', arquivo);
     expect(component.usuarioPendenteFoto()?.id).toBe('novo');
-    expect(host.querySelector('.form-feedback.error')?.textContent).toContain('servidor');
+    expect(component.errorMessage()).toContain('servidor');
     expect(navigate).not.toHaveBeenCalled();
 
+    const toast = TestBed.inject(ToastService);
+    vi.useFakeTimers();
     clicarSalvar();
 
     expect(service.criarUsuario).toHaveBeenCalledTimes(1);
     expect(service.enviarFoto).toHaveBeenCalledTimes(2);
-    expect(navigate).toHaveBeenCalledWith(['/desbravadores'], {
-      state: { feedback: 'Ana Souza cadastrado com sucesso.' },
+    expect(toast.toasts().find(record => record.type === 'success')).toMatchObject({
+      message: 'Ana Souza cadastrado com sucesso.',
+      type: 'success',
+      duration: 2000,
     });
+    expect(navigate).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(2000);
+    expect(navigate).toHaveBeenCalledWith(['/desbravadores']);
+    vi.useRealTimers();
   });
 
   it('CIN ligado desabilita o RG e permite salvar sem enviá-lo', async () => {
@@ -601,9 +624,7 @@ describe('UserRegister', () => {
     preencher({ nome: 'Ana Souza', email: 'ana@example.com', senha: SENHA_VALIDA, confirmarSenha: SENHA_VALIDA, cargoId: 'c-sec' });
     clicarSalvar();
 
-    expect(host.querySelector('.form-feedback.error')?.textContent).toContain(
-      'Já existe um usuário cadastrado com o e-mail informado.',
-    );
+    expect(component.errorMessage()).toContain('Já existe um usuário cadastrado com o e-mail informado.');
     expect(component.form.getRawValue()).toEqual({
       nome: 'Ana Souza',
       email: 'ana@example.com',
@@ -644,7 +665,7 @@ describe('UserRegister', () => {
 
     expect(component.form.controls.senha.errors?.['server']).toBe('A senha é trivial ou muito comum.');
     expect(host.querySelector('#user-register-senha-error')?.textContent).toContain('A senha é trivial ou muito comum.');
-    expect(host.querySelector('.form-feedback.error')?.textContent).toContain('Verifique os campos destacados.');
+    expect(component.errorMessage()).toContain('Verifique os campos destacados.');
   });
 
   it('associa erros 400 do backend aos campos de CPF e RG', async () => {
@@ -706,12 +727,14 @@ describe('UserRegister', () => {
     expect(host.innerHTML).not.toContain(guid);
   });
 
-  it('edição chama PUT com o id do usuário, sem senha, e volta para a listagem', async () => {
+  it('edição chama PUT sem senha, mostra o toast e redireciona após 2 segundos', async () => {
     service.atualizarUsuario.mockReturnValue(of({ ...usuario, nome: 'Ana Maria Souza', cargo: cargos[0] }));
     history.replaceState({ usuario }, '');
     await setup('editar');
+    const toast = TestBed.inject(ToastService);
 
     preencher({ nome: 'Ana Maria Souza', cargoId: 'c-dir' });
+    vi.useFakeTimers();
     clicarSalvar();
 
     expect(service.criarUsuario).not.toHaveBeenCalled();
@@ -726,9 +749,16 @@ describe('UserRegister', () => {
       doencasAlergias: 'Asma',
       endereco: usuario.endereco,
     });
-    expect(navigate).toHaveBeenCalledWith(['/desbravadores'], {
-      state: { feedback: 'Cadastro de Ana Maria Souza atualizado com sucesso.' },
+    expect(toast.toasts().find(record => record.type === 'success')).toMatchObject({
+      message: 'Cadastro de Ana Maria Souza atualizado com sucesso.',
+      type: 'success',
+      duration: 2000,
     });
+    expect(navigate).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1999);
+    expect(navigate).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(navigate).toHaveBeenCalledWith(['/desbravadores']);
   });
 
   it('edição CIN ligada carrega o estado e envia PUT sem RG com ehCin boolean', async () => {
@@ -749,12 +779,13 @@ describe('UserRegister', () => {
       ehCin: true,
     }));
     expect(service.atualizarUsuario.mock.calls[0][1]).not.toHaveProperty('rg');
+    expect(component.redirecting()).toBe(true);
   });
 
   it('edição sem usuário selecionado (ex.: acesso direto) não permite salvar', async () => {
     await setup('editar');
 
-    expect(host.querySelector('.form-feedback.error')?.textContent).toContain('Volte à listagem');
+    expect(component.errorMessage()).toContain('Volte à listagem');
     expect(host.querySelector<HTMLButtonElement>('.header-actions .refresh-button')!.disabled).toBe(true);
   });
 

@@ -5,7 +5,7 @@ import { AbstractControl, FormBuilder, FormControl, ReactiveFormsModule, Validat
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { catchError, distinctUntilChanged, finalize, map, merge, of, switchMap, take, Subject } from 'rxjs';
-import { MyProfileResponse } from '../../core/models/user.model';
+import { MyProfileResponse, UpdateMyProfileRequest, UserAddressUpdate } from '../../core/models/user.model';
 import { AuthService } from '../../core/services/auth';
 import { User as UserService } from '../../core/services/user';
 import { UserAvatarService } from '../../core/services/user-avatar.service';
@@ -67,6 +67,7 @@ export class MyProfile implements OnInit, OnDestroy {
   private readonly cepReset$ = new Subject<void>();
   private fotoObjectUrl: string | null = null;
   private pendingPhotoObjectUrl: string | null = null;
+  private readonly serverErrorValues = new Map<string, string>();
 
   readonly nomeResumo = new FormControl('', { nonNullable: true });
   readonly emailResumo = new FormControl('', { nonNullable: true });
@@ -74,8 +75,12 @@ export class MyProfile implements OnInit, OnDestroy {
   readonly emailCredenciais = new FormControl('', { nonNullable: true });
 
   readonly form = this.fb.nonNullable.group({
-    nome: ["", [Validators.required, Validators.maxLength(200)]],
-    cpf: ['', [Validators.required, cpfValidator]],
+    nome: ['', [
+      Validators.required,
+      Validators.maxLength(200),
+      (control: AbstractControl) => String(control.value ?? '').trim() ? null : { whitespace: true },
+    ]],
+    cpf: [{ value: '', disabled: true }, [Validators.required, cpfValidator]],
     rg: ['', [Validators.maxLength(20), Validators.pattern(/\d/)]],
     dataNascimento: ['', [Validators.maxLength(10), (control: AbstractControl) =>
       isValidFormDate(String(control.value ?? '')) ? null : { dateInvalid: true }]],
@@ -102,6 +107,9 @@ export class MyProfile implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.configureCepLookup();
+    this.form.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.clearResolvedServerErrors());
     this.loadProfile();
   }
 
@@ -124,24 +132,40 @@ export class MyProfile implements OnInit, OnDestroy {
     this.successMessage.set('');
     if (this.form.invalid) {
       this.form.markAllAsTouched();
-      this.errorMessage.set(this.validationMessage());
+      const message = this.validationMessage();
+      this.errorMessage.set(message);
+      this.toast.error(message);
       return;
     }
 
     const values = this.form.getRawValue();
     if (this.addressChanged(user, values) && this.addressNeedsCep(values)) {
       this.form.controls.cep.markAsTouched();
-      this.errorMessage.set('Informe um CEP válido antes de atualizar o endereço.');
+      const message = 'Informe um CEP válido antes de atualizar o endereço.';
+      this.errorMessage.set(message);
+      this.toast.error(message);
       return;
     }
     if (!this.hasChanges(user, values)) {
       this.personalInfoInactive.set(true);
       this.form.markAsPristine();
+      this.toast.error('Nenhuma alteração foi feita. Edite alguma informação antes de salvar.');
       return;
     }
 
     const ehCin = user.ehCin ?? false;
-    const payload = {
+    const endereco: UserAddressUpdate = {
+      ...(onlyDigits(values.cep) !== onlyDigits(user.endereco?.cep) && onlyDigits(values.cep).length === 8
+        ? { cep: onlyDigits(values.cep) }
+        : {}),
+      ...(this.changed(values.numero, user.endereco?.numero)
+        ? { numero: values.numero.trim() || null }
+        : {}),
+      ...(this.changed(values.complemento, user.endereco?.complemento)
+        ? { complemento: values.complemento.trim() || null }
+        : {}),
+    };
+    const payload: UpdateMyProfileRequest = {
       ehCin,
       ...(this.changed(values.nome, user.nome) ? { nome: values.nome.trim() } : {}),
       ...(!ehCin ? { rg: values.rg.trim() } : {}),
@@ -157,15 +181,7 @@ export class MyProfile implements OnInit, OnDestroy {
       ...(this.changed(values.doencasAlergias, user.doencasAlergias ?? '')
         ? { doencasAlergias: values.doencasAlergias.trim() || null }
         : {}),
-      ...(this.addressChanged(user, values)
-        ? {
-            endereco: {
-              ...(onlyDigits(values.cep) ? { cep: onlyDigits(values.cep) } : {}),
-              numero: values.numero.trim() || null,
-              complemento: values.complemento.trim() || null,
-            },
-          }
-        : {}),
+      ...(this.addressChanged(user, values) ? { endereco } : {}),
     };
 
     this.saving.set(true);
@@ -178,6 +194,7 @@ export class MyProfile implements OnInit, OnDestroy {
       .subscribe({
         next: updated => {
           this.user.set(updated);
+          this.setRgValidators(updated.ehCin ?? false);
           this.patchProfile(updated);
           this.form.markAsPristine();
           this.personalInfoInactive.set(true);
@@ -212,7 +229,9 @@ export class MyProfile implements OnInit, OnDestroy {
       return;
     }
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) {
-      this.errorMessage.set('Selecione uma foto JPEG, PNG ou WebP de até 10 MB.');
+      const message = 'Selecione uma foto JPEG, PNG ou WebP de até 10 MB.';
+      this.errorMessage.set(message);
+      this.toast.error(message);
       (event.target as HTMLInputElement).value = '';
       return;
     }
@@ -278,9 +297,12 @@ export class MyProfile implements OnInit, OnDestroy {
           this.loadPhoto();
         },
         error: error => {
-          this.errorMessage.set(
-            describeUsuarioError(error, 'Não foi possível carregar seu perfil. Tente novamente.'),
+          const message = describeUsuarioError(
+            error,
+            'Não foi possível carregar seu perfil. Tente novamente.',
           );
+          this.errorMessage.set(message);
+          this.toast.error(message);
         },
       });
   }
@@ -314,11 +336,13 @@ export class MyProfile implements OnInit, OnDestroy {
 
   private setRgValidators(ehCin: boolean): void {
     const rg = this.form.controls.rg;
-    rg.setValidators(
-      ehCin
-        ? [Validators.maxLength(20), Validators.pattern(/\d/)]
-        : [Validators.required, Validators.maxLength(20), Validators.pattern(/\d/)],
-    );
+    if (ehCin) {
+      rg.clearValidators();
+      rg.disable({ emitEvent: false });
+    } else {
+      rg.setValidators([Validators.required, Validators.maxLength(20), Validators.pattern(/\d/)]);
+      rg.enable({ emitEvent: false });
+    }
     rg.updateValueAndValidity({ emitEvent: false });
   }
 
@@ -485,9 +509,13 @@ export class MyProfile implements OnInit, OnDestroy {
 
   private handleSaveError(error: unknown): void {
     const fields = usuarioFieldErrors(error);
-    for (const [name, message] of Object.entries(fields)) {
+    for (const [serverName, message] of Object.entries(fields)) {
+      const name = this.formControlNameForServerField(serverName);
       const control = this.form.get(name);
-      control?.setErrors({ ...(control.errors ?? {}), server: message });
+      if (control) {
+        control.setErrors({ ...(control.errors ?? {}), server: message });
+        this.serverErrorValues.set(name, String(control.value ?? ''));
+      }
     }
     const message = describeUsuarioError(error, 'Não foi possível salvar as alterações. Tente novamente.');
     this.errorMessage.set(message);
@@ -496,19 +524,45 @@ export class MyProfile implements OnInit, OnDestroy {
 
   private validationMessage(): string {
     const controls = this.form.controls;
-    if (controls.cpf.hasError('required') || controls.cpf.hasError('cpfInvalid')) {
-      return 'Informe um CPF válido; o CPF cadastrado não pode ser removido.';
+    if (controls.nome.hasError('required') || controls.nome.hasError('whitespace')) {
+      return 'Informe um nome válido.';
+    }
+    if (controls.nome.hasError('maxlength')) {
+      return 'O nome deve ter no máximo 200 caracteres.';
     }
     if (controls.rg.invalid && !(this.user()?.ehCin ?? false)) {
       return 'Informe um RG válido ou regularize a identificação CIN do usuário.';
     }
-    if (controls.dataNascimento.hasError('dateInvalid')) {
+    if (controls.dataNascimento.hasError('dateInvalid') || controls.dataNascimento.hasError('maxlength')) {
       return 'Informe uma data de nascimento válida no formato dd/mm/aaaa.';
     }
     if (controls.cep.invalid) {
-      return 'Informe um CEP com 8 dígitos.';
+      return 'Informe um CEP válido antes de atualizar o endereço.';
+    }
+    if (controls.doencasAlergias.hasError('maxlength')) {
+      return 'A descrição de alergias/doenças deve ter no máximo 2000 caracteres.';
     }
     return 'Verifique os campos destacados.';
+  }
+
+  private formControlNameForServerField(name: string): string {
+    const path = name.replace(/\[(\w+)\]/g, '.$1').split(/[./]/).filter(Boolean);
+    const field = path.at(-1) ?? name;
+    return field.charAt(0).toLowerCase() + field.slice(1);
+  }
+
+  private clearResolvedServerErrors(): void {
+    for (const [name, originalValue] of this.serverErrorValues) {
+      const control = this.form.get(name);
+      if (!control || String(control.value ?? '') === originalValue) {
+        continue;
+      }
+
+      const errors = { ...(control.errors ?? {}) };
+      delete errors['server'];
+      control.setErrors(Object.keys(errors).length ? errors : null);
+      this.serverErrorValues.delete(name);
+    }
   }
 
   private revokeCurrentPhoto(): void {

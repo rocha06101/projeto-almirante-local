@@ -68,6 +68,7 @@
               autocomplete="name"
               [compact]="true"
               [inactive]="personalInfoInactive()"
+              [invalid]="form.controls.nome.invalid && (form.controls.nome.dirty || form.controls.nome.touched)"
               formControlName="nome"
             ></app-primary-input>
             <app-primary-input
@@ -84,6 +85,7 @@
               mask="rg"
               [compact]="true"
               [inactive]="personalInfoInactive() || (user()?.ehCin ?? false)"
+              [invalid]="form.controls.rg.invalid && (form.controls.rg.dirty || form.controls.rg.touched)"
               formControlName="rg"
             ></app-primary-input>
             <app-primary-input
@@ -93,6 +95,7 @@
               autocomplete="bday"
               [compact]="true"
               [inactive]="personalInfoInactive()"
+              [invalid]="form.controls.dataNascimento.invalid && (form.controls.dataNascimento.dirty || form.controls.dataNascimento.touched)"
               formControlName="dataNascimento"
             ></app-primary-input>
             <div class="cep-field">
@@ -163,6 +166,7 @@
               [maxlength]="2000"
               [compact]="true"
               [inactive]="personalInfoInactive()"
+              [invalid]="form.controls.doencasAlergias.invalid && (form.controls.doencasAlergias.dirty || form.controls.doencasAlergias.touched)"
               minHeight="13.6rem"
               formControlName="doencasAlergias"
             ></app-primary-textarea>

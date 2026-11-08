@@ -10,189 +10,276 @@
   </div>
 
   @if (isLoaded()) {
-    <div class="container-center">
-      <div class="container-left">
-        <div class="container-up">
-          <div class="container-up-left">
-            <div class="image-back">
-              <div class="image-front">
-                @if (fotoAtual()) {
-                  <img
-                    [src]="fotoAtual()"
-                    alt="Foto do usuário"
-                    style="display: block; width: 100%; height: 100%; border-radius: inherit; object-fit: cover"
-                    (error)="onPhotoError()"
-                  >
-                }
-              </div>
-            </div>
-            <input
-              #photoInput
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              hidden
-              (change)="selecionarFoto($event)"
-            >
-            <button type="button" class="button-image" [disabled]="photoSaving() || photoLoading()" (click)="photoInput.click()">
-              {{ photoSaving() ? 'Enviando...' : photoLoading() ? 'Carregando...' : 'Alterar Foto' }}
-            </button>
-          </div>
-
-          <div class="container-up-right">
-            <app-primary-input label="Nome" [formControl]="nomeResumo" [inactive]="true"></app-primary-input>
-            <app-primary-input label="E-mail" [formControl]="emailResumo" [inactive]="true"></app-primary-input>
-            <app-primary-input label="Cargo" [formControl]="cargoResumo" [inactive]="true"></app-primary-input>
+    <div class="user-summary card">
+      <div class="user-photo">
+        <div class="image-back">
+          <div class="image-front">
+            @if (fotoAtual()) {
+              <img
+                [src]="fotoAtual()"
+                alt="Foto do usuário"
+                (error)="onPhotoError()"
+              >
+            }
           </div>
         </div>
+        <input
+          #photoInput
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          hidden
+          (change)="selecionarFoto($event)"
+        >
+        <button
+          type="button"
+          class="button-image"
+          [disabled]="photoSaving() || photoLoading()"
+          (click)="photoInput.click()"
+        >
+          {{ photoSaving() ? 'Enviando...' : photoLoading() ? 'Carregando...' : 'Alterar Foto' }}
+        </button>
+      </div>
 
-        <div class="container-down">
-          <p>Credenciais</p>
-          <app-primary-input label="Email" [formControl]="emailCredenciais" [inactive]="true"></app-primary-input>
-          <app-primary-input label="Senha" [inactive]="true"></app-primary-input>
-          <div class="container-down-button">
-            <app-refresh-button (click)="openPasswordModal()">Editar</app-refresh-button>
-          </div>
+      <div class="summary-fields">
+        <span class="role-label">{{ cargoResumo.value }}</span>
+        <div class="summary-inputs">
+          <app-primary-input
+            label="Nome"
+            autocomplete="name"
+            [compact]="true"
+            [inactive]="true"
+            [formControl]="nomeResumo"
+          ></app-primary-input>
+          <app-primary-input
+            label="E-mail"
+            type="email"
+            [compact]="true"
+            [inactive]="true"
+            [formControl]="emailResumo"
+          ></app-primary-input>
+          <app-primary-input
+            label="Senha"
+            type="password"
+            placeholder="••••••••"
+            [compact]="true"
+            [inactive]="true"
+          ></app-primary-input>
         </div>
       </div>
 
-      <div class="container-rigth">
-        <h2>Informações Pessoais</h2>
-        <div class="inputs-columns">
-          <div class="inputs-left">
-            <app-primary-input
-              label="Nome"
-              placeholder="Nome completo"
-              autocomplete="name"
-              [compact]="true"
-              [inactive]="personalInfoInactive()"
-              formControlName="nome"
-            ></app-primary-input>
-            <app-primary-input
-              label="CPF"
-              placeholder="000.000.000-00"
-              mask="cpf"
-              [compact]="true"
-              [inactive]="personalInfoInactive()"
-              formControlName="cpf"
-            ></app-primary-input>
-            <app-primary-input
-              label="RG"
-              placeholder="00.000.000-0"
-              mask="rg"
-              [compact]="true"
-              [inactive]="personalInfoInactive() || (usuario()?.ehCin ?? false)"
-              formControlName="rg"
-            ></app-primary-input>
-            <app-primary-input
-              label="Data de nascimento"
-              placeholder="dd/mm/aaaa"
-              mask="data"
-              autocomplete="bday"
-              [compact]="true"
-              [inactive]="personalInfoInactive()"
-              formControlName="dataNascimento"
-            ></app-primary-input>
-            <div class="cep-field">
-              <app-primary-input
-                label="CEP"
-                placeholder="00000-000"
-                mask="cep"
-                autocomplete="postal-code"
-                [compact]="true"
-                [inactive]="personalInfoInactive()"
-                [invalid]="form.controls.cep.invalid && (form.controls.cep.dirty || form.controls.cep.touched)"
-                describedBy="user-edit-cep-feedback"
-                formControlName="cep"
-              ></app-primary-input>
-              <div class="cep-feedback-row">
-                <p
-                  id="user-edit-cep-feedback"
-                  class="cep-feedback"
-                  [class.loading]="cepFeedback().status === 'loading'"
-                  [class.success]="cepFeedback().status === 'success'"
-                  [class.error]="cepFeedback().status === 'error'"
-                  role="status"
-                  aria-live="polite"
-                >{{ cepFeedback().message }}</p>
-                @if (cepFeedback().status === 'error') {
-                  <button class="cep-retry" type="button" (click)="retryCepLookup()">Tentar novamente</button>
-                }
-              </div>
-            </div>
-            <app-primary-input
-              label="Bairro"
-              autocomplete="address-level3"
-              [compact]="true"
-              [inactive]="true"
-              formControlName="bairro"
-            ></app-primary-input>
-            <app-primary-input
-              label="Rua"
-              autocomplete="street-address"
-              [compact]="true"
-              [inactive]="true"
-              formControlName="logradouro"
-            ></app-primary-input>
-          </div>
-
-          <div class="inputs-rigth">
-            <app-primary-input
-              label="Telefone"
-              placeholder="(00) 00000-0000"
-              type="tel"
-              mask="telefone"
-              autocomplete="tel"
-              [compact]="true"
-              [inactive]="personalInfoInactive()"
-              formControlName="telefone"
-            ></app-primary-input>
-            <app-primary-select
-              label="Tipo sanguíneo"
-              placeholder="Selecione o tipo sanguíneo"
-              [options]="tipoSanguineoOptions"
-              [compact]="true"
-              [inactive]="personalInfoInactive()"
-              formControlName="tipoSanguineo"
-            ></app-primary-select>
-            <app-primary-textarea
-              label="Alergias/ Doenças"
-              placeholder="Descreva alergias e doenças"
-              [maxlength]="2000"
-              [compact]="true"
-              [inactive]="personalInfoInactive()"
-              minHeight="13.6rem"
-              formControlName="doencasAlergias"
-            ></app-primary-textarea>
-            <app-primary-input
-              label="Número"
-              type="number"
-              autocomplete="address-line2"
-              [compact]="true"
-              [inactive]="personalInfoInactive()"
-              formControlName="numero"
-            ></app-primary-input>
-            <app-primary-input
-              label="Complemento"
-              autocomplete="address-line2"
-              [compact]="true"
-              [inactive]="personalInfoInactive()"
-              formControlName="complemento"
-            ></app-primary-input>
-            <div class="profile-edit-button">
-              <app-refresh-button [disabled]="!isLoaded() || saving()" (click)="enablePersonalInfoEditing()">
-                Editar
-              </app-refresh-button>
-            </div>
-          </div>
-        </div>
-
-        @if (passwordModalOpen()) {
-          <app-password-change-modal
-            [currentEmail]="currentEmail"
-            (closed)="closePasswordModal()"
-          />
-        }
+      <div class="summary-actions">
+        <app-refresh-button
+          type="button"
+          [disabled]="!isLoaded() || saving() || redirecting()"
+          (click)="openPasswordModal()"
+        >
+          Editar credenciais
+        </app-refresh-button>
       </div>
     </div>
+
+    <div class="cards-grid">
+      <section class="info-card personal-card" aria-labelledby="personal-title">
+        <h2 id="personal-title">Informações pessoais</h2>
+        <div class="card-fields">
+          <app-primary-input
+            label="Nome"
+            placeholder="Nome completo"
+            autocomplete="name"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+            formControlName="nome"
+          ></app-primary-input>
+          <app-primary-input
+            label="CPF"
+            placeholder="000.000.000-00"
+            mask="cpf"
+            [compact]="true"
+            [inactive]="true"
+            formControlName="cpf"
+          ></app-primary-input>
+          <app-primary-input
+            label="RG"
+            placeholder="00.000.000-0"
+            mask="rg"
+            [compact]="true"
+            [inactive]="personalInfoInactive() || (usuario()?.ehCin ?? false)"
+            formControlName="rg"
+          ></app-primary-input>
+          <app-primary-input
+            label="Data de nascimento"
+            placeholder="dd/mm/aaaa"
+            mask="data"
+            autocomplete="bday"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+            formControlName="dataNascimento"
+          ></app-primary-input>
+          <app-primary-input
+            label="Telefone"
+            placeholder="(00) 00000-0000"
+            type="tel"
+            mask="telefone"
+            autocomplete="tel"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+            formControlName="telefone"
+          ></app-primary-input>
+          <app-primary-select
+            label="Tipo sanguíneo"
+            placeholder="Selecione o tipo sanguíneo"
+            [options]="tipoSanguineoOptions"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+            formControlName="tipoSanguineo"
+          ></app-primary-select>
+          <app-primary-textarea
+            label="Alergias/ Doenças"
+            placeholder="Descreva alergias e doenças"
+            [maxlength]="2000"
+            [compact]="true"
+            [inactive]="personalInfoInactive()"
+            minHeight="7rem"
+            formControlName="doencasAlergias"
+          ></app-primary-textarea>
+        </div>
+        <footer class="card-footer">
+          <app-refresh-button
+            type="button"
+            [disabled]="!isLoaded() || saving() || redirecting()"
+            (click)="enablePersonalInfoEditing()"
+          >Editar</app-refresh-button>
+        </footer>
+      </section>
+
+      <section class="info-card responsible-card" aria-labelledby="responsible-title">
+        <h2 id="responsible-title">Dados do responsável</h2>
+        <div class="card-fields">
+          <p class="api-contract-note">
+            A gravação desses dados depende da confirmação do contrato da API. Eles não serão enviados
+            até essa confirmação.
+          </p>
+          <app-primary-input
+            label="Nome do responsável"
+            [compact]="true"
+            [inactive]="responsibleInfoInactive()"
+            formControlName="responsavelNome"
+          ></app-primary-input>
+          <app-primary-input
+            label="Telefone do responsável"
+            placeholder="(00) 00000-0000"
+            type="tel"
+            mask="telefone"
+            [compact]="true"
+            [inactive]="responsibleInfoInactive()"
+            formControlName="responsavelTelefone"
+          ></app-primary-input>
+          <div class="responsible-email">
+            <app-primary-input
+              label="E-mail do responsável"
+              type="email"
+              [compact]="true"
+              [inactive]="responsibleInfoInactive()"
+              [invalid]="form.controls.responsavelEmail.invalid &&
+                (form.controls.responsavelEmail.dirty || form.controls.responsavelEmail.touched)"
+              describedBy="user-edit-responsible-email-feedback"
+              formControlName="responsavelEmail"
+            ></app-primary-input>
+            @if (form.controls.responsavelEmail.invalid &&
+              (form.controls.responsavelEmail.dirty || form.controls.responsavelEmail.touched)) {
+              <p id="user-edit-responsible-email-feedback" class="field-error" role="alert">
+                Informe um e-mail válido.
+              </p>
+            }
+          </div>
+        </div>
+        <footer class="card-footer">
+          <app-refresh-button
+            type="button"
+            [disabled]="!isLoaded() || saving() || redirecting()"
+            (click)="enableResponsibleInfoEditing()"
+          >Editar</app-refresh-button>
+        </footer>
+      </section>
+
+      <section class="info-card address-card" aria-labelledby="address-title">
+        <h2 id="address-title">Endereço</h2>
+        <div class="card-fields">
+          <div class="cep-field">
+            <app-primary-input
+              label="CEP"
+              placeholder="00000-000"
+              mask="cep"
+              autocomplete="postal-code"
+              [compact]="true"
+              [inactive]="addressInfoInactive()"
+              [invalid]="form.controls.cep.invalid &&
+                (form.controls.cep.dirty || form.controls.cep.touched)"
+              describedBy="user-edit-cep-feedback"
+              formControlName="cep"
+            ></app-primary-input>
+            <div class="cep-feedback-row">
+              <p
+                id="user-edit-cep-feedback"
+                class="cep-feedback"
+                [class.loading]="cepFeedback().status === 'loading'"
+                [class.success]="cepFeedback().status === 'success'"
+                [class.error]="cepFeedback().status === 'error'"
+                role="status"
+                aria-live="polite"
+              >{{ cepFeedback().message }}</p>
+              @if (cepFeedback().status === 'error') {
+                <button class="cep-retry" type="button" (click)="retryCepLookup()">
+                  Tentar novamente
+                </button>
+              }
+            </div>
+          </div>
+          <app-primary-input
+            label="Bairro"
+            autocomplete="address-level3"
+            [compact]="true"
+            [inactive]="true"
+            formControlName="bairro"
+          ></app-primary-input>
+          <app-primary-input
+            label="Rua"
+            autocomplete="street-address"
+            [compact]="true"
+            [inactive]="true"
+            formControlName="logradouro"
+          ></app-primary-input>
+          <app-primary-input
+            label="Número"
+            type="number"
+            autocomplete="address-line2"
+            [compact]="true"
+            [inactive]="addressInfoInactive()"
+            formControlName="numero"
+          ></app-primary-input>
+          <app-primary-input
+            label="Complemento"
+            autocomplete="address-line2"
+            [compact]="true"
+            [inactive]="addressInfoInactive()"
+            formControlName="complemento"
+          ></app-primary-input>
+        </div>
+        <footer class="card-footer">
+          <app-refresh-button
+            type="button"
+            [disabled]="!isLoaded() || saving() || redirecting()"
+            (click)="enableAddressEditing()"
+          >Editar</app-refresh-button>
+        </footer>
+      </section>
+    </div>
+
+    @if (passwordModalOpen()) {
+      <app-password-change-modal
+        [currentEmail]="currentEmail"
+        (closed)="closePasswordModal()"
+      />
+    }
   }
 </div>

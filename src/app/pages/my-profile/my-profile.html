@@ -67,7 +67,7 @@
               placeholder="Nome completo"
               autocomplete="name"
               [compact]="true"
-              [inactive]="true"
+              [inactive]="personalInfoInactive()"
               formControlName="nome"
             ></app-primary-input>
             <app-primary-input
@@ -75,7 +75,7 @@
               placeholder="000.000.000-00"
               mask="cpf"
               [compact]="true"
-              [inactive]="personalInfoInactive()"
+              [inactive]="true"
               formControlName="cpf"
             ></app-primary-input>
             <app-primary-input

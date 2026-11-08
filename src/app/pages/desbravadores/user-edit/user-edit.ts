@@ -6,7 +6,9 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { catchError, distinctUntilChanged, finalize, map, merge, of, switchMap, take, timer, Subject } from 'rxjs';
 import { User as UserModel } from '../../../core/models/user.model';
+import { AuthService } from '../../../core/services/auth';
 import { User as UserService } from '../../../core/services/user';
+import { UserAvatarService } from '../../../core/services/user-avatar.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { PasswordChangeModal } from '../../../shared/components/password-change-modal/password-change-modal';
 import { PrimaryInput } from '../../../shared/components/primary-input/primary-input';
@@ -57,12 +59,16 @@ export class UserEdit implements OnDestroy {
   private readonly location = inject(Location);
   private readonly fb = inject(FormBuilder);
   private readonly userService = inject(UserService);
+  private readonly auth = inject(AuthService);
+  private readonly userAvatar = inject(UserAvatarService);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly usuario = signal<UserModel | null>(null);
   readonly isLoaded = signal(false);
   readonly personalInfoInactive = signal(true);
+  readonly responsibleInfoInactive = signal(true);
+  readonly addressInfoInactive = signal(true);
   readonly passwordModalOpen = signal(false);
   readonly saving = signal(false);
   readonly redirecting = signal(false);
@@ -77,10 +83,7 @@ export class UserEdit implements OnDestroy {
   private fotoObjectUrl: string | null = null;
   private pendingPhotoObjectUrl: string | null = null;
 
-  readonly nomeResumo = new FormControl('', { nonNullable: true });
-  readonly emailResumo = new FormControl('', { nonNullable: true });
   readonly cargoResumo = new FormControl('', { nonNullable: true });
-  readonly emailCredenciais = new FormControl('', { nonNullable: true });
 
   readonly form = this.fb.nonNullable.group({
     nome: ['', [Validators.required, Validators.maxLength(200)]],
@@ -88,6 +91,9 @@ export class UserEdit implements OnDestroy {
     rg: ['', [Validators.maxLength(20), Validators.pattern(/\d/)]],
     dataNascimento: ['', [Validators.maxLength(10), (control: AbstractControl) =>
       isValidFormDate(String(control.value ?? '')) ? null : { dateInvalid: true }]],
+    responsavelNome: [''],
+    responsavelTelefone: [''],
+    responsavelEmail: ['', Validators.email],
     telefone: [''],
     tipoSanguineo: [''],
     doencasAlergias: ['', Validators.maxLength(2000)],
@@ -98,6 +104,8 @@ export class UserEdit implements OnDestroy {
     complemento: [''],
   });
 
+  readonly nomeResumo = this.form.controls.nome;
+  readonly emailResumo = new FormControl('', { nonNullable: true });
   readonly tipoSanguineoOptions = [
     { label: 'A+', value: 'A+' },
     { label: 'A-', value: 'A-' },
@@ -131,8 +139,24 @@ export class UserEdit implements OnDestroy {
   }
 
   enablePersonalInfoEditing(): void {
-    if (this.isLoaded() && !this.saving()) {
+    if (this.canEditSection()) {
       this.personalInfoInactive.set(false);
+      this.errorMessage.set('');
+      this.successMessage.set('');
+    }
+  }
+
+  enableResponsibleInfoEditing(): void {
+    if (this.canEditSection()) {
+      this.responsibleInfoInactive.set(false);
+      this.errorMessage.set('');
+      this.successMessage.set('');
+    }
+  }
+
+  enableAddressEditing(): void {
+    if (this.canEditSection()) {
+      this.addressInfoInactive.set(false);
       this.errorMessage.set('');
       this.successMessage.set('');
     }
@@ -153,6 +177,14 @@ export class UserEdit implements OnDestroy {
     }
 
     const values = this.form.getRawValue();
+    if (this.responsibleDataChanged(usuario, values)) {
+      const message =
+        'Os dados do responsável foram alterados, mas a API disponível não confirma que esses campos possam ser salvos. Nenhuma alteração foi enviada.';
+      this.errorMessage.set(message);
+      this.toast.error(message);
+      return;
+    }
+
     if (this.addressChanged(usuario, values) && this.addressNeedsCep(values)) {
       this.form.controls.cep.markAsTouched();
       this.errorMessage.set('Informe um CEP válido antes de atualizar o endereço.');
@@ -160,7 +192,7 @@ export class UserEdit implements OnDestroy {
     }
     const hasChanges = this.hasChanges(usuario, values);
     if (!hasChanges) {
-      this.personalInfoInactive.set(true);
+      this.setSectionsInactive();
       this.form.markAsPristine();
       this.toast.error('Nenhuma alteração foi feita. Edite alguma informação antes de salvar.');
       return;
@@ -210,7 +242,7 @@ export class UserEdit implements OnDestroy {
           this.replaceNavigationUser(updated);
           this.patchUsuario(updated);
           this.form.markAsPristine();
-          this.personalInfoInactive.set(true);
+          this.setSectionsInactive();
           this.successMessage.set('Os dados do usuário foram atualizados com sucesso.');
           this.redirecting.set(true);
           this.toast.success('Os dados do usuário foram atualizados com sucesso.', { duration: 2000 });
@@ -223,7 +255,7 @@ export class UserEdit implements OnDestroy {
   }
 
   openPasswordModal(): void {
-    if (this.isLoaded()) {
+    if (this.canEditSection()) {
       this.passwordModalOpen.set(true);
     }
   }
@@ -268,6 +300,9 @@ export class UserEdit implements OnDestroy {
         next: updated => {
           this.usuario.set(updated);
           this.replaceNavigationUser(updated);
+          if (this.auth.user()?.id === usuario.id) {
+            this.userAvatar.reloadCurrentUserPhoto();
+          }
           this.revokeCurrentPhoto();
           this.fotoAtual.set(this.pendingPhotoObjectUrl);
           this.fotoObjectUrl = this.pendingPhotoObjectUrl;
@@ -305,6 +340,9 @@ export class UserEdit implements OnDestroy {
         cpf: usuario.cpf ?? '',
         rg: usuario.rg ?? '',
         dataNascimento: apiDateToForm(usuario.dataNascimento),
+        responsavelNome: usuario.responsavelNome ?? '',
+        responsavelTelefone: usuario.responsavelTelefone ?? '',
+        responsavelEmail: usuario.responsavelEmail ?? '',
         telefone: usuario.telefone ?? '',
         tipoSanguineo: usuario.tipoSanguineo ?? '',
         doencasAlergias: usuario.doencasAlergias ?? '',
@@ -319,8 +357,17 @@ export class UserEdit implements OnDestroy {
     this.cepReset$.next();
     this.nomeResumo.setValue(usuario.nome ?? '');
     this.emailResumo.setValue(usuario.email ?? '');
-    this.emailCredenciais.setValue(usuario.email ?? '');
     this.cargoResumo.setValue(usuario.cargo?.nome ?? usuario.funcao ?? '');
+  }
+
+  private canEditSection(): boolean {
+    return this.isLoaded() && !this.saving() && !this.redirecting();
+  }
+
+  private setSectionsInactive(): void {
+    this.personalInfoInactive.set(true);
+    this.responsibleInfoInactive.set(true);
+    this.addressInfoInactive.set(true);
   }
 
   private replaceNavigationUser(usuario: UserModel): void {
@@ -382,6 +429,17 @@ export class UserEdit implements OnDestroy {
     return (
       [values.cep, values.numero, values.complemento].some(value => value.trim()) &&
       onlyDigits(values.cep).length !== 8
+    );
+  }
+
+  private responsibleDataChanged(
+    usuario: UserModel,
+    values: ReturnType<typeof this.form.getRawValue>,
+  ): boolean {
+    return (
+      this.changed(values.responsavelNome, usuario.responsavelNome) ||
+      onlyDigits(values.responsavelTelefone) !== onlyDigits(usuario.responsavelTelefone) ||
+      this.changed(values.responsavelEmail, usuario.responsavelEmail)
     );
   }
 
@@ -530,6 +588,9 @@ export class UserEdit implements OnDestroy {
     }
     if (controls.nome.invalid) {
       return 'Informe um nome com até 200 caracteres.';
+    }
+    if (controls.responsavelEmail.invalid) {
+      return 'Informe um e-mail válido para o responsável.';
     }
     return 'Verifique os campos destacados.';
   }

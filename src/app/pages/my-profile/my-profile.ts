@@ -6,7 +6,9 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { catchError, distinctUntilChanged, finalize, map, merge, of, switchMap, take, Subject } from 'rxjs';
 import { MyProfileResponse } from '../../core/models/user.model';
+import { AuthService } from '../../core/services/auth';
 import { User as UserService } from '../../core/services/user';
+import { UserAvatarService } from '../../core/services/user-avatar.service';
 import { ToastService } from '../../core/services/toast.service';
 import { PasswordChangeModal } from '../../shared/components/password-change-modal/password-change-modal';
 import { PrimaryInput } from '../../shared/components/primary-input/primary-input';
@@ -42,6 +44,8 @@ interface CepFeedback {
 })
 export class MyProfile implements OnInit, OnDestroy {
   private readonly userService = inject(UserService);
+  private readonly auth = inject(AuthService);
+  private readonly userAvatar = inject(UserAvatarService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly fb = inject(FormBuilder);
@@ -70,7 +74,7 @@ export class MyProfile implements OnInit, OnDestroy {
   readonly emailCredenciais = new FormControl('', { nonNullable: true });
 
   readonly form = this.fb.nonNullable.group({
-    nome: [{ value: '', disabled: true }, [Validators.required, Validators.maxLength(200)]],
+    nome: ["", [Validators.required, Validators.maxLength(200)]],
     cpf: ['', [Validators.required, cpfValidator]],
     rg: ['', [Validators.maxLength(20), Validators.pattern(/\d/)]],
     dataNascimento: ['', [Validators.maxLength(10), (control: AbstractControl) =>
@@ -139,7 +143,7 @@ export class MyProfile implements OnInit, OnDestroy {
     const ehCin = user.ehCin ?? false;
     const payload = {
       ehCin,
-      ...(onlyDigits(values.cpf) !== onlyDigits(user.cpf) ? { cpf: values.cpf.trim() } : {}),
+      ...(this.changed(values.nome, user.nome) ? { nome: values.nome.trim() } : {}),
       ...(!ehCin ? { rg: values.rg.trim() } : {}),
       ...(this.changed(values.dataNascimento, apiDateToForm(user.dataNascimento))
         ? { dataNascimento: formDateToApi(values.dataNascimento) }
@@ -219,6 +223,7 @@ export class MyProfile implements OnInit, OnDestroy {
     this.pendingPhotoObjectUrl = URL.createObjectURL(file);
     this.fotoAtual.set(this.pendingPhotoObjectUrl);
     this.photoSaving.set(true);
+    const userId = this.user()?.id;
     this.userService
       .enviarMinhaFoto(file)
       .pipe(
@@ -231,6 +236,9 @@ export class MyProfile implements OnInit, OnDestroy {
           this.fotoAtual.set(this.pendingPhotoObjectUrl);
           this.fotoObjectUrl = this.pendingPhotoObjectUrl;
           this.pendingPhotoObjectUrl = null;
+          if (userId && this.auth.user()?.id === userId) {
+            this.userAvatar.reloadCurrentUserPhoto();
+          }
         },
         error: error => {
           this.revokePendingPhoto();
@@ -328,7 +336,7 @@ export class MyProfile implements OnInit, OnDestroy {
     values: ReturnType<typeof this.form.getRawValue>,
   ): boolean {
     return (
-      onlyDigits(values.cpf) !== onlyDigits(user.cpf) ||
+      this.changed(values.nome, user.nome) ||
       (!user.ehCin && this.changed(values.rg, user.rg ?? '')) ||
       this.changed(values.dataNascimento, apiDateToForm(user.dataNascimento)) ||
       onlyDigits(values.telefone) !== onlyDigits(user.telefone) ||

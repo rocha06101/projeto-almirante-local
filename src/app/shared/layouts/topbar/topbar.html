@@ -32,7 +32,7 @@
           aria-controls="profile-dropdown"
           [attr.aria-label]="'Menu do perfil de ' + userInfo().name"
         >
-          <img [src]="userInfo().avatar" alt="" class="avatar" />
+          <img [src]="userInfo().avatar" alt="" class="avatar" (error)="onAvatarError($event)" />
           <span class="user-name">{{ userInfo().name }}</span>
         </button>
 
@@ -40,7 +40,7 @@
           <div class="dropdown profile-dropdown" id="profile-dropdown">
             <div class="profile-header">
               <div class="avatar-container">
-                <img [src]="userInfo().avatar" alt="" class="large-avatar" />
+                <img [src]="userInfo().avatar" alt="" class="large-avatar" (error)="onAvatarError($event)" />
               </div>
               <div class="user-info">
                 <strong>{{ userInfo().name }}</strong>

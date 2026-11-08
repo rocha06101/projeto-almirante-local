@@ -3,8 +3,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { CepLookupResponse, MyProfileResponse } from '../../core/models/user.model';
+import { AuthService } from '../../core/services/auth';
 import { ToastService } from '../../core/services/toast.service';
 import { User as UserService } from '../../core/services/user';
+import { UserAvatarService } from '../../core/services/user-avatar.service';
 import { MyProfile } from './my-profile';
 
 const profile: MyProfileResponse = {
@@ -66,6 +68,7 @@ describe('MyProfile', () => {
     enviarMinhaFoto: ReturnType<typeof vi.fn>;
     consultarCep: ReturnType<typeof vi.fn>;
   };
+  let userAvatar: { reloadCurrentUserPhoto: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     service = {
@@ -75,11 +78,13 @@ describe('MyProfile', () => {
       enviarMinhaFoto: vi.fn(),
       consultarCep: vi.fn().mockReturnValue(of({})),
     };
+    userAvatar = { reloadCurrentUserPhoto: vi.fn() };
 
     await TestBed.configureTestingModule({
       imports: [MyProfile],
       providers: [
         { provide: UserService, useValue: service },
+        { provide: UserAvatarService, useValue: userAvatar },
         provideRouter([]),
       ],
     }).compileComponents();
@@ -395,6 +400,12 @@ describe('MyProfile', () => {
   it('carrega e envia a foto do perfil próprio separadamente', () => {
     const component = fixture.componentInstance;
     component.user.set({ ...profile, fotoUrl: '/api/Me/foto' });
+    TestBed.inject(AuthService).user.set({
+      id: profile.id,
+      nome: profile.nome,
+      email: profile.email,
+      cargo: profile.cargo!,
+    });
 
     const file = new File(['image'], 'profile.webp', { type: 'image/webp' });
     service.enviarMinhaFoto.mockReturnValue(of(profile));
@@ -405,8 +416,26 @@ describe('MyProfile', () => {
     component.selecionarFoto({ target: input } as unknown as Event);
 
     expect(service.enviarMinhaFoto).toHaveBeenCalledWith(file);
+    expect(userAvatar.reloadCurrentUserPhoto).toHaveBeenCalledOnce();
     expect(service.obterMinhaFoto).not.toHaveBeenCalled();
     expect(service.atualizarMeuPerfil).not.toHaveBeenCalled();
+  });
+
+  it('mantém a foto anterior e não atualiza os avatares quando o upload falha', () => {
+    const component = fixture.componentInstance;
+    component.fotoAtual.set('blob:previous-photo');
+    const file = new File(['image'], 'profile.webp', { type: 'image/webp' });
+    service.enviarMinhaFoto.mockReturnValue(throwError(() => new Error('upload failed')));
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:failed-preview');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const input = document.createElement('input');
+    input.type = 'file';
+    Object.defineProperty(input, 'files', { value: [file] });
+
+    component.selecionarFoto({ target: input } as unknown as Event);
+
+    expect(component.fotoAtual()).toBe('blob:previous-photo');
+    expect(userAvatar.reloadCurrentUserPhoto).not.toHaveBeenCalled();
   });
 
   it('preserva o modal de senha e navega de volta para a Home', () => {

@@ -5,7 +5,9 @@ import { provideRouter, Router } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { CepLookupResponse, User as UserModel } from '../../../core/models/user.model';
 import { ToastService } from '../../../core/services/toast.service';
+import { AuthService } from '../../../core/services/auth';
 import { User as UserService } from '../../../core/services/user';
+import { UserAvatarService } from '../../../core/services/user-avatar.service';
 import { UserEdit } from './user-edit';
 
 const usuario: UserModel = {
@@ -30,12 +32,16 @@ const usuario: UserModel = {
   },
   cargo: { id: 'cargo-1', nome: 'Administrador', role: 'ADM' },
   responsavelNome: 'Maria Silva',
+  responsavelTelefone: '11988887777',
+  responsavelEmail: 'maria@example.com',
   dataExpiracao: '2027-01-01',
 };
 
 function expectRenderedProfile(page: HTMLElement): void {
   const input = (name: string) =>
-    page.querySelector<HTMLInputElement>(`.container-rigth app-primary-input[formcontrolname="${name}"] input`);
+    page.querySelector<HTMLInputElement>(`.personal-card app-primary-input[formcontrolname="${name}"] input`);
+  const addressInput = (name: string) =>
+    page.querySelector<HTMLInputElement>(`.address-card app-primary-input[formcontrolname="${name}"] input`);
 
   expect(input('nome')?.value).toBe('Ana Silva');
   expect(input('cpf')?.value).toBe('529.982.247-25');
@@ -43,18 +49,18 @@ function expectRenderedProfile(page: HTMLElement): void {
   expect(input('dataNascimento')?.value).toBe('29/02/2000');
   expect(input('telefone')?.value).toBe('(11) 99999-9999');
   expect(input('cep')?.value).toBe('01001-000');
-  expect(input('bairro')?.value).toBe('Sé');
-  expect(input('logradouro')?.value).toBe('Praça da Sé');
-  expect(input('numero')?.value).toBe('100');
-  expect(input('complemento')?.value).toBe('Apto 12');
+  expect(addressInput('bairro')?.value).toBe('Sé');
+  expect(addressInput('logradouro')?.value).toBe('Praça da Sé');
+  expect(addressInput('numero')?.value).toBe('100');
+  expect(addressInput('complemento')?.value).toBe('Apto 12');
   expect(
     page.querySelector<HTMLSelectElement>(
-      '.container-rigth app-primary-select[formcontrolname="tipoSanguineo"] select',
+      '.personal-card app-primary-select[formcontrolname="tipoSanguineo"] select',
     )?.value,
   ).toBe('O+');
   expect(
     page.querySelector<HTMLTextAreaElement>(
-      '.container-rigth app-primary-textarea[formcontrolname="doencasAlergias"] textarea',
+      '.personal-card app-primary-textarea[formcontrolname="doencasAlergias"] textarea',
     )?.value,
   ).toBe('Alergia a amendoim');
 }
@@ -67,6 +73,7 @@ describe('UserEdit', () => {
     enviarFoto: ReturnType<typeof vi.fn>;
     consultarCep: ReturnType<typeof vi.fn>;
   };
+  let userAvatar: { reloadCurrentUserPhoto: ReturnType<typeof vi.fn> };
 
   async function createComponent(state: Record<string, unknown> = { usuario }): Promise<void> {
     history.replaceState(state, '', '/desbravadores/editar');
@@ -75,6 +82,7 @@ describe('UserEdit', () => {
       providers: [
         provideRouter([]),
         { provide: UserService, useValue: service },
+        { provide: UserAvatarService, useValue: userAvatar },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(UserEdit);
@@ -90,9 +98,54 @@ describe('UserEdit', () => {
       enviarFoto: vi.fn(),
       consultarCep: vi.fn().mockReturnValue(of({})),
     };
+    userAvatar = { reloadCurrentUserPhoto: vi.fn() };
   });
 
   afterEach(() => vi.useRealTimers());
+
+  it('atualiza os avatares quando a própria conta tem a foto alterada', async () => {
+    await createComponent();
+    const auth = TestBed.inject(AuthService);
+    auth.user.set({
+      id: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      cargo: { id: 'cargo-1', nome: 'Administrador', role: 'ADM' },
+    });
+
+    const file = new File(['image'], 'profile.webp', { type: 'image/webp' });
+    service.enviarFoto.mockReturnValue(of(usuario));
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:profile-preview');
+    const input = document.createElement('input');
+    input.type = 'file';
+    Object.defineProperty(input, 'files', { value: [file] });
+    fixture.componentInstance.selecionarFoto({ target: input } as unknown as Event);
+
+    expect(service.enviarFoto).toHaveBeenCalledWith(usuario.id, file);
+    expect(userAvatar.reloadCurrentUserPhoto).toHaveBeenCalledOnce();
+  });
+
+  it('não atualiza os avatares da sessão ao editar a foto de outra pessoa', async () => {
+    await createComponent();
+    const auth = TestBed.inject(AuthService);
+    auth.user.set({
+      id: 'session-user',
+      nome: 'Bia',
+      email: 'bia@example.com',
+      cargo: { id: 'cargo-1', nome: 'Administrador', role: 'ADM' },
+    });
+
+    const file = new File(['image'], 'other.webp', { type: 'image/webp' });
+    service.enviarFoto.mockReturnValue(of(usuario));
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:other-preview');
+    const input = document.createElement('input');
+    input.type = 'file';
+    Object.defineProperty(input, 'files', { value: [file] });
+    fixture.componentInstance.selecionarFoto({ target: input } as unknown as Event);
+
+    expect(service.enviarFoto).toHaveBeenCalledWith(usuario.id, file);
+    expect(userAvatar.reloadCurrentUserPhoto).not.toHaveBeenCalled();
+  });
 
   it('preenche o usuário selecionado e mantém os dados de endereço e cargo', async () => {
     await createComponent();
@@ -105,6 +158,9 @@ describe('UserEdit', () => {
     expect(component.form.controls.rg.value).toBe('123456789');
     expect(component.form.controls.dataNascimento.value).toBe('29/02/2000');
     expect(component.form.controls.telefone.value).toBe('11999999999');
+    expect(component.form.controls.responsavelNome.value).toBe('Maria Silva');
+    expect(component.form.controls.responsavelTelefone.value).toBe('11988887777');
+    expect(component.form.controls.responsavelEmail.value).toBe('maria@example.com');
     expect(component.form.controls.tipoSanguineo.value).toBe('O+');
     expect(component.form.controls.doencasAlergias.value).toBe('Alergia a amendoim');
     expect(component.form.controls.cep.value).toBe('01001000');
@@ -116,15 +172,85 @@ describe('UserEdit', () => {
     expectRenderedProfile(page);
     expect(
       page.querySelectorAll<HTMLElement>(
-        '.container-rigth app-primary-input[formcontrolname], .container-rigth app-primary-select[formcontrolname], .container-rigth app-primary-textarea[formcontrolname]',
+        '.personal-card app-primary-input[formcontrolname], .personal-card app-primary-select[formcontrolname], .personal-card app-primary-textarea[formcontrolname]',
       ).length,
-    ).toBe(12);
+    ).toBe(8);
     expect(
       [...page.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
-        '.container-rigth app-primary-input[formcontrolname] input, .container-rigth app-primary-select[formcontrolname] select, .container-rigth app-primary-textarea[formcontrolname] textarea',
+        '.cards-grid app-primary-input[formcontrolname] input, .cards-grid app-primary-select[formcontrolname] select, .cards-grid app-primary-textarea[formcontrolname] textarea',
       )].every(control => control.disabled),
     ).toBe(true);
+    expect(component.nomeResumo).toBe(component.form.controls.nome);
+    const cepIds = [...page.querySelectorAll<HTMLInputElement>(
+      '.personal-card [formcontrolname="cep"] input, .address-card [formcontrolname="cep"] input',
+    )].map(input => input.id);
+    expect(cepIds).toHaveLength(2);
+    expect(new Set(cepIds).size).toBe(2);
     expect(service.consultarCep).not.toHaveBeenCalled();
+  });
+
+  it('reflete o nome do controle pessoal no resumo sem liberar os campos protegidos', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    const page = fixture.nativeElement as HTMLElement;
+
+    component.enablePersonalInfoEditing();
+    component.form.controls.nome.setValue('Ana atualizada');
+    fixture.detectChanges();
+
+    expect(page.querySelector<HTMLInputElement>('.user-summary input[autocomplete="name"]')?.value)
+      .toBe('Ana atualizada');
+    expect(page.querySelector<HTMLInputElement>('.user-summary input[type="email"]')?.disabled)
+      .toBe(true);
+    expect(page.querySelector<HTMLInputElement>('.personal-card [formcontrolname="cpf"] input')?.disabled)
+      .toBe(true);
+    expect(page.querySelector<HTMLInputElement>('.user-summary input[type="password"]')?.disabled).toBe(true);
+    expect(page.querySelector('.role-label')?.textContent?.trim()).toBe('Administrador');
+  });
+
+  it('não inventa dados para usuário sem responsável', async () => {
+    await createComponent({
+      usuario: {
+        ...usuario,
+        responsavelNome: null,
+        responsavelTelefone: null,
+        responsavelEmail: null,
+      },
+    });
+
+    const component = fixture.componentInstance;
+    expect(component.form.controls.responsavelNome.value).toBe('');
+    expect(component.form.controls.responsavelTelefone.value).toBe('');
+    expect(component.form.controls.responsavelEmail.value).toBe('');
+    expect(component.form.controls.responsavelEmail.valid).toBe(true);
+    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+  });
+
+  it('valida o e-mail do responsável e preserva o texto inválido sem enviar', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    component.enableResponsibleInfoEditing();
+    component.form.controls.responsavelEmail.setValue('email-invalido');
+
+    component.salvar();
+
+    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+    expect(component.form.controls.responsavelEmail.value).toBe('email-invalido');
+    expect(component.errorMessage()).toContain('e-mail válido');
+  });
+
+  it('não declara salvo dado do responsável alterado enquanto o contrato da API não for confirmado', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    component.enableResponsibleInfoEditing();
+    component.form.controls.responsavelTelefone.setValue('(21) 98888-7777');
+
+    component.salvar();
+
+    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+    expect(component.form.controls.responsavelTelefone.value).toBe('(21) 98888-7777');
+    expect(component.errorMessage()).toContain('API disponível não confirma');
+    expect(component.responsibleInfoInactive()).toBe(false);
   });
 
   it('cancela a consulta anterior e só preenche o endereço do CEP atual', async () => {
@@ -171,6 +297,7 @@ describe('UserEdit', () => {
       status: 'error',
       message: 'Não foi possível consultar o CEP. Tente novamente.',
     });
+
     fixture.detectChanges();
 
     page.querySelector<HTMLButtonElement>('.cep-retry')?.click();
@@ -186,6 +313,22 @@ describe('UserEdit', () => {
       status: 'error',
       message: 'CEP não encontrado. Confira os 8 dígitos.',
     });
+  });
+
+  it('mantém os dois campos de exibição do CEP sincronizados sem duplicar o endereço', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    const page = fixture.nativeElement as HTMLElement;
+
+    component.enableAddressEditing();
+    component.form.controls.cep.setValue('20000000');
+    fixture.detectChanges();
+
+    expect(page.querySelector<HTMLInputElement>('.personal-card [formcontrolname="cep"] input')?.value)
+      .toBe('20000-000');
+    expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="cep"] input')?.value)
+      .toBe('20000-000');
+    expect(service.consultarCep).toHaveBeenCalledWith('20000000');
   });
 
   it('usa os dados do usuário selecionado, sem substituir pelo perfil autenticado', async () => {
@@ -217,6 +360,8 @@ describe('UserEdit', () => {
       '(11) 91234-5678',
     );
     expect(component.nomeResumo.value).toBe('Perfil Administrativo de Teste');
+    expect(page.querySelector<HTMLInputElement>('.user-summary input[autocomplete="name"]')?.value)
+      .toBe('Perfil Administrativo de Teste');
   });
 
   it('não mostra um formulário vazio quando o estado de navegação está ausente', async () => {
@@ -340,7 +485,7 @@ describe('UserEdit', () => {
   it('envia endereço sem campos ViaCEP quando um campo visível muda', async () => {
     await createComponent();
     const component = fixture.componentInstance;
-    component.enablePersonalInfoEditing();
+    component.enableAddressEditing();
     component.form.controls.numero.setValue('200');
     component.salvar();
 
@@ -403,14 +548,90 @@ describe('UserEdit', () => {
     await createComponent();
     const page = fixture.nativeElement as HTMLElement;
     expectRenderedProfile(page);
-    page.querySelector<HTMLButtonElement>('.profile-edit-button button')?.click();
+    page.querySelector<HTMLButtonElement>('.personal-card .card-footer button')?.click();
     fixture.detectChanges();
 
     expect(fixture.componentInstance.personalInfoInactive()).toBe(false);
+    expect(fixture.componentInstance.responsibleInfoInactive()).toBe(true);
+    expect(fixture.componentInstance.addressInfoInactive()).toBe(true);
     expectRenderedProfile(page);
     expect(page.querySelector<HTMLInputElement>('input[autocomplete="street-address"]')?.disabled).toBe(true);
     expect(page.querySelector<HTMLInputElement>('input[autocomplete="address-level3"]')?.disabled).toBe(true);
-    expect(page.querySelector<HTMLInputElement>('input[autocomplete="name"]')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('.personal-card input[autocomplete="name"]')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('.personal-card [formcontrolname="cpf"] input')?.disabled).toBe(true);
+    expect(page.querySelector<HTMLInputElement>('.responsible-card [formcontrolname="responsavelNome"] input')?.disabled).toBe(true);
+  });
+
+  it('habilita somente a seção de responsável e preserva os valores das outras seções', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    const page = fixture.nativeElement as HTMLElement;
+    component.form.controls.nome.setValue('Nome mantido durante edição');
+
+    page.querySelector<HTMLButtonElement>('.responsible-card .card-footer button')?.click();
+    fixture.detectChanges();
+
+    expect(component.personalInfoInactive()).toBe(true);
+    expect(component.responsibleInfoInactive()).toBe(false);
+    expect(component.addressInfoInactive()).toBe(true);
+    expect(component.form.controls.nome.value).toBe('Nome mantido durante edição');
+    expect(page.querySelector<HTMLInputElement>('.responsible-card [formcontrolname="responsavelNome"] input')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('.personal-card [formcontrolname="nome"] input')?.disabled).toBe(true);
+    expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="cep"] input')?.disabled).toBe(true);
+  });
+
+  it('habilita somente a seção de endereço, mantendo CEP editável e campos derivados bloqueados', async () => {
+    await createComponent();
+    const page = fixture.nativeElement as HTMLElement;
+
+    page.querySelector<HTMLButtonElement>('.address-card .card-footer button')?.click();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.personalInfoInactive()).toBe(true);
+    expect(fixture.componentInstance.responsibleInfoInactive()).toBe(true);
+    expect(fixture.componentInstance.addressInfoInactive()).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="cep"] input')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="numero"] input')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="complemento"] input')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="logradouro"] input')?.disabled).toBe(true);
+    expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="bairro"] input')?.disabled).toBe(true);
+  });
+
+  it('abre credenciais no botão superior sem habilitar cartões nem enviar o formulário', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    const page = fixture.nativeElement as HTMLElement;
+    const button = page.querySelector<HTMLButtonElement>('.summary-actions button');
+
+    expect(button?.textContent?.trim()).toBe('Editar credenciais');
+    expect(button?.type).toBe('button');
+    expect(page.querySelectorAll('.card-footer button')).toHaveLength(3);
+
+    button?.click();
+    fixture.detectChanges();
+
+    expect(page.querySelector('[role="dialog"]')?.textContent).toContain('Alterar senha');
+    expect(page.querySelector('.password-button')).toBeNull();
+    expect(component.personalInfoInactive()).toBe(true);
+    expect(component.responsibleInfoInactive()).toBe(true);
+    expect(component.addressInfoInactive()).toBe(true);
+    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+  });
+
+  it('não habilita seções nem abre credenciais durante salvamento', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+
+    component.saving.set(true);
+    component.enablePersonalInfoEditing();
+    component.enableResponsibleInfoEditing();
+    component.enableAddressEditing();
+    component.openPasswordModal();
+
+    expect(component.personalInfoInactive()).toBe(true);
+    expect(component.responsibleInfoInactive()).toBe(true);
+    expect(component.addressInfoInactive()).toBe(true);
+    expect(component.passwordModalOpen()).toBe(false);
   });
 
   it('mantém vazios apenas os campos ausentes ou nulos, sem inventar endereço', async () => {
@@ -421,6 +642,9 @@ describe('UserEdit', () => {
         rg: null,
         dataNascimento: null,
         telefone: null,
+        responsavelNome: null,
+        responsavelTelefone: null,
+        responsavelEmail: null,
         tipoSanguineo: null,
         doencasAlergias: null,
         endereco: null,
@@ -434,6 +658,9 @@ describe('UserEdit', () => {
       component.form.controls.rg,
       component.form.controls.dataNascimento,
       component.form.controls.telefone,
+      component.form.controls.responsavelNome,
+      component.form.controls.responsavelTelefone,
+      component.form.controls.responsavelEmail,
       component.form.controls.tipoSanguineo,
       component.form.controls.doencasAlergias,
       component.form.controls.cep,
@@ -452,7 +679,7 @@ describe('UserEdit', () => {
   it('preserva o modal de alteração de senha e retorna à listagem ao cancelar', async () => {
     await createComponent();
     const page = fixture.nativeElement as HTMLElement;
-    page.querySelector<HTMLButtonElement>('.container-down-button button')?.click();
+    page.querySelector<HTMLButtonElement>('.summary-actions button')?.click();
     fixture.detectChanges();
     expect(page.querySelector('[role="dialog"]')?.textContent).toContain('Alterar senha');
 

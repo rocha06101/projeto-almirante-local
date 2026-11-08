@@ -40,7 +40,9 @@ export const SCREENSHOT_VIEWPORTS = new Set([
 
 export const ROUTES = [
   { path: '/', name: 'home', ready: 'app-home' },
+  { path: '/perfil', name: 'perfil', ready: 'app-my-profile .container-center' },
   { path: '/desbravadores', name: 'desbravadores', ready: 'app-desbravadores table' },
+  { path: '/desbravadores/editar', name: 'editar-usuario', ready: 'app-user-edit .container-center' },
   { path: '/desbravadores/cadastrar', name: 'cadastro-membro', ready: 'app-user-register' },
   { path: '/treasury', name: 'tesouraria', ready: 'app-treasury app-financial-entries-component table' },
 ];
@@ -71,6 +73,40 @@ export async function mockApi(page: Page) {
         email: 'maria@example.com',
         cargo: { id: '22222222-2222-2222-2222-222222222222', nome: 'Diretoria', role: 'Diretor' },
       });
+    }
+    if (path.endsWith('/me') && method === 'GET') {
+      return json(route, {
+        id: '11111111-1111-1111-1111-111111111111',
+        nome: 'Maria Aparecida de Nascimento Albuquerque',
+        email: 'maria.aparecida.albuquerque@example.org',
+        cpf: '52998224725',
+        rg: '123456789',
+        ehCin: false,
+        dataNascimento: '1985-06-15',
+        telefone: '11999999999',
+        tipoSanguineo: 'O+',
+        doencasAlergias: 'Nenhuma',
+        endereco: {
+          cep: '01001000',
+          logradouro: 'Praça da Sé',
+          bairro: 'Sé',
+          numero: '100',
+          complemento: 'Sala 1',
+        },
+        cargo: { id: '22222222-2222-2222-2222-222222222222', nome: 'Diretoria', role: 'Diretor' },
+      });
+    }
+    if (path.includes('/cep/')) {
+      const cep = path.split('/').pop();
+      if (cep === '00000000') return json(route, { erro: true });
+      if (cep === '22222222') {
+        return route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Serviço temporariamente indisponível' }),
+        });
+      }
+      return json(route, { logradouro: 'Rua da consulta', bairro: 'Centro' });
     }
     if (path.endsWith('/auth/logout')) return route.fulfill({ status: 204 });
     if (path.endsWith('/usuarios') && method === 'GET') {

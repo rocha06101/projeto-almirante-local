@@ -4,7 +4,7 @@ import { Component, DestroyRef, OnDestroy, inject, signal } from '@angular/core'
 import { AbstractControl, FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
-import { catchError, distinctUntilChanged, finalize, map, of, switchMap, take, timer } from 'rxjs';
+import { catchError, distinctUntilChanged, finalize, map, merge, of, switchMap, take, timer, Subject } from 'rxjs';
 import { User as UserModel } from '../../../core/models/user.model';
 import { User as UserService } from '../../../core/services/user';
 import { ToastService } from '../../../core/services/toast.service';
@@ -29,6 +29,13 @@ const isValidSelectedUser = (value: UserModel | undefined): value is UserModel =
   !!value.email.trim() &&
   typeof (value.cargo?.id ?? value.cargoId) === 'string' &&
   !!(value.cargo?.id ?? value.cargoId)?.trim();
+
+type CepFeedbackStatus = 'neutral' | 'loading' | 'success' | 'error';
+
+interface CepFeedback {
+  status: CepFeedbackStatus;
+  message: string;
+}
 
 @Component({
   selector: 'app-user-edit',
@@ -63,9 +70,10 @@ export class UserEdit implements OnDestroy {
   readonly photoLoading = signal(false);
   readonly errorMessage = signal('');
   readonly successMessage = signal('');
-  readonly cepLoading = signal(false);
-  readonly cepFeedback = signal('');
+  readonly cepFeedback = signal<CepFeedback>({ status: 'neutral', message: '' });
   readonly fotoAtual = signal<string | null>(null);
+  private readonly cepRetry$ = new Subject<string>();
+  private readonly cepReset$ = new Subject<void>();
   private fotoObjectUrl: string | null = null;
   private pendingPhotoObjectUrl: string | null = null;
 
@@ -308,6 +316,7 @@ export class UserEdit implements OnDestroy {
       },
       { emitEvent: false },
     );
+    this.cepReset$.next();
     this.nomeResumo.setValue(usuario.nome ?? '');
     this.emailResumo.setValue(usuario.email ?? '');
     this.emailCredenciais.setValue(usuario.email ?? '');
@@ -381,25 +390,58 @@ export class UserEdit implements OnDestroy {
   }
 
   private configureCepLookup(): void {
-    this.form.controls.cep.valueChanges
-      .pipe(
+    merge(
+      this.form.controls.cep.valueChanges.pipe(
         map(cep => onlyDigits(cep)),
         distinctUntilChanged(),
-        switchMap(cep => {
+        map(cep => ({ cep, clearAddress: true })),
+      ),
+      this.cepRetry$.pipe(map(cep => ({ cep, clearAddress: false }))),
+      this.cepReset$.pipe(map(() => null)),
+    )
+      .pipe(
+        switchMap(request => {
+          if (!request) {
+            return of(null);
+          }
+          const { cep, clearAddress } = request;
+          if (clearAddress) {
+            this.form.patchValue({ logradouro: '', bairro: '' }, { emitEvent: false });
+          }
           if (cep.length !== 8) {
-            this.cepLoading.set(false);
-            this.cepFeedback.set('');
+            this.cepFeedback.set({
+              status: 'neutral',
+              message:
+                this.form.controls.cep.dirty || this.form.controls.cep.touched
+                  ? 'Informe os 8 dígitos do CEP.'
+                  : '',
+            });
             return of(null);
           }
 
-          this.cepLoading.set(true);
-          this.cepFeedback.set('Consultando CEP...');
+          this.cepFeedback.set({ status: 'loading', message: 'Buscando endereço...' });
           return this.userService.consultarCep(cep).pipe(
-            map(endereco => ({ endereco, error: null as unknown })),
-            catchError((error: unknown) => of({ endereco: null, error })),
+            map(endereco =>
+              endereco.erro
+                ? {
+                    status: 'error' as const,
+                    message: 'CEP não encontrado. Confira os 8 dígitos.',
+                    endereco: null,
+                  }
+                : { status: 'success' as const, endereco },
+            ),
+            catchError(() =>
+              of({
+                status: 'error' as const,
+                message: 'Não foi possível consultar o CEP. Tente novamente.',
+                endereco: null,
+              }),
+            ),
             finalize(() => {
               if (onlyDigits(this.form.controls.cep.value) === cep) {
-                this.cepLoading.set(false);
+                if (this.cepFeedback().status === 'loading') {
+                  this.cepFeedback.set({ status: 'neutral', message: '' });
+                }
               }
             }),
           );
@@ -410,24 +452,29 @@ export class UserEdit implements OnDestroy {
         if (!result) {
           return;
         }
-        if (result.error) {
-          this.cepFeedback.set(describeUsuarioError(result.error, 'Não foi possível consultar o CEP.'));
-          return;
-        }
-        if (!result.endereco || result.endereco.erro) {
-          this.cepFeedback.set('CEP não encontrado. Confira os 8 dígitos.');
+        if (result.status === 'error') {
+          this.cepFeedback.set({ status: 'error', message: result.message });
           return;
         }
 
         this.form.patchValue(
           {
-            logradouro: result.endereco.logradouro ?? '',
-            bairro: result.endereco.bairro ?? '',
+            logradouro: result.endereco?.logradouro ?? '',
+            bairro: result.endereco?.bairro ?? '',
           },
           { emitEvent: false },
         );
-        this.cepFeedback.set('Endereço preenchido pela consulta de CEP.');
+        this.cepFeedback.set({
+          status: 'success',
+          message: 'Endereço encontrado. Confira os dados e informe o número.',
+        });
       });
+  }
+
+  retryCepLookup(): void {
+    if (this.cepFeedback().status === 'error') {
+      this.cepRetry$.next(onlyDigits(this.form.controls.cep.value));
+    }
   }
 
   private loadPhoto(usuario: UserModel): void {

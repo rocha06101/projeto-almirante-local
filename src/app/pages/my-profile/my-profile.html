@@ -95,15 +95,33 @@
               [inactive]="personalInfoInactive()"
               formControlName="dataNascimento"
             ></app-primary-input>
-            <app-primary-input
-              label="CEP"
-              placeholder="00000-000"
-              mask="cep"
-              autocomplete="postal-code"
-              [compact]="true"
-              [inactive]="personalInfoInactive()"
-              formControlName="cep"
-            ></app-primary-input>
+            <div class="cep-field">
+              <app-primary-input
+                label="CEP"
+                placeholder="00000-000"
+                mask="cep"
+                autocomplete="postal-code"
+                [compact]="true"
+                [inactive]="personalInfoInactive()"
+                [invalid]="form.controls.cep.invalid && (form.controls.cep.dirty || form.controls.cep.touched)"
+                describedBy="my-profile-cep-feedback"
+                formControlName="cep"
+              ></app-primary-input>
+              <div class="cep-feedback-row">
+                <p
+                  id="my-profile-cep-feedback"
+                  class="cep-feedback"
+                  [class.loading]="cepFeedback().status === 'loading'"
+                  [class.success]="cepFeedback().status === 'success'"
+                  [class.error]="cepFeedback().status === 'error'"
+                  role="status"
+                  aria-live="polite"
+                >{{ cepFeedback().message }}</p>
+                @if (cepFeedback().status === 'error') {
+                  <button class="cep-retry" type="button" (click)="retryCepLookup()">Tentar novamente</button>
+                }
+              </div>
+            </div>
             <app-primary-input
               label="Bairro"
               autocomplete="address-level3"
@@ -163,9 +181,6 @@
               [inactive]="personalInfoInactive()"
               formControlName="complemento"
             ></app-primary-input>
-            @if (cepFeedback()) {
-              <p role="status">{{ cepFeedback() }}</p>
-            }
             <div class="profile-edit-button">
               <app-refresh-button [disabled]="!isLoaded() || saving()" (click)="enablePersonalInfoEditing()">
                 Editar

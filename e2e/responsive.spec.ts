@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import {
   ALL_VIEWPORTS,
   ROUTES,
@@ -9,6 +10,29 @@ import {
 } from './support';
 
 const SHOTS = process.env['E2E_SHOTS'] ?? 'test-results/screens';
+
+async function openResponsiveRoute(
+  page: Page,
+  route: (typeof ROUTES)[number],
+): Promise<void> {
+  if (route.path === '/desbravadores/editar') {
+    await page.goto('/desbravadores');
+    await page.getByRole('button', { name: 'Editar Bartolomeu Fernandes de Albuquerque Cavalcanti' }).click();
+  } else {
+    await page.goto(route.path);
+  }
+  await page.locator(route.ready).first().waitFor();
+}
+
+async function openCepTestRoute(page: Page, path: string): Promise<void> {
+  if (path === '/desbravadores/editar') {
+    await page.goto('/desbravadores');
+    await page.getByRole('button', { name: 'Editar Bartolomeu Fernandes de Albuquerque Cavalcanti' }).click();
+  } else {
+    await page.goto(path);
+  }
+  await page.locator('.container-rigth').waitFor();
+}
 
 for (const viewport of ALL_VIEWPORTS) {
   test.describe(viewport.name, () => {
@@ -42,8 +66,7 @@ for (const viewport of ALL_VIEWPORTS) {
     for (const route of ROUTES) {
       test(`${route.name}: sem overflow horizontal, navegação visível e sem erros`, async ({ page }) => {
         const problems = collectProblems(page);
-        await page.goto(route.path);
-        await page.locator(route.ready).first().waitFor();
+        await openResponsiveRoute(page, route);
         // Aguarda a animação de entrada e o gráfico (Chart.js) assentarem.
         await page.waitForTimeout(700);
 
@@ -135,6 +158,7 @@ for (const viewport of ALL_VIEWPORTS) {
             documentOverflow: documentElement.scrollWidth - documentElement.clientWidth,
           };
         });
+
         expect(modalBounds.left).toBeGreaterThanOrEqual(-1);
         expect(modalBounds.right).toBeLessThanOrEqual(modalBounds.viewportWidth + 1);
         expect(modalBounds.width).toBeLessThanOrEqual(modalBounds.viewportWidth + 1);
@@ -181,3 +205,69 @@ for (const viewport of ALL_VIEWPORTS) {
     });
   });
 }
+
+test.describe('consulta de CEP nos perfis', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  for (const path of ['/perfil', '/desbravadores/editar']) {
+    test(`${path}: feedback, retry e associação acessível`, async ({ page }) => {
+      await mockApi(page);
+      await page.route('https://viacep.com.br/ws/22222222/json/', route =>
+        route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Serviço temporariamente indisponível' }),
+        }),
+      );
+
+      const requests: string[] = [];
+      page.on('request', request => {
+        const url = new URL(request.url());
+        if (url.pathname.toLowerCase().includes('/cep/')) {
+          requests.push(url.pathname.split('/').pop() ?? '');
+        }
+      });
+
+      await openCepTestRoute(page, path);
+      const cep = page.locator('.cep-field app-primary-input input');
+      const feedback = page.locator('.cep-feedback');
+      const rua = page.locator('[formcontrolname="logradouro"] input');
+      const bairro = page.locator('[formcontrolname="bairro"] input');
+      const numero = page.locator('[formcontrolname="numero"] input');
+      const complemento = page.locator('[formcontrolname="complemento"] input');
+
+      await expect(cep).toHaveAttribute('aria-describedby', /cep-feedback$/);
+      await expect(feedback).toHaveAttribute('role', 'status');
+      await expect(feedback).toHaveAttribute('aria-live', 'polite');
+      expect(requests).toEqual([]);
+
+      await page.locator('.profile-edit-button app-refresh-button').click();
+      await numero.fill('42');
+      await complemento.fill('Bloco 2');
+      await cep.fill('123');
+      await expect(feedback).toHaveText('Informe os 8 dígitos do CEP.');
+      await expect(cep).toHaveAttribute('aria-invalid', 'true');
+      expect(requests).toEqual([]);
+
+      await cep.fill('01001000');
+      await expect(feedback).toHaveText(
+        'Endereço encontrado. Confira os dados e informe o número.',
+      );
+      await expect(rua).toHaveValue('Rua da consulta');
+      await expect(bairro).toHaveValue('Centro');
+      await expect(numero).toHaveValue('42');
+      await expect(complemento).toHaveValue('Bloco 2');
+      expect(requests).toContain('01001000');
+
+      await cep.fill('00000000');
+      await expect(feedback).toHaveText('CEP não encontrado. Confira os 8 dígitos.');
+      await expect(cep).not.toHaveAttribute('aria-invalid', 'true');
+
+      await cep.fill('22222222');
+      await expect(feedback).toHaveText('Não foi possível consultar o CEP. Tente novamente.');
+      await page.getByRole('button', { name: 'Tentar novamente' }).click();
+      await expect(feedback).toHaveText('Não foi possível consultar o CEP. Tente novamente.');
+      expect(requests.filter(value => value === '22222222')).toHaveLength(2);
+    });
+  }
+});

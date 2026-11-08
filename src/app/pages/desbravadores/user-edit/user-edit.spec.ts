@@ -2,8 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { provideRouter, Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
-import { User as UserModel } from '../../../core/models/user.model';
+import { of, Subject, throwError } from 'rxjs';
+import { CepLookupResponse, User as UserModel } from '../../../core/models/user.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { User as UserService } from '../../../core/services/user';
 import { UserEdit } from './user-edit';
@@ -125,6 +125,67 @@ describe('UserEdit', () => {
       )].every(control => control.disabled),
     ).toBe(true);
     expect(service.consultarCep).not.toHaveBeenCalled();
+  });
+
+  it('cancela a consulta anterior e só preenche o endereço do CEP atual', async () => {
+    await createComponent();
+    const previousLookup = new Subject<CepLookupResponse>();
+    const currentLookup = new Subject<CepLookupResponse>();
+    service.consultarCep
+      .mockReturnValueOnce(previousLookup)
+      .mockReturnValueOnce(currentLookup);
+    const component = fixture.componentInstance;
+
+    component.form.controls.cep.setValue('20000000');
+    component.form.controls.cep.setValue('30000000');
+    previousLookup.next({ logradouro: 'Rua desatualizada', bairro: 'Antigo' });
+    expect(component.form.controls.logradouro.value).toBe('');
+    expect(component.form.controls.bairro.value).toBe('');
+    expect(component.cepFeedback()).toMatchObject({ status: 'loading', message: 'Buscando endereço...' });
+
+    currentLookup.next({ logradouro: 'Rua atual', bairro: 'Centro' });
+    currentLookup.complete();
+
+    expect(service.consultarCep).toHaveBeenNthCalledWith(1, '20000000');
+    expect(service.consultarCep).toHaveBeenNthCalledWith(2, '30000000');
+    expect(component.form.controls.logradouro.value).toBe('Rua atual');
+    expect(component.form.controls.bairro.value).toBe('Centro');
+    expect(component.form.controls.numero.value).toBe('100');
+    expect(component.form.controls.complemento.value).toBe('Apto 12');
+    expect(component.cepFeedback()).toMatchObject({
+      status: 'success',
+      message: 'Endereço encontrado. Confira os dados e informe o número.',
+    });
+  });
+
+  it('permite tentar novamente após falha e orienta quando o CEP é inexistente', async () => {
+    await createComponent();
+    service.consultarCep
+      .mockReturnValueOnce(throwError(() => new Error('offline')))
+      .mockReturnValueOnce(of({ logradouro: 'Rua consultada', bairro: 'Centro' }));
+    const component = fixture.componentInstance;
+    const page = fixture.nativeElement as HTMLElement;
+
+    component.form.controls.cep.setValue('20000000');
+    expect(component.cepFeedback()).toMatchObject({
+      status: 'error',
+      message: 'Não foi possível consultar o CEP. Tente novamente.',
+    });
+    fixture.detectChanges();
+
+    page.querySelector<HTMLButtonElement>('.cep-retry')?.click();
+    fixture.detectChanges();
+
+    expect(service.consultarCep).toHaveBeenCalledTimes(2);
+    expect(component.form.controls.logradouro.value).toBe('Rua consultada');
+    expect(component.form.controls.bairro.value).toBe('Centro');
+
+    service.consultarCep.mockReturnValueOnce(of({ erro: true }));
+    component.form.controls.cep.setValue('40000000');
+    expect(component.cepFeedback()).toMatchObject({
+      status: 'error',
+      message: 'CEP não encontrado. Confira os 8 dígitos.',
+    });
   });
 
   it('usa os dados do usuário selecionado, sem substituir pelo perfil autenticado', async () => {

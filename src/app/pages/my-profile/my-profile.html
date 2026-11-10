@@ -5,7 +5,7 @@
       <app-refresh-button [disabled]="!isLoaded() || saving()" (click)="salvar()">
         {{ saving() ? 'Salvando...' : 'Salvar' }}
       </app-refresh-button>
-      <button class="cancel-button" type="button" (click)="cancel()">Cancelar</button>
+      <button class="cancel-button" type="button" (click)="cancel()" [disabled]="saving()">Cancelar</button>
     </div>
   </div>
 
@@ -34,11 +34,15 @@
               type="file"
               accept="image/jpeg,image/png,image/webp"
               hidden
+              [disabled]="saving() || photoLoading()"
               (change)="selecionarFoto($event)"
             >
-            <button type="button" class="button-image" [disabled]="photoSaving() || photoLoading()" (click)="photoInput.click()">
+            <button type="button" class="button-image" [disabled]="saving() || photoLoading()" (click)="photoInput.click()">
               {{ photoSaving() ? 'Enviando...' : photoLoading() ? 'Carregando...' : 'Alterar Foto' }}
             </button>
+            @if (hasPendingPhoto()) {
+              <p role="status">Foto selecionada. Clique em Salvar para confirmar.</p>
+            }
           </div>
 
           <div class="container-up-right">
@@ -67,7 +71,7 @@
               placeholder="Nome completo"
               autocomplete="name"
               [compact]="true"
-              [inactive]="personalInfoInactive()"
+              [inactive]="personalInfoInactive() || saving()"
               [invalid]="form.controls.nome.invalid && (form.controls.nome.dirty || form.controls.nome.touched)"
               formControlName="nome"
             ></app-primary-input>
@@ -84,7 +88,7 @@
               placeholder="00.000.000-0"
               mask="rg"
               [compact]="true"
-              [inactive]="personalInfoInactive() || (user()?.ehCin ?? false)"
+              [inactive]="personalInfoInactive() || saving() || (user()?.ehCin ?? false)"
               [invalid]="form.controls.rg.invalid && (form.controls.rg.dirty || form.controls.rg.touched)"
               formControlName="rg"
             ></app-primary-input>
@@ -94,7 +98,7 @@
               mask="data"
               autocomplete="bday"
               [compact]="true"
-              [inactive]="personalInfoInactive()"
+              [inactive]="personalInfoInactive() || saving()"
               [invalid]="form.controls.dataNascimento.invalid && (form.controls.dataNascimento.dirty || form.controls.dataNascimento.touched)"
               formControlName="dataNascimento"
             ></app-primary-input>
@@ -105,7 +109,7 @@
                 mask="cep"
                 autocomplete="postal-code"
                 [compact]="true"
-                [inactive]="personalInfoInactive()"
+                [inactive]="personalInfoInactive() || saving()"
                 [invalid]="form.controls.cep.invalid && (form.controls.cep.dirty || form.controls.cep.touched)"
                 describedBy="my-profile-cep-feedback"
                 formControlName="cep"
@@ -149,7 +153,7 @@
               mask="telefone"
               autocomplete="tel"
               [compact]="true"
-              [inactive]="personalInfoInactive()"
+              [inactive]="personalInfoInactive() || saving()"
               formControlName="telefone"
             ></app-primary-input>
             <app-primary-select
@@ -157,7 +161,7 @@
               placeholder="Selecione o tipo sanguíneo"
               [options]="tipoSanguineoOptions"
               [compact]="true"
-              [inactive]="personalInfoInactive()"
+              [inactive]="personalInfoInactive() || saving()"
               formControlName="tipoSanguineo"
             ></app-primary-select>
             <app-primary-textarea
@@ -165,7 +169,7 @@
               placeholder="Descreva alergias e doenças"
               [maxlength]="2000"
               [compact]="true"
-              [inactive]="personalInfoInactive()"
+              [inactive]="personalInfoInactive() || saving()"
               [invalid]="form.controls.doencasAlergias.invalid && (form.controls.doencasAlergias.dirty || form.controls.doencasAlergias.touched)"
               minHeight="13.6rem"
               formControlName="doencasAlergias"
@@ -175,7 +179,7 @@
               type="number"
               autocomplete="address-line2"
               [compact]="true"
-              [inactive]="personalInfoInactive()"
+              [inactive]="personalInfoInactive() || saving()"
               formControlName="numero"
             ></app-primary-input>
             <app-primary-input

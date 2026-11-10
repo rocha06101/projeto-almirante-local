@@ -5,7 +5,7 @@
       <app-refresh-button [disabled]="!isLoaded() || saving() || redirecting()" (click)="salvar()">
         {{ saving() ? 'Salvando...' : redirecting() ? 'Redirecionando...' : 'Salvar' }}
       </app-refresh-button>
-      <button class="cancel-button" type="button" (click)="cancel()" [disabled]="redirecting()">Cancelar</button>
+      <button class="cancel-button" type="button" (click)="cancel()" [disabled]="saving() || redirecting()">Cancelar</button>
     </div>
   </div>
 
@@ -28,12 +28,16 @@
           type="file"
           accept="image/jpeg,image/png,image/webp"
           hidden
+          [disabled]="saving() || photoLoading()"
           (change)="selecionarFoto($event)"
         >
+        @if (hasPendingPhoto()) {
+          <p role="status">Foto selecionada. Clique em Salvar para confirmar.</p>
+        }
         <button
           type="button"
           class="button-image"
-          [disabled]="photoSaving() || photoLoading()"
+          [disabled]="saving() || photoLoading()"
           (click)="photoInput.click()"
         >
           {{ photoSaving() ? 'Enviando...' : photoLoading() ? 'Carregando...' : 'Alterar Foto' }}
@@ -87,7 +91,7 @@
             placeholder="Nome completo"
             autocomplete="name"
             [compact]="true"
-            [inactive]="personalInfoInactive()"
+            [inactive]="personalInfoInactive() || saving()"
             formControlName="nome"
           ></app-primary-input>
           <app-primary-input
@@ -103,7 +107,7 @@
             placeholder="00.000.000-0"
             mask="rg"
             [compact]="true"
-            [inactive]="personalInfoInactive() || (usuario()?.ehCin ?? false)"
+            [inactive]="personalInfoInactive() || saving() || (usuario()?.ehCin ?? false)"
             formControlName="rg"
           ></app-primary-input>
           <app-primary-input
@@ -112,7 +116,7 @@
             mask="data"
             autocomplete="bday"
             [compact]="true"
-            [inactive]="personalInfoInactive()"
+            [inactive]="personalInfoInactive() || saving()"
             formControlName="dataNascimento"
           ></app-primary-input>
           <app-primary-input
@@ -122,7 +126,7 @@
             mask="telefone"
             autocomplete="tel"
             [compact]="true"
-            [inactive]="personalInfoInactive()"
+            [inactive]="personalInfoInactive() || saving()"
             formControlName="telefone"
           ></app-primary-input>
           <app-primary-select
@@ -130,7 +134,7 @@
             placeholder="Selecione o tipo sanguíneo"
             [options]="tipoSanguineoOptions"
             [compact]="true"
-            [inactive]="personalInfoInactive()"
+            [inactive]="personalInfoInactive() || saving()"
             formControlName="tipoSanguineo"
           ></app-primary-select>
           <app-primary-textarea
@@ -138,7 +142,7 @@
             placeholder="Descreva alergias e doenças"
             [maxlength]="2000"
             [compact]="true"
-            [inactive]="personalInfoInactive()"
+            [inactive]="personalInfoInactive() || saving()"
             minHeight="7rem"
             formControlName="doencasAlergias"
           ></app-primary-textarea>
@@ -162,7 +166,7 @@
           <app-primary-input
             label="Nome do responsável"
             [compact]="true"
-            [inactive]="responsibleInfoInactive()"
+            [inactive]="responsibleInfoInactive() || saving()"
             formControlName="responsavelNome"
           ></app-primary-input>
           <app-primary-input
@@ -171,7 +175,7 @@
             type="tel"
             mask="telefone"
             [compact]="true"
-            [inactive]="responsibleInfoInactive()"
+            [inactive]="responsibleInfoInactive() || saving()"
             formControlName="responsavelTelefone"
           ></app-primary-input>
           <div class="responsible-email">
@@ -179,7 +183,7 @@
               label="E-mail do responsável"
               type="email"
               [compact]="true"
-              [inactive]="responsibleInfoInactive()"
+              [inactive]="responsibleInfoInactive() || saving()"
               [invalid]="form.controls.responsavelEmail.invalid &&
                 (form.controls.responsavelEmail.dirty || form.controls.responsavelEmail.touched)"
               describedBy="user-edit-responsible-email-feedback"
@@ -212,7 +216,7 @@
               mask="cep"
               autocomplete="postal-code"
               [compact]="true"
-              [inactive]="addressInfoInactive()"
+              [inactive]="addressInfoInactive() || saving()"
               [invalid]="form.controls.cep.invalid &&
                 (form.controls.cep.dirty || form.controls.cep.touched)"
               describedBy="user-edit-cep-feedback"
@@ -229,7 +233,7 @@
                 aria-live="polite"
               >{{ cepFeedback().message }}</p>
               @if (cepFeedback().status === 'error') {
-                <button class="cep-retry" type="button" (click)="retryCepLookup()">
+                <button class="cep-retry" type="button" (click)="retryCepLookup()" [disabled]="saving()">
                   Tentar novamente
                 </button>
               }
@@ -254,14 +258,14 @@
             type="number"
             autocomplete="address-line2"
             [compact]="true"
-            [inactive]="addressInfoInactive()"
+            [inactive]="addressInfoInactive() || saving()"
             formControlName="numero"
           ></app-primary-input>
           <app-primary-input
             label="Complemento"
             autocomplete="address-line2"
             [compact]="true"
-            [inactive]="addressInfoInactive()"
+            [inactive]="addressInfoInactive() || saving()"
             formControlName="complemento"
           ></app-primary-input>
         </div>

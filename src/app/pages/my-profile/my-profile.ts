@@ -1,10 +1,34 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, OnInit, OnDestroy, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  Injector,
+  OnInit,
+  OnDestroy,
+  afterNextRender,
+  computed,
+  inject,
+  runInInjectionContext,
+  signal,
+} from '@angular/core';
 import { AbstractControl, FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
-import { catchError, distinctUntilChanged, finalize, map, merge, of, switchMap, take, Subject } from 'rxjs';
+import {
+  EMPTY,
+  catchError,
+  concatMap,
+  distinctUntilChanged,
+  finalize,
+  map,
+  merge,
+  of,
+  switchMap,
+  take,
+  tap,
+  Subject,
+} from 'rxjs';
 import { MyProfileResponse, UpdateMyProfileRequest, UserAddressUpdate } from '../../core/models/user.model';
 import { AuthService } from '../../core/services/auth';
 import { User as UserService } from '../../core/services/user';
@@ -50,6 +74,7 @@ export class MyProfile implements OnInit, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly fb = inject(FormBuilder);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
 
   readonly user = signal<MyProfileResponse | null>(null);
   readonly isLoading = signal(true);
@@ -63,10 +88,13 @@ export class MyProfile implements OnInit, OnDestroy {
   readonly successMessage = signal('');
   readonly cepFeedback = signal<CepFeedback>({ status: 'neutral', message: '' });
   readonly fotoAtual = signal<string | null>(null);
+  readonly pendingPhoto = signal<File | null>(null);
+  readonly hasPendingPhoto = computed(() => this.pendingPhoto() !== null);
   private readonly cepRetry$ = new Subject<string>();
   private readonly cepReset$ = new Subject<void>();
   private fotoObjectUrl: string | null = null;
   private pendingPhotoObjectUrl: string | null = null;
+  private readonly retiredPhotoObjectUrls = new Set<string>();
   private readonly serverErrorValues = new Map<string, string>();
 
   readonly nomeResumo = new FormControl('', { nonNullable: true });
@@ -130,7 +158,16 @@ export class MyProfile implements OnInit, OnDestroy {
 
     this.errorMessage.set('');
     this.successMessage.set('');
-    if (this.form.invalid) {
+    const values = this.form.getRawValue();
+    const hasDataChanges = this.hasDataChanges(user, values);
+    const pendingPhoto = this.pendingPhoto();
+    if (pendingPhoto && !this.isValidPhotoFile(pendingPhoto)) {
+      const message = 'Selecione uma foto JPEG, PNG ou WebP de até 10 MB.';
+      this.errorMessage.set(message);
+      this.toast.error(message);
+      return;
+    }
+    if (hasDataChanges && this.form.invalid) {
       this.form.markAllAsTouched();
       const message = this.validationMessage();
       this.errorMessage.set(message);
@@ -138,75 +175,74 @@ export class MyProfile implements OnInit, OnDestroy {
       return;
     }
 
-    const values = this.form.getRawValue();
-    if (this.addressChanged(user, values) && this.addressNeedsCep(values)) {
+    if (hasDataChanges && this.addressChanged(user, values) && this.addressNeedsCep(values)) {
       this.form.controls.cep.markAsTouched();
       const message = 'Informe um CEP válido antes de atualizar o endereço.';
       this.errorMessage.set(message);
       this.toast.error(message);
       return;
     }
-    if (!this.hasChanges(user, values)) {
+    if (!hasDataChanges && !pendingPhoto) {
       this.personalInfoInactive.set(true);
       this.form.markAsPristine();
       this.toast.error('Nenhuma alteração foi feita. Edite alguma informação antes de salvar.');
       return;
     }
 
-    const ehCin = user.ehCin ?? false;
-    const endereco: UserAddressUpdate = {
-      ...(onlyDigits(values.cep) !== onlyDigits(user.endereco?.cep) && onlyDigits(values.cep).length === 8
-        ? { cep: onlyDigits(values.cep) }
-        : {}),
-      ...(this.changed(values.numero, user.endereco?.numero)
-        ? { numero: values.numero.trim() || null }
-        : {}),
-      ...(this.changed(values.complemento, user.endereco?.complemento)
-        ? { complemento: values.complemento.trim() || null }
-        : {}),
-    };
-    const payload: UpdateMyProfileRequest = {
-      ehCin,
-      ...(this.changed(values.nome, user.nome) ? { nome: values.nome.trim() } : {}),
-      ...(!ehCin ? { rg: values.rg.trim() } : {}),
-      ...(this.changed(values.dataNascimento, apiDateToForm(user.dataNascimento))
-        ? { dataNascimento: formDateToApi(values.dataNascimento) }
-        : {}),
-      ...(onlyDigits(values.telefone) !== onlyDigits(user.telefone)
-        ? { telefone: values.telefone.trim() || null }
-        : {}),
-      ...(this.changed(values.tipoSanguineo, user.tipoSanguineo ?? '')
-        ? { tipoSanguineo: values.tipoSanguineo || null }
-        : {}),
-      ...(this.changed(values.doencasAlergias, user.doencasAlergias ?? '')
-        ? { doencasAlergias: values.doencasAlergias.trim() || null }
-        : {}),
-      ...(this.addressChanged(user, values) ? { endereco } : {}),
-    };
-
+    const payload = hasDataChanges ? this.createProfilePayload(user, values) : null;
+    let dataWasSaved = false;
+    let photoUploadStarted = false;
     this.saving.set(true);
-    this.userService
-      .atualizarMeuPerfil(payload)
+    const dataSave$ = payload
+      ? this.userService.atualizarMeuPerfil(payload).pipe(
+          take(1),
+          tap(updated => {
+            dataWasSaved = true;
+            this.commitProfile(updated);
+          }),
+        )
+      : of(user);
+
+    dataSave$
       .pipe(
-        take(1),
-        finalize(() => this.saving.set(false)),
+        concatMap(() => {
+          if (!pendingPhoto) {
+            return of(null);
+          }
+          photoUploadStarted = true;
+          this.photoSaving.set(true);
+          return this.userService.enviarMinhaFoto(pendingPhoto).pipe(
+            take(1),
+            tap(() => this.commitPendingPhoto()),
+          );
+        }),
+        catchError((error: unknown) => {
+          if (photoUploadStarted && dataWasSaved) {
+            const message =
+              'Os dados foram salvos, mas a foto não pôde ser enviada. Clique em Salvar para tentar novamente.';
+            this.errorMessage.set(message);
+            this.toast.error(message);
+          } else if (photoUploadStarted) {
+            const message = describeUsuarioError(error, 'Não foi possível enviar a foto.');
+            this.errorMessage.set(message);
+            this.toast.error(message);
+          } else {
+            this.handleSaveError(error);
+          }
+          return EMPTY;
+        }),
+        finalize(() => {
+          this.photoSaving.set(false);
+          this.saving.set(false);
+        }),
       )
       .subscribe({
-        next: updated => {
-          this.user.set(updated);
-          this.setRgValidators(updated.ehCin ?? false);
-          this.patchProfile(updated);
-          this.form.markAsPristine();
-          this.personalInfoInactive.set(true);
-          this.successMessage.set('Seu perfil foi atualizado com sucesso.');
-          this.toast.success('Seu perfil foi atualizado com sucesso.', { duration: 2000 });
-        },
-        error: error => this.handleSaveError(error),
+        next: () => this.finishSaveSuccess(),
       });
   }
 
   openPasswordModal(): void {
-    if (this.isLoaded()) {
+    if (this.isLoaded() && !this.saving()) {
       this.passwordModalOpen.set(true);
     }
   }
@@ -224,59 +260,51 @@ export class MyProfile implements OnInit, OnDestroy {
   }
 
   selecionarFoto(event: Event): void {
-    const file = (event.target as HTMLInputElement).files?.[0];
-    if (!file || !this.isLoaded() || this.photoSaving() || this.photoLoading()) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || !this.isLoaded() || this.saving() || this.photoLoading()) {
       return;
     }
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) {
+    if (!this.isValidPhotoFile(file)) {
       const message = 'Selecione uma foto JPEG, PNG ou WebP de até 10 MB.';
       this.errorMessage.set(message);
       this.toast.error(message);
-      (event.target as HTMLInputElement).value = '';
       return;
     }
 
+    let previewUrl: string;
+    try {
+      previewUrl = URL.createObjectURL(file);
+    } catch {
+      const message = 'Não foi possível preparar a prévia da foto. Tente novamente.';
+      this.errorMessage.set(message);
+      this.toast.error(message);
+      return;
+    }
     this.errorMessage.set('');
-    const previousPhoto = this.fotoAtual();
-    this.revokePendingPhoto();
-    this.pendingPhotoObjectUrl = URL.createObjectURL(file);
+    const previousPreviewUrl = this.pendingPhotoObjectUrl;
+    this.pendingPhotoObjectUrl = previewUrl;
+    this.pendingPhoto.set(file);
     this.fotoAtual.set(this.pendingPhotoObjectUrl);
-    this.photoSaving.set(true);
-    const userId = this.user()?.id;
-    this.userService
-      .enviarMinhaFoto(file)
-      .pipe(
-        take(1),
-        finalize(() => this.photoSaving.set(false)),
-      )
-      .subscribe({
-        next: () => {
-          this.revokeCurrentPhoto();
-          this.fotoAtual.set(this.pendingPhotoObjectUrl);
-          this.fotoObjectUrl = this.pendingPhotoObjectUrl;
-          this.pendingPhotoObjectUrl = null;
-          if (userId && this.auth.user()?.id === userId) {
-            this.userAvatar.reloadCurrentUserPhoto();
-          }
-        },
-        error: error => {
-          this.revokePendingPhoto();
-          this.fotoAtual.set(previousPhoto);
-          const message = describeUsuarioError(error, 'Não foi possível enviar a foto.');
-          this.errorMessage.set(message);
-          this.toast.error(message);
-        },
-      });
-    (event.target as HTMLInputElement).value = '';
+    this.retirePhotoObjectUrl(previousPreviewUrl);
   }
 
   cancel(): void {
+    if (this.saving()) {
+      return;
+    }
+    this.discardPendingPhoto();
     void this.router.navigate(['/']);
   }
 
   ngOnDestroy(): void {
     this.revokeCurrentPhoto();
     this.revokePendingPhoto();
+    for (const url of this.retiredPhotoObjectUrls) {
+      URL.revokeObjectURL(url);
+    }
+    this.retiredPhotoObjectUrls.clear();
   }
 
   private loadProfile(): void {
@@ -355,7 +383,12 @@ export class MyProfile implements OnInit, OnDestroy {
     cep.updateValueAndValidity({ emitEvent: false });
   }
 
-  private hasChanges(
+  hasUnsavedChanges(): boolean {
+    const user = this.user();
+    return !!user && (this.hasDataChanges(user, this.form.getRawValue()) || this.hasPendingPhoto());
+  }
+
+  private hasDataChanges(
     user: MyProfileResponse,
     values: ReturnType<typeof this.form.getRawValue>,
   ): boolean {
@@ -368,6 +401,76 @@ export class MyProfile implements OnInit, OnDestroy {
       this.changed(values.doencasAlergias, user.doencasAlergias ?? '') ||
       this.addressChanged(user, values)
     );
+  }
+
+  private createProfilePayload(
+    user: MyProfileResponse,
+    values: ReturnType<typeof this.form.getRawValue>,
+  ): UpdateMyProfileRequest {
+    const ehCin = user.ehCin ?? false;
+    const endereco: UserAddressUpdate = {
+      ...(onlyDigits(values.cep) !== onlyDigits(user.endereco?.cep) && onlyDigits(values.cep).length === 8
+        ? { cep: onlyDigits(values.cep) }
+        : {}),
+      ...(this.changed(values.numero, user.endereco?.numero)
+        ? { numero: values.numero.trim() || null }
+        : {}),
+      ...(this.changed(values.complemento, user.endereco?.complemento)
+        ? { complemento: values.complemento.trim() || null }
+        : {}),
+    };
+    return {
+      ehCin,
+      ...(this.changed(values.nome, user.nome) ? { nome: values.nome.trim() } : {}),
+      ...(!ehCin ? { rg: values.rg.trim() } : {}),
+      ...(this.changed(values.dataNascimento, apiDateToForm(user.dataNascimento))
+        ? { dataNascimento: formDateToApi(values.dataNascimento) }
+        : {}),
+      ...(onlyDigits(values.telefone) !== onlyDigits(user.telefone)
+        ? { telefone: values.telefone.trim() || null }
+        : {}),
+      ...(this.changed(values.tipoSanguineo, user.tipoSanguineo ?? '')
+        ? { tipoSanguineo: values.tipoSanguineo || null }
+        : {}),
+      ...(this.changed(values.doencasAlergias, user.doencasAlergias ?? '')
+        ? { doencasAlergias: values.doencasAlergias.trim() || null }
+        : {}),
+      ...(this.addressChanged(user, values) ? { endereco } : {}),
+    };
+  }
+
+  private commitProfile(profile: MyProfileResponse): void {
+    this.user.set(profile);
+    this.setRgValidators(profile.ehCin ?? false);
+    this.patchProfile(profile);
+    this.form.markAsPristine();
+    this.personalInfoInactive.set(true);
+  }
+
+  private commitPendingPhoto(): void {
+    const userId = this.user()?.id;
+    const confirmedPreview = this.pendingPhotoObjectUrl;
+    this.revokeCurrentPhoto();
+    this.fotoObjectUrl = confirmedPreview;
+    this.pendingPhotoObjectUrl = null;
+    this.pendingPhoto.set(null);
+    this.fotoAtual.set(confirmedPreview);
+    if (userId && this.auth.user()?.id === userId) {
+      this.userAvatar.reloadCurrentUserPhoto();
+    }
+  }
+
+  private discardPendingPhoto(): void {
+    const previousPreviewUrl = this.pendingPhotoObjectUrl;
+    this.pendingPhotoObjectUrl = null;
+    this.pendingPhoto.set(null);
+    this.fotoAtual.set(this.fotoObjectUrl);
+    this.retirePhotoObjectUrl(previousPreviewUrl);
+  }
+
+  private finishSaveSuccess(): void {
+    this.successMessage.set('Seu perfil foi atualizado com sucesso.');
+    this.toast.success('Seu perfil foi atualizado com sucesso.', { duration: 2000 });
   }
 
   private addressChanged(
@@ -390,6 +493,10 @@ export class MyProfile implements OnInit, OnDestroy {
 
   private changed(value: string, original: string | null | undefined): boolean {
     return value.trim() !== (original ?? '').trim();
+  }
+
+  private isValidPhotoFile(file: File): boolean {
+    return ['image/jpeg', 'image/png', 'image/webp'].includes(file.type) && file.size <= 10 * 1024 * 1024;
   }
 
   private configureCepLookup(): void {
@@ -578,5 +685,20 @@ export class MyProfile implements OnInit, OnDestroy {
       URL.revokeObjectURL(this.pendingPhotoObjectUrl);
       this.pendingPhotoObjectUrl = null;
     }
+    this.pendingPhoto.set(null);
+  }
+
+  private retirePhotoObjectUrl(url: string | null): void {
+    if (!url) {
+      return;
+    }
+    this.retiredPhotoObjectUrls.add(url);
+    runInInjectionContext(this.injector, () => {
+      afterNextRender(() => {
+        if (this.fotoAtual() !== url && this.retiredPhotoObjectUrls.delete(url)) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    });
   }
 }

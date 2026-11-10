@@ -530,12 +530,21 @@ describe('MyProfile', () => {
   it('mostra erro para foto inválida e avisa quando o perfil não carrega', async () => {
     const component = fixture.componentInstance;
     const toast = TestBed.inject(ToastService);
+    const validFile = new File(['image'], 'valid.webp', { type: 'image/webp' });
     const invalidFile = new File(['image'], 'profile.gif', { type: 'image/gif' });
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:valid-photo');
+    const validInput = document.createElement('input');
+    validInput.type = 'file';
+    Object.defineProperty(validInput, 'files', { value: [validFile] });
+    component.selecionarFoto({ target: validInput } as unknown as Event);
     const input = document.createElement('input');
     input.type = 'file';
     Object.defineProperty(input, 'files', { value: [invalidFile] });
     component.selecionarFoto({ target: input } as unknown as Event);
 
+    expect(input.value).toBe('');
+    expect(component.pendingPhoto()).toBe(validFile);
+    expect(component.fotoAtual()).toBe('blob:valid-photo');
     expect(service.enviarMinhaFoto).not.toHaveBeenCalled();
     expect(toast.toasts().at(-1)?.message).toBe(
       'Selecione uma foto JPEG, PNG ou WebP de até 10 MB.',
@@ -693,7 +702,7 @@ describe('MyProfile', () => {
     expect(component.saving()).toBe(false);
   });
 
-  it('carrega e envia a foto do perfil próprio separadamente', () => {
+  it('mantém a foto selecionada localmente e só envia após Salvar', () => {
     const component = fixture.componentInstance;
     component.user.set({ ...profile, fotoUrl: '/api/Me/foto' });
     TestBed.inject(AuthService).user.set({
@@ -704,24 +713,34 @@ describe('MyProfile', () => {
     });
 
     const file = new File(['image'], 'profile.webp', { type: 'image/webp' });
-    service.enviarMinhaFoto.mockReturnValue(of(profile));
+    service.enviarMinhaFoto.mockReturnValue(of(undefined));
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:profile-preview');
     const input = document.createElement('input');
     input.type = 'file';
     Object.defineProperty(input, 'files', { value: [file] });
     component.selecionarFoto({ target: input } as unknown as Event);
 
+    expect(component.pendingPhoto()).toBe(file);
+    expect(component.fotoAtual()).toBe('blob:profile-preview');
+    expect(component.photoSaving()).toBe(false);
+    expect(service.enviarMinhaFoto).not.toHaveBeenCalled();
+    expect(service.atualizarMeuPerfil).not.toHaveBeenCalled();
+    expect(userAvatar.reloadCurrentUserPhoto).not.toHaveBeenCalled();
+
+    component.salvar();
+
     expect(service.enviarMinhaFoto).toHaveBeenCalledWith(file);
     expect(userAvatar.reloadCurrentUserPhoto).toHaveBeenCalledOnce();
     expect(service.obterMinhaFoto).not.toHaveBeenCalled();
     expect(service.atualizarMeuPerfil).not.toHaveBeenCalled();
+    expect(component.pendingPhoto()).toBeNull();
+    expect(component.fotoAtual()).toBe('blob:profile-preview');
   });
 
-  it('mantém a foto anterior e não atualiza os avatares quando o upload falha', () => {
+  it('mantém a prévia pendente e permite nova tentativa quando o upload falha', () => {
     const component = fixture.componentInstance;
     const toast = TestBed.inject(ToastService);
     toast.clear();
-    component.fotoAtual.set('blob:previous-photo');
     const file = new File(['image'], 'profile.webp', { type: 'image/webp' });
     service.enviarMinhaFoto.mockReturnValue(throwError(() => new Error('upload failed')));
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:failed-preview');
@@ -731,13 +750,134 @@ describe('MyProfile', () => {
     Object.defineProperty(input, 'files', { value: [file] });
 
     component.selecionarFoto({ target: input } as unknown as Event);
+    expect(service.enviarMinhaFoto).not.toHaveBeenCalled();
+    component.salvar();
 
-    expect(component.fotoAtual()).toBe('blob:previous-photo');
+    expect(component.fotoAtual()).toBe('blob:failed-preview');
+    expect(component.pendingPhoto()).toBe(file);
     expect(userAvatar.reloadCurrentUserPhoto).not.toHaveBeenCalled();
     expect(toast.toasts().at(-1)).toMatchObject({
       message: 'Não foi possível enviar a foto.',
       type: 'error',
     });
+    expect(component.saving()).toBe(false);
+    expect(component.photoSaving()).toBe(false);
+  });
+
+  it('persiste dados antes da foto e, após falha parcial, repete apenas o upload', () => {
+    const component = fixture.componentInstance;
+    const file = new File(['image'], 'profile.webp', { type: 'image/webp' });
+    TestBed.inject(AuthService).user.set({
+      id: profile.id,
+      nome: profile.nome,
+      email: profile.email,
+      cargo: profile.cargo!,
+    });
+    service.atualizarMeuPerfil.mockReturnValueOnce(of({ ...profile, telefone: '21999999999' }));
+    service.enviarMinhaFoto
+      .mockReturnValueOnce(throwError(() => new Error('upload failed')))
+      .mockReturnValueOnce(of(undefined));
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:pending-photo');
+    const input = document.createElement('input');
+    input.type = 'file';
+    Object.defineProperty(input, 'files', { value: [file] });
+    component.selecionarFoto({ target: input } as unknown as Event);
+    component.enablePersonalInfoEditing();
+    component.form.controls.telefone.setValue('21999999999');
+
+    component.salvar();
+
+    expect(service.atualizarMeuPerfil).toHaveBeenCalledOnce();
+    expect(service.enviarMinhaFoto).toHaveBeenCalledOnce();
+    expect(component.pendingPhoto()).toBe(file);
+    expect(component.form.controls.telefone.value).toBe('21999999999');
+    expect(component.errorMessage()).toContain('Os dados foram salvos, mas a foto');
+    expect(component.saving()).toBe(false);
+
+    component.salvar();
+
+    expect(service.atualizarMeuPerfil).toHaveBeenCalledOnce();
+    expect(service.enviarMinhaFoto).toHaveBeenCalledTimes(2);
+    expect(component.pendingPhoto()).toBeNull();
+    expect(userAvatar.reloadCurrentUserPhoto).toHaveBeenCalledOnce();
+  });
+
+  it('não envia a foto se a atualização dos dados falhar', () => {
+    const component = fixture.componentInstance;
+    const file = new File(['image'], 'profile.webp', { type: 'image/webp' });
+    service.atualizarMeuPerfil.mockReturnValueOnce(
+      throwError(() => new HttpErrorResponse({ status: 500 })),
+    );
+    service.enviarMinhaFoto.mockReturnValueOnce(of(undefined));
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:pending-photo');
+    const input = document.createElement('input');
+    input.type = 'file';
+    Object.defineProperty(input, 'files', { value: [file] });
+    component.selecionarFoto({ target: input } as unknown as Event);
+    component.enablePersonalInfoEditing();
+    component.form.controls.telefone.setValue('21999999999');
+
+    component.salvar();
+
+    expect(service.atualizarMeuPerfil).toHaveBeenCalledOnce();
+    expect(service.enviarMinhaFoto).not.toHaveBeenCalled();
+    expect(component.pendingPhoto()).toBe(file);
+    expect(component.form.controls.telefone.value).toBe('21999999999');
+    expect(component.saving()).toBe(false);
+  });
+
+  it('substitui a foto pendente pela última seleção e mantém a anterior se o seletor for cancelado', () => {
+    const component = fixture.componentInstance;
+    const fileA = new File(['A'], 'a.webp', { type: 'image/webp' });
+    const fileB = new File(['B'], 'b.webp', { type: 'image/webp' });
+    vi.spyOn(URL, 'createObjectURL')
+      .mockReturnValueOnce('blob:photo-a')
+      .mockReturnValueOnce('blob:photo-b');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const select = (file?: File) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      Object.defineProperty(input, 'files', { value: file ? [file] : [] });
+      component.selecionarFoto({ target: input } as unknown as Event);
+      expect(input.value).toBe('');
+      return input;
+    };
+
+    select(fileA);
+    select(fileB);
+    select();
+    fixture.detectChanges();
+
+    expect(component.pendingPhoto()).toBe(fileB);
+    expect(component.fotoAtual()).toBe('blob:photo-b');
+    expect(revokeSpy).toHaveBeenCalledWith('blob:photo-a');
+    expect(service.enviarMinhaFoto).not.toHaveBeenCalled();
+
+    service.enviarMinhaFoto.mockReturnValueOnce(of(undefined));
+    component.salvar();
+
+    expect(service.enviarMinhaFoto).toHaveBeenCalledOnce();
+    expect(service.enviarMinhaFoto).toHaveBeenCalledWith(fileB);
+  });
+
+  it('descarta a foto pendente ao cancelar sem iniciar gravações', () => {
+    const component = fixture.componentInstance;
+    const file = new File(['image'], 'profile.webp', { type: 'image/webp' });
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:pending-photo');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const input = document.createElement('input');
+    input.type = 'file';
+    Object.defineProperty(input, 'files', { value: [file] });
+    component.selecionarFoto({ target: input } as unknown as Event);
+
+    component.cancel();
+    fixture.detectChanges();
+
+    expect(component.pendingPhoto()).toBeNull();
+    expect(component.fotoAtual()).toBeNull();
+    expect(revokeSpy).toHaveBeenCalledWith('blob:pending-photo');
+    expect(service.enviarMinhaFoto).not.toHaveBeenCalled();
+    expect(service.atualizarMeuPerfil).not.toHaveBeenCalled();
   });
 
   it('preserva o modal de senha e navega de volta para a Home', () => {

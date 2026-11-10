@@ -48,7 +48,7 @@ function expectRenderedProfile(page: HTMLElement): void {
   expect(input('rg')?.value).toBe('12.345.678-9');
   expect(input('dataNascimento')?.value).toBe('29/02/2000');
   expect(input('telefone')?.value).toBe('(11) 99999-9999');
-  expect(input('cep')?.value).toBe('01001-000');
+  expect(addressInput('cep')?.value).toBe('01001-000');
   expect(addressInput('bairro')?.value).toBe('Sé');
   expect(addressInput('logradouro')?.value).toBe('Praça da Sé');
   expect(addressInput('numero')?.value).toBe('100');
@@ -103,7 +103,7 @@ describe('UserEdit', () => {
 
   afterEach(() => vi.useRealTimers());
 
-  it('atualiza os avatares quando a própria conta tem a foto alterada', async () => {
+  it('atualiza o avatar da própria conta somente após confirmar a foto', async () => {
     await createComponent();
     const auth = TestBed.inject(AuthService);
     auth.user.set({
@@ -121,11 +121,17 @@ describe('UserEdit', () => {
     Object.defineProperty(input, 'files', { value: [file] });
     fixture.componentInstance.selecionarFoto({ target: input } as unknown as Event);
 
+    expect(service.enviarFoto).not.toHaveBeenCalled();
+    expect(userAvatar.reloadCurrentUserPhoto).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.pendingPhoto()).toBe(file);
+    fixture.componentInstance.salvar();
+
     expect(service.enviarFoto).toHaveBeenCalledWith(usuario.id, file);
     expect(userAvatar.reloadCurrentUserPhoto).toHaveBeenCalledOnce();
+    expect(service.atualizarUsuario).not.toHaveBeenCalled();
   });
 
-  it('não atualiza os avatares da sessão ao editar a foto de outra pessoa', async () => {
+  it('não atualiza o avatar da sessão ao salvar a foto de outra pessoa', async () => {
     await createComponent();
     const auth = TestBed.inject(AuthService);
     auth.user.set({
@@ -143,8 +149,133 @@ describe('UserEdit', () => {
     Object.defineProperty(input, 'files', { value: [file] });
     fixture.componentInstance.selecionarFoto({ target: input } as unknown as Event);
 
+    expect(service.enviarFoto).not.toHaveBeenCalled();
+    fixture.componentInstance.salvar();
+
     expect(service.enviarFoto).toHaveBeenCalledWith(usuario.id, file);
     expect(userAvatar.reloadCurrentUserPhoto).not.toHaveBeenCalled();
+    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+  });
+
+  it('repete somente o upload quando os dados foram salvos e a foto falhou', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    const file = new File(['image'], 'profile.webp', { type: 'image/webp' });
+    service.atualizarUsuario.mockReturnValueOnce(of({ ...usuario, telefone: '21999999999' }));
+    service.enviarFoto
+      .mockReturnValueOnce(throwError(() => new Error('upload failed')))
+      .mockReturnValueOnce(of(usuario));
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:pending-photo');
+    const input = document.createElement('input');
+    input.type = 'file';
+    Object.defineProperty(input, 'files', { value: [file] });
+    component.selecionarFoto({ target: input } as unknown as Event);
+    component.enablePersonalInfoEditing();
+    component.form.controls.telefone.setValue('21999999999');
+
+    component.salvar();
+
+    expect(service.atualizarUsuario).toHaveBeenCalledOnce();
+    expect(service.enviarFoto).toHaveBeenCalledOnce();
+    expect(component.pendingPhoto()).toBe(file);
+    expect(component.errorMessage()).toContain('Os dados foram salvos, mas a foto');
+    expect(component.redirecting()).toBe(false);
+    expect(component.saving()).toBe(false);
+
+    component.salvar();
+
+    expect(service.atualizarUsuario).toHaveBeenCalledOnce();
+    expect(service.enviarFoto).toHaveBeenCalledTimes(2);
+    expect(component.pendingPhoto()).toBeNull();
+    expect(component.redirecting()).toBe(true);
+  });
+
+  it('não envia a foto se a atualização dos dados falhar', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    const file = new File(['image'], 'profile.webp', { type: 'image/webp' });
+    service.atualizarUsuario.mockReturnValueOnce(
+      throwError(() => new HttpErrorResponse({ status: 500 })),
+    );
+    service.enviarFoto.mockReturnValueOnce(of(usuario));
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:pending-photo');
+    const input = document.createElement('input');
+    input.type = 'file';
+    Object.defineProperty(input, 'files', { value: [file] });
+    component.selecionarFoto({ target: input } as unknown as Event);
+    component.enablePersonalInfoEditing();
+    component.form.controls.telefone.setValue('21999999999');
+
+    component.salvar();
+
+    expect(service.atualizarUsuario).toHaveBeenCalledOnce();
+    expect(service.enviarFoto).not.toHaveBeenCalled();
+    expect(component.pendingPhoto()).toBe(file);
+    expect(component.form.controls.telefone.value).toBe('21999999999');
+    expect(component.saving()).toBe(false);
+    expect(component.redirecting()).toBe(false);
+  });
+
+  it('envia somente a última prévia escolhida após salvar e libera a anterior', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    const fileA = new File(['A'], 'a.webp', { type: 'image/webp' });
+    const fileB = new File(['B'], 'b.webp', { type: 'image/webp' });
+    vi.spyOn(URL, 'createObjectURL')
+      .mockReturnValueOnce('blob:photo-a')
+      .mockReturnValueOnce('blob:photo-b');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const select = (file?: File) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      Object.defineProperty(input, 'files', { value: file ? [file] : [] });
+      component.selecionarFoto({ target: input } as unknown as Event);
+      expect(input.value).toBe('');
+    };
+
+    select(fileA);
+    select(fileB);
+    select();
+    fixture.detectChanges();
+    expect(component.pendingPhoto()).toBe(fileB);
+    expect(component.fotoAtual()).toBe('blob:photo-b');
+    expect(revokeSpy).toHaveBeenCalledWith('blob:photo-a');
+    expect(service.enviarFoto).not.toHaveBeenCalled();
+
+    service.enviarFoto.mockReturnValueOnce(of(usuario));
+    component.salvar();
+
+    expect(service.enviarFoto).toHaveBeenCalledWith(usuario.id, fileB);
+    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+  });
+
+  it('descarta a foto pendente ao cancelar e bloqueia foto se os dados estiverem inválidos', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const file = new File(['image'], 'profile.webp', { type: 'image/webp' });
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:pending-photo');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const input = document.createElement('input');
+    input.type = 'file';
+    Object.defineProperty(input, 'files', { value: [file] });
+    component.selecionarFoto({ target: input } as unknown as Event);
+    component.enablePersonalInfoEditing();
+    component.form.controls.nome.setValue('');
+    component.salvar();
+
+    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+    expect(service.enviarFoto).not.toHaveBeenCalled();
+    expect(component.pendingPhoto()).toBe(file);
+
+    component.cancel();
+    fixture.detectChanges();
+
+    expect(component.pendingPhoto()).toBeNull();
+    expect(component.fotoAtual()).toBeNull();
+    expect(revokeSpy).toHaveBeenCalledWith('blob:pending-photo');
+    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+    expect(service.enviarFoto).not.toHaveBeenCalled();
   });
 
   it('preenche o usuário selecionado e mantém os dados de endereço e cargo', async () => {
@@ -174,7 +305,7 @@ describe('UserEdit', () => {
       page.querySelectorAll<HTMLElement>(
         '.personal-card app-primary-input[formcontrolname], .personal-card app-primary-select[formcontrolname], .personal-card app-primary-textarea[formcontrolname]',
       ).length,
-    ).toBe(8);
+    ).toBe(7);
     expect(
       [...page.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
         '.cards-grid app-primary-input[formcontrolname] input, .cards-grid app-primary-select[formcontrolname] select, .cards-grid app-primary-textarea[formcontrolname] textarea',
@@ -184,8 +315,8 @@ describe('UserEdit', () => {
     const cepIds = [...page.querySelectorAll<HTMLInputElement>(
       '.personal-card [formcontrolname="cep"] input, .address-card [formcontrolname="cep"] input',
     )].map(input => input.id);
-    expect(cepIds).toHaveLength(2);
-    expect(new Set(cepIds).size).toBe(2);
+    expect(cepIds).toHaveLength(1);
+    expect(new Set(cepIds).size).toBe(1);
     expect(service.consultarCep).not.toHaveBeenCalled();
   });
 
@@ -315,7 +446,7 @@ describe('UserEdit', () => {
     });
   });
 
-  it('mantém os dois campos de exibição do CEP sincronizados sem duplicar o endereço', async () => {
+  it('mantém o CEP exibido sincronizado com o endereço consultado', async () => {
     await createComponent();
     const component = fixture.componentInstance;
     const page = fixture.nativeElement as HTMLElement;
@@ -324,8 +455,6 @@ describe('UserEdit', () => {
     component.form.controls.cep.setValue('20000000');
     fixture.detectChanges();
 
-    expect(page.querySelector<HTMLInputElement>('.personal-card [formcontrolname="cep"] input')?.value)
-      .toBe('20000-000');
     expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="cep"] input')?.value)
       .toBe('20000-000');
     expect(service.consultarCep).toHaveBeenCalledWith('20000000');

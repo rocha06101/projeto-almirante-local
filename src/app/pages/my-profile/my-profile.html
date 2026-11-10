@@ -199,7 +199,11 @@
 
         @if (passwordModalOpen()) {
           <app-password-change-modal
-            [currentEmail]="user()?.email ?? ''"
+            [targetUserId]="user()?.id ?? ''"
+            [isOwnAccount]="true"
+            [originalEmail]="user()?.email ?? ''"
+            [targetUserName]="user()?.nome ?? ''"
+            [targetUserCargoId]="user()?.cargo?.id ?? user()?.cargoId ?? ''"
             (closed)="closePasswordModal()"
           />
         }

@@ -27,6 +27,12 @@ interface CsrfResponse {
   csrfToken: string;
 }
 
+export interface PasswordChangeRequest {
+  senhaAtualSolicitante: string;
+  novaSenha: string;
+  confirmacaoNovaSenha: string;
+}
+
 /** Chave usada por versões anteriores para guardar o token; removida por segurança. */
 const LEGACY_TOKEN_KEY = 'auth_token';
 const CSRF_HEADER = 'X-CSRF-TOKEN';
@@ -137,6 +143,26 @@ export class AuthService {
       map(() => void 0),
       catchError(() => of(void 0)),
       finalize(() => this.clearSession()),
+    );
+  }
+
+  alterarMinhaSenha(request: PasswordChangeRequest): Observable<void> {
+    return this.csrfToken(true).pipe(
+      switchMap(csrf =>
+        this.api.post<void>('/Auth/alterar-senha', request, {
+          headers: { [CSRF_HEADER]: csrf },
+        }),
+      ),
+    );
+  }
+
+  alterarSenhaDeUsuario(usuarioId: string, request: PasswordChangeRequest): Observable<void> {
+    return this.csrfToken(true).pipe(
+      switchMap(csrf =>
+        this.api.post<void>(`/Usuarios/${encodeURIComponent(usuarioId)}/alterar-senha`, request, {
+          headers: { [CSRF_HEADER]: csrf },
+        }),
+      ),
     );
   }
 

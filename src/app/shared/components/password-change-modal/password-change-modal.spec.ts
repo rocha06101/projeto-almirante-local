@@ -2,9 +2,8 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
-import { AuthService } from '../../../core/services/auth';
+import { AuthService, PasswordChangeFailure } from '../../../core/services/auth';
 import { ToastService } from '../../../core/services/toast.service';
-import { User as UserService } from '../../../core/services/user';
 import { PasswordChangeModal } from './password-change-modal';
 
 const validPassword = 'VidaNova!2026Claro';
@@ -21,7 +20,6 @@ describe('PasswordChangeModal', () => {
     error: ReturnType<typeof vi.fn>;
     dismiss: ReturnType<typeof vi.fn>;
   };
-  let userService: { atualizarUsuario: ReturnType<typeof vi.fn> };
   let router: { navigate: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
@@ -35,203 +33,63 @@ describe('PasswordChangeModal', () => {
       error: vi.fn().mockReturnValue('error-toast'),
       dismiss: vi.fn(),
     };
-    userService = {
-      atualizarUsuario: vi.fn().mockReturnValue(of({})),
-    };
     router = { navigate: vi.fn() };
     await TestBed.configureTestingModule({
       imports: [PasswordChangeModal],
       providers: [
         { provide: AuthService, useValue: auth },
         { provide: ToastService, useValue: toast },
-        { provide: UserService, useValue: userService },
         { provide: Router, useValue: router },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(PasswordChangeModal);
     fixture.componentRef.setInput('targetUserId', 'target-1');
-    fixture.componentRef.setInput('originalEmail', 'ana@example.com');
-    fixture.componentRef.setInput('targetUserName', 'Ana Silva');
-    fixture.componentRef.setInput('targetUserCargoId', 'cargo-1');
     fixture.detectChanges();
   });
 
   afterEach(() => vi.useRealTimers());
 
-  it('mantém o feedback de validação da senha em tempo real e permite avançar com os campos vazios', () => {
+  it('mantém as validações em tempo real e exibe uma única etapa com Cancelar e Salvar', () => {
     const component = fixture.componentInstance;
     const page = fixture.nativeElement as HTMLElement;
     const ruleRows = () => [...page.querySelectorAll('.password-rules li')];
 
     expect(ruleRows().every(row => row.classList.contains('neutral'))).toBe(true);
-    expect(component.canAdvance).toBe(true);
-    component.advanceToEmail();
-    expect(component.step()).toBe('email');
+    expect(page.textContent).toContain('Cancelar');
+    expect(page.textContent).toContain('Salvar');
+    expect(page.textContent).not.toContain('Próximo');
+    expect(page.querySelector('input[type="email"]')).toBeNull();
 
-    component.changePassword();
     component.passwordForm.controls.novaSenha.setValue(validPassword);
     component.passwordForm.controls.confirmacaoNovaSenha.setValue(validPassword);
     fixture.detectChanges();
     expect(ruleRows().every(row => row.classList.contains('valid'))).toBe(true);
-    expect(page.querySelector('.password-modal-input.valid')).not.toBeNull();
-    expect(component.canAdvance).toBe(false);
+    expect(component.confirmationStatus).toBe('valid');
 
-    component.passwordForm.controls.senhaAtualSolicitante.setValue('senha atual');
-    expect(component.canAdvance).toBe(true);
     component.passwordForm.controls.novaSenha.setValue('abcdefghijklmno');
     fixture.detectChanges();
     expect(ruleRows()[1].classList.contains('invalid')).toBe(true);
     expect(component.confirmationStatus).toBe('invalid');
-    expect(component.canAdvance).toBe(false);
   });
 
-  it('valida e-mail obrigatório, formato, ASCII e limite de 100 caracteres', () => {
-    const email = fixture.componentInstance.emailForm.controls.email;
-    email.setValue('');
-    expect(email.hasError('required')).toBe(true);
-    email.setValue('email-invalido');
-    expect(email.hasError('email')).toBe(true);
-    email.setValue('anã@example.com');
-    expect(email.hasError('ascii')).toBe(true);
-    email.setValue(`${'a'.repeat(90)}@example.com`);
-    expect(email.hasError('maxlength')).toBe(true);
-    email.setValue('ana@example.com');
-    expect(email.valid).toBe(true);
-  });
-
-  it('informa que nada mudou quando os dois valores continuam iguais aos originais', () => {
-    const component = fixture.componentInstance;
-    component.advanceToEmail();
-    component.submitChanges();
-
-    expect(toast.error).toHaveBeenCalledWith(
-      'Nenhum dado foi alterado.',
-      expect.objectContaining({ duration: 0 }),
-    );
-    expect(userService.atualizarUsuario).not.toHaveBeenCalled();
-    expect(auth.alterarMinhaSenha).not.toHaveBeenCalled();
-  });
-
-  it('bloqueia e-mail próprio sem gravar parcialmente uma senha também alterada', () => {
-    const component = fixture.componentInstance;
-    component.emailForm.controls.email.setValue('novo@example.com');
-    component.passwordForm.setValue({
-      senhaAtualSolicitante: 'senha atual',
-      novaSenha: validPassword,
-      confirmacaoNovaSenha: validPassword,
-    });
-    component.advanceToEmail();
-    component.submitChanges();
-
-    expect(toast.error).toHaveBeenCalledWith(
-      expect.stringContaining('a API local não oferece uma rota'),
-      expect.objectContaining({ duration: 0 }),
-    );
-    expect(userService.atualizarUsuario).not.toHaveBeenCalled();
-    expect(auth.alterarMinhaSenha).not.toHaveBeenCalled();
-  });
-
-  it('mostra o toast de e-mail exclusivo e grava somente o e-mail após confirmação', () => {
-    vi.useFakeTimers();
-    const component = fixture.componentInstance;
-    fixture.componentRef.setInput('isOwnAccount', false);
-    component.emailForm.controls.email.setValue('  novo@example.com ');
-    component.advanceToEmail();
-    component.submitChanges();
-
-    expect(toast.error).toHaveBeenCalledWith(
-      'Somente o email foi alterado.',
-      expect.objectContaining({ duration: 0, actions: expect.any(Array) }),
-    );
-    expect(userService.atualizarUsuario).not.toHaveBeenCalled();
-    const actions = toast.error.mock.calls.at(-1)?.[1].actions;
-    actions[1].onClick();
-
-    expect(userService.atualizarUsuario).toHaveBeenCalledWith('target-1', {
-      nome: 'Ana Silva',
-      email: 'novo@example.com',
-      cargoId: 'cargo-1',
-    });
-    expect(auth.alterarMinhaSenha).not.toHaveBeenCalled();
-    expect(toast.success).toHaveBeenCalledWith('Dados alterados', { duration: 2000 });
-    vi.advanceTimersByTime(2000);
-    expect(router.navigate).toHaveBeenCalledWith(['/desbravadores']);
-  });
-
-  it('mostra o toast de senha exclusiva e salva somente a senha própria', () => {
-    vi.useFakeTimers();
+  it('gera toast vermelho e não chama a API para campos inválidos', () => {
     const component = fixture.componentInstance;
     component.passwordForm.setValue({
-      senhaAtualSolicitante: 'senha atual',
-      novaSenha: validPassword,
-      confirmacaoNovaSenha: validPassword,
+      senhaAtualSolicitante: '',
+      novaSenha: 'invalida',
+      confirmacaoNovaSenha: 'diferente',
     });
-    component.advanceToEmail();
-    component.submitChanges();
+
+    component.submitPasswordChange();
 
     expect(toast.error).toHaveBeenCalledWith(
-      'Somente a senha foi alterada',
-      expect.objectContaining({ duration: 0, actions: expect.any(Array) }),
+      expect.stringContaining('Informe a senha atual.'),
     );
-    const actions = toast.error.mock.calls.at(-1)?.[1].actions;
-    actions[1].onClick();
-
-    expect(auth.alterarMinhaSenha).toHaveBeenCalledWith({
-      senhaAtualSolicitante: 'senha atual',
-      novaSenha: validPassword,
-      confirmacaoNovaSenha: validPassword,
-    });
-    expect(userService.atualizarUsuario).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(2000);
-    expect(auth.expireSession).toHaveBeenCalledOnce();
-    expect(router.navigate).not.toHaveBeenCalled();
+    expect(auth.alterarMinhaSenha).not.toHaveBeenCalled();
+    expect(auth.alterarSenhaDeUsuario).not.toHaveBeenCalled();
   });
 
-  it('grava e-mail antes da senha e, se a senha falhar, permite repetir só a chamada pendente', () => {
-    vi.useFakeTimers();
-    const component = fixture.componentInstance;
-    fixture.componentRef.setInput('isOwnAccount', false);
-    const calls: string[] = [];
-    userService.atualizarUsuario.mockImplementation(() => {
-      calls.push('email');
-      return of({});
-    });
-    auth.alterarSenhaDeUsuario
-      .mockImplementationOnce(() => {
-        calls.push('password');
-        return throwError(() => new HttpErrorResponse({ status: 400 }));
-      })
-      .mockImplementationOnce(() => {
-        calls.push('password-retry');
-        return of(void 0);
-      });
-    component.emailForm.controls.email.setValue('novo@example.com');
-    component.passwordForm.setValue({
-      senhaAtualSolicitante: 'senha do operador',
-      novaSenha: validPassword,
-      confirmacaoNovaSenha: validPassword,
-    });
-    component.advanceToEmail();
-    component.submitChanges();
-
-    expect(calls).toEqual(['email', 'password']);
-    expect(userService.atualizarUsuario).toHaveBeenCalledOnce();
-    expect(toast.error).toHaveBeenCalledWith(
-      expect.stringContaining('O e-mail foi alterado, mas a senha não.'),
-      expect.objectContaining({ duration: 0 }),
-    );
-    const retry = toast.error.mock.calls.at(-1)?.[1].actions[0];
-    expect(retry.label).toBe('Repetir só a senha');
-    retry.onClick();
-
-    expect(calls).toEqual(['email', 'password', 'password-retry']);
-    expect(userService.atualizarUsuario).toHaveBeenCalledOnce();
-    expect(toast.success).toHaveBeenCalledWith('Dados alterados', { duration: 2000 });
-  });
-
-  it('impede envio duplicado, mantém o rascunho após erro e descarta toast ao cancelar', () => {
-    const pending = new Subject<void>();
-    auth.alterarMinhaSenha.mockReturnValue(pending);
+  it('cancela e descarta os campos', () => {
     const component = fixture.componentInstance;
     const closed = vi.fn();
     component.closed.subscribe(closed);
@@ -240,20 +98,142 @@ describe('PasswordChangeModal', () => {
       novaSenha: validPassword,
       confirmacaoNovaSenha: validPassword,
     });
-    component.advanceToEmail();
-    component.submitChanges();
-    const confirmSave = toast.error.mock.calls.at(-1)?.[1].actions[1];
-    confirmSave.onClick();
-    component.submitChanges();
-    expect(auth.alterarMinhaSenha).toHaveBeenCalledOnce();
-    expect(component.isSaving()).toBe(true);
-    pending.error(new HttpErrorResponse({ status: 400 }));
-    fixture.detectChanges();
 
-    expect(toast.error).toHaveBeenCalledTimes(2);
-    expect(component.passwordForm.controls.senhaAtualSolicitante.value).toBe('senha atual');
     component.close();
+
+    expect(component.passwordForm.getRawValue()).toEqual({
+      senhaAtualSolicitante: '',
+      novaSenha: '',
+      confirmacaoNovaSenha: '',
+    });
     expect(closed).toHaveBeenCalledOnce();
-    expect(toast.dismiss).toHaveBeenCalledWith('error-toast');
+    expect(auth.alterarMinhaSenha).not.toHaveBeenCalled();
+  });
+
+  it('salva a própria senha sem exigir ID, envia os campos sem alterar e encerra a sessão após 2 s', () => {
+    vi.useFakeTimers();
+    fixture.componentRef.setInput('targetUserId', '');
+    const component = fixture.componentInstance;
+    const closed = vi.fn();
+    component.closed.subscribe(closed);
+    const request = {
+      senhaAtualSolicitante: ' senha atual ',
+      novaSenha: validPassword,
+      confirmacaoNovaSenha: validPassword,
+    };
+    component.passwordForm.setValue(request);
+
+    component.submitPasswordChange();
+    component.submitPasswordChange();
+
+    expect(auth.alterarMinhaSenha).toHaveBeenCalledOnce();
+    expect(auth.alterarMinhaSenha).toHaveBeenCalledWith(request);
+    expect(auth.alterarSenhaDeUsuario).not.toHaveBeenCalled();
+    expect(component.passwordForm.getRawValue()).toEqual({
+      senhaAtualSolicitante: '',
+      novaSenha: '',
+      confirmacaoNovaSenha: '',
+    });
+    expect(toast.success).toHaveBeenCalledWith('Dados alterados', { duration: 2000 });
+    expect(closed).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(2000);
+    expect(closed).toHaveBeenCalledOnce();
+    expect(auth.expireSession).toHaveBeenCalledOnce();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('altera senha de terceiro com o ID alvo, preservando a sessão do operador', () => {
+    vi.useFakeTimers();
+    fixture.componentRef.setInput('isOwnAccount', false);
+    const component = fixture.componentInstance;
+    const request = {
+      senhaAtualSolicitante: 'senha do operador',
+      novaSenha: validPassword,
+      confirmacaoNovaSenha: validPassword,
+    };
+    component.passwordForm.setValue(request);
+
+    component.submitPasswordChange();
+    vi.advanceTimersByTime(2000);
+
+    expect(auth.alterarSenhaDeUsuario).toHaveBeenCalledWith('target-1', request);
+    expect(auth.alterarMinhaSenha).not.toHaveBeenCalled();
+    expect(router.navigate).toHaveBeenCalledWith(['/desbravadores']);
+    expect(auth.expireSession).not.toHaveBeenCalled();
+  });
+
+  it('mantém o formulário em falha 400 e distingue o campo ProblemDetails.errors', () => {
+    auth.alterarMinhaSenha.mockReturnValue(
+      throwError(() => new PasswordChangeFailure(
+        'password',
+        new HttpErrorResponse({
+          status: 400,
+          error: {
+            title: 'Dados inválidos.',
+            errors: { senhaAtualSolicitante: ['A senha atual informada não confere.'] },
+          },
+        }),
+      )),
+    );
+    const component = fixture.componentInstance;
+    const request = {
+      senhaAtualSolicitante: 'senha atual',
+      novaSenha: validPassword,
+      confirmacaoNovaSenha: validPassword,
+    };
+    component.passwordForm.setValue(request);
+
+    component.submitPasswordChange();
+
+    expect(toast.error).toHaveBeenCalledWith('A senha atual não confere ou está inválida.');
+    expect(component.passwordForm.getRawValue()).toEqual(request);
+    expect(component.isSaving()).toBe(false);
+  });
+
+  it('distingue falha do GET CSRF, permissão, conflito, limite e rede nos toasts', () => {
+    const component = fixture.componentInstance;
+    const cases: Array<[number, string]> = [
+      [401, 'Sessão inválida ou expirada ao obter o token CSRF. Entre novamente.'],
+      [403, 'A API recusou a emissão do token CSRF. Verifique a sessão e tente novamente.'],
+      [409, 'Conflito: a conta ou o usuário alvo foi alterado ou desativado. Atualize os dados e tente novamente.'],
+      [429, 'Limite de tentativas excedido. Aguarde antes de tentar novamente.'],
+      [0, 'Falha de rede ao obter o token CSRF. Verifique a conexão e o proxy da API.'],
+    ];
+
+    for (const [status, message] of cases) {
+      auth.alterarMinhaSenha.mockReturnValue(
+        throwError(() => new PasswordChangeFailure('csrf', new HttpErrorResponse({ status }))),
+      );
+      component.passwordForm.setValue({
+        senhaAtualSolicitante: 'senha atual',
+        novaSenha: validPassword,
+        confirmacaoNovaSenha: validPassword,
+      });
+      component.submitPasswordChange();
+      expect(toast.error).toHaveBeenLastCalledWith(message);
+    }
+  });
+
+  it('bloqueia envio duplicado e preserva o rascunho quando o POST está pendente', () => {
+    const pending = new Subject<void>();
+    auth.alterarSenhaDeUsuario.mockReturnValue(pending);
+    fixture.componentRef.setInput('isOwnAccount', false);
+    const component = fixture.componentInstance;
+    const request = {
+      senhaAtualSolicitante: 'senha do operador',
+      novaSenha: validPassword,
+      confirmacaoNovaSenha: validPassword,
+    };
+    component.passwordForm.setValue(request);
+
+    component.submitPasswordChange();
+    component.submitPasswordChange();
+
+    expect(auth.alterarSenhaDeUsuario).toHaveBeenCalledOnce();
+    expect(component.isSaving()).toBe(true);
+    pending.error(new HttpErrorResponse({ status: 403 }));
+    expect(toast.error).toHaveBeenCalledWith('Você não tem permissão para alterar a senha deste usuário.');
+    expect(component.passwordForm.getRawValue()).toEqual(request);
+    expect(component.isSaving()).toBe(false);
   });
 });

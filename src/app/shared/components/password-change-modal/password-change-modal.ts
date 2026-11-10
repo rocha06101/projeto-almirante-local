@@ -1,30 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import {
-  Component,
-  DestroyRef,
-  ElementRef,
-  EventEmitter,
-  Input,
-  OnDestroy,
-  OnInit,
-  Output,
-  ViewChild,
-  inject,
-  signal,
-} from '@angular/core';
-import {
-  FormBuilder,
-  FormControl,
-  ReactiveFormsModule,
-  ValidationErrors,
-  ValidatorFn,
-  Validators,
-} from '@angular/forms';
-import { Router } from '@angular/router';
+import { Component, DestroyRef, EventEmitter, Input, OnDestroy, Output, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormBuilder, ReactiveFormsModule, ValidatorFn, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
 import { take } from 'rxjs';
-import { AuthService } from '../../../core/services/auth';
-import { User as UserService } from '../../../core/services/user';
+import { AuthService, PasswordChangeFailure } from '../../../core/services/auth';
 import { ToastService } from '../../../core/services/toast.service';
 import { PasswordToggleComponent } from '../password-toggle/password-toggle';
 
@@ -43,19 +23,6 @@ const passwordValidators: ValidatorFn[] = passwordRules.map(({ key }) => control
   passesRule(key, String(control.value ?? '')) ? null : { [key]: true },
 );
 
-type ModalStep = 'password' | 'email';
-
-const requiredEmailValidator: ValidatorFn = control =>
-  String(control.value ?? '').trim() ? null : { required: true };
-
-const emailFormatValidator: ValidatorFn = control => {
-  const email = String(control.value ?? '').trim();
-  return email ? Validators.email(new FormControl(email)) : null;
-};
-
-const asciiEmailValidator: ValidatorFn = control =>
-  /^[\x00-\x7F]*$/.test(String(control.value ?? '')) ? null : { ascii: true };
-
 @Component({
   selector: 'app-password-change-modal',
   standalone: true,
@@ -63,9 +30,8 @@ const asciiEmailValidator: ValidatorFn = control =>
   styleUrl: './password-change-modal.scss',
   imports: [ReactiveFormsModule, PasswordToggleComponent],
 })
-export class PasswordChangeModal implements OnInit, OnDestroy {
+export class PasswordChangeModal implements OnDestroy {
   private readonly auth = inject(AuthService);
-  private readonly userService = inject(UserService);
   private readonly toast = inject(ToastService);
   private readonly fb = inject(FormBuilder);
   private readonly router = inject(Router);
@@ -73,76 +39,39 @@ export class PasswordChangeModal implements OnInit, OnDestroy {
 
   @Input() targetUserId = '';
   @Input() isOwnAccount = true;
-  @Input() originalEmail = '';
-  @Input() targetUserName = '';
-  @Input() targetUserCargoId = '';
   @Output() closed = new EventEmitter<void>();
-
-  @ViewChild('emailInput') private emailInput?: ElementRef<HTMLInputElement>;
 
   readonly currentPasswordVisible = signal(false);
   readonly newPasswordVisible = signal(false);
   readonly confirmPasswordVisible = signal(false);
   readonly isSaving = signal(false);
-  readonly step = signal<ModalStep>('password');
   readonly passwordForm = this.fb.nonNullable.group({
-    senhaAtualSolicitante: '',
+    senhaAtualSolicitante: ['', [Validators.required, Validators.maxLength(1024)]],
     novaSenha: this.fb.nonNullable.control('', passwordValidators),
-    confirmacaoNovaSenha: '',
-  });
-  readonly emailForm = this.fb.nonNullable.group({
-    email: ['', [requiredEmailValidator, emailFormatValidator, asciiEmailValidator, Validators.maxLength(100)]],
+    confirmacaoNovaSenha: ['', Validators.required],
   });
 
   readonly passwordRules = passwordRules;
-  private emailPending = false;
-  private passwordPending = false;
-  private emailWasSaved = false;
-  private pendingToastId?: string;
-  private focusTimer?: ReturnType<typeof setTimeout>;
   private completionTimer?: ReturnType<typeof setTimeout>;
-
-  ngOnInit(): void {
-    this.emailForm.controls.email.setValue(this.originalEmail);
-  }
+  private pendingToastId?: string;
 
   ngOnDestroy(): void {
-    this.clearTimer('focus');
-    this.clearTimer('completion');
+    if (this.completionTimer) {
+      clearTimeout(this.completionTimer);
+    }
     this.dismissPendingToast();
   }
 
   ruleStatus(rule: PasswordRule): RuleStatus {
     const control = this.passwordForm.controls.novaSenha;
-    const password = control.value;
-    if (!password) {
+    if (!control.value) {
       return 'neutral';
     }
     return control.hasError(rule) ? 'invalid' : 'valid';
   }
 
-  get canAdvance(): boolean {
-    const { senhaAtualSolicitante, novaSenha, confirmacaoNovaSenha } = this.passwordForm.getRawValue();
-    const hasPassword = !!senhaAtualSolicitante || !!novaSenha || !!confirmacaoNovaSenha;
-    return !this.isSaving() && (!hasPassword || this.isPasswordChangeValid);
-  }
-
   get canSave(): boolean {
-    return !this.isSaving() && this.emailForm.valid;
-  }
-
-  get isPasswordChangeValid(): boolean {
-    const { senhaAtualSolicitante, novaSenha, confirmacaoNovaSenha } = this.passwordForm.getRawValue();
-    return (
-      !!senhaAtualSolicitante &&
-      this.passwordRules.every(rule => this.ruleStatus(rule.key) === 'valid') &&
-      !!confirmacaoNovaSenha &&
-      novaSenha === confirmacaoNovaSenha
-    );
-  }
-
-  get emailChanged(): boolean {
-    return normalizeEmail(this.emailForm.controls.email.value) !== normalizeEmail(this.originalEmail);
+    return !this.isSaving();
   }
 
   get confirmationStatus(): RuleStatus {
@@ -153,59 +82,42 @@ export class PasswordChangeModal implements OnInit, OnDestroy {
     return novaSenha === confirmacaoNovaSenha ? 'valid' : 'invalid';
   }
 
-  advanceToEmail(): void {
-    if (!this.canAdvance) {
-      return;
-    }
-    this.step.set('email');
-  }
-
-  changePassword(): void {
-    this.step.set('password');
-  }
-
-  focusEmail(): void {
-    this.step.set('email');
-    this.clearTimer('focus');
-    this.focusTimer = setTimeout(() => this.emailInput?.nativeElement.focus(), 0);
-  }
-
-  submitChanges(): void {
-    if (!this.canSave || this.isSaving()) {
+  submitPasswordChange(): void {
+    if (this.isSaving()) {
       return;
     }
 
-    const passwordChanged = this.isPasswordChangeValid;
-    const emailChanged = this.emailChanged;
-    if (!emailChanged && !passwordChanged) {
-      this.showToast('Nenhum dado foi alterado.');
+    this.passwordForm.markAllAsTouched();
+    const request = this.passwordForm.getRawValue();
+    const errors = passwordFormErrors(request, this.passwordForm.controls.novaSenha.errors);
+    if (errors.length) {
+      this.showError(`Revise os campos da senha: ${errors.join(' ')}`);
       return;
     }
 
-    if (this.isOwnAccount && emailChanged) {
-      this.showToast(
-        'Não foi possível alterar o e-mail próprio: a API local não oferece uma rota para isso. Nenhuma alteração foi gravada.',
-      );
+    if (!this.isOwnAccount && !this.targetUserId) {
+      this.showError('Não foi possível identificar o usuário cuja senha será alterada.');
       return;
     }
 
-    if (emailChanged && passwordChanged) {
-      this.startSaving(true, true);
-      return;
-    }
+    this.dismissPendingToast();
+    this.isSaving.set(true);
+    const change$ = this.isOwnAccount
+      ? this.auth.alterarMinhaSenha(request)
+      : this.auth.alterarSenhaDeUsuario(this.targetUserId, request);
 
-    if (emailChanged) {
-      this.showToast('Somente o email foi alterado.', [
-        { label: 'Alterar senha', onClick: () => this.changePassword() },
-        { label: 'Salvar mesmo assim', onClick: () => this.startSaving(true, false) },
-      ]);
-      return;
-    }
-
-    this.showToast('Somente a senha foi alterada', [
-      { label: 'Alterar e-mail', onClick: () => this.focusEmail() },
-      { label: 'Salvar assim mesmo', onClick: () => this.startSaving(false, true) },
-    ]);
+    change$
+      .pipe(
+        take(1),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: () => this.finishSaving(),
+        error: (error: unknown) => {
+          this.isSaving.set(false);
+          this.showError(passwordChangeError(error, this.isOwnAccount));
+        },
+      });
   }
 
   close(): void {
@@ -213,105 +125,19 @@ export class PasswordChangeModal implements OnInit, OnDestroy {
       return;
     }
     this.passwordForm.reset();
-    this.emailForm.reset({ email: this.originalEmail });
     this.dismissPendingToast();
     this.closed.emit();
   }
 
-  private startSaving(saveEmail: boolean, savePassword: boolean): void {
-    if (this.isSaving() || this.completionTimer) {
-      return;
-    }
-    this.dismissPendingToast();
-    this.emailPending = saveEmail;
-    this.passwordPending = savePassword;
-    this.emailWasSaved = false;
-    this.isSaving.set(true);
-    this.saveNextPendingChange();
-  }
-
-  private saveNextPendingChange(): void {
-    if (this.emailPending) {
-      if (!this.targetUserId || !this.targetUserName || !this.targetUserCargoId) {
-        this.handleSaveError('email', new Error('Dados do usuário incompletos para salvar o e-mail.'));
-        return;
-      }
-
-      this.userService
-        .atualizarUsuario(this.targetUserId, {
-          nome: this.targetUserName,
-          email: this.emailForm.controls.email.value.trim(),
-          cargoId: this.targetUserCargoId,
-        })
-        .pipe(take(1), takeUntilDestroyed(this.destroyRef))
-        .subscribe({
-          next: () => {
-            this.emailPending = false;
-            this.emailWasSaved = true;
-            this.saveNextPendingChange();
-          },
-          error: (error: unknown) => this.handleSaveError('email', error),
-        });
-      return;
-    }
-
-    if (this.passwordPending) {
-      if (!this.targetUserId) {
-        this.handleSaveError('password', new Error('Não foi possível identificar o usuário.'));
-        return;
-      }
-      const request = this.passwordForm.getRawValue();
-      const change$ = this.isOwnAccount
-        ? this.auth.alterarMinhaSenha(request)
-        : this.auth.alterarSenhaDeUsuario(this.targetUserId, request);
-      change$.pipe(take(1), takeUntilDestroyed(this.destroyRef)).subscribe({
-        next: () => {
-          this.passwordPending = false;
-          this.finishSaving();
-        },
-        error: (error: unknown) => this.handleSaveError('password', error),
-      });
-      return;
-    }
-
-    this.finishSaving();
-  }
-
-  private handleSaveError(operation: 'email' | 'password', error: unknown): void {
-    this.isSaving.set(false);
-    const details =
-      operation === 'email' ? emailChangeError(error) : passwordChangeError(error);
-    const message = this.emailWasSaved
-      ? `O e-mail foi alterado, mas a senha não. ${details}`
-      : this.emailPending && this.passwordPending
-        ? `Não foi possível alterar o e-mail. A senha não foi enviada. ${details}`
-        : details;
-    this.showToast(message, [
-      {
-        label: this.emailWasSaved ? 'Repetir só a senha' : 'Tentar novamente',
-        onClick: () => this.retryPendingChanges(),
-      },
-    ]);
-  }
-
-  private retryPendingChanges(): void {
-    if (this.isSaving() || (!this.emailPending && !this.passwordPending)) {
-      return;
-    }
-    this.isSaving.set(true);
-    this.saveNextPendingChange();
-  }
-
   private finishSaving(): void {
     this.isSaving.set(false);
+    this.passwordForm.reset();
     this.dismissPendingToast();
     this.pendingToastId = this.toast.success('Dados alterados', { duration: 2000 });
     this.completionTimer = setTimeout(() => {
       this.completionTimer = undefined;
-      this.passwordForm.reset();
-      this.emailForm.reset({ email: this.originalEmail });
       this.closed.emit();
-      if (this.isOwnAccount && !this.emailPending) {
+      if (this.isOwnAccount) {
         this.auth.expireSession();
       } else {
         void this.router.navigate(['/desbravadores']);
@@ -319,12 +145,9 @@ export class PasswordChangeModal implements OnInit, OnDestroy {
     }, 2000);
   }
 
-  private showToast(
-    message: string,
-    actions: { label: string; onClick: () => void }[] = [],
-  ): void {
+  private showError(message: string): void {
     this.dismissPendingToast();
-    this.pendingToastId = this.toast.error(message, { actions, duration: 0 });
+    this.pendingToastId = this.toast.error(message);
   }
 
   private dismissPendingToast(): void {
@@ -333,16 +156,27 @@ export class PasswordChangeModal implements OnInit, OnDestroy {
       this.pendingToastId = undefined;
     }
   }
+}
 
-  private clearTimer(timer: 'focus' | 'completion'): void {
-    if (timer === 'focus' && this.focusTimer) {
-      clearTimeout(this.focusTimer);
-      this.focusTimer = undefined;
-    } else if (timer === 'completion' && this.completionTimer) {
-      clearTimeout(this.completionTimer);
-      this.completionTimer = undefined;
-    }
+function passwordFormErrors(
+  request: { senhaAtualSolicitante: string; novaSenha: string; confirmacaoNovaSenha: string },
+  newPasswordErrors: Record<string, unknown> | null,
+): string[] {
+  const errors: string[] = [];
+  if (!request.senhaAtualSolicitante) {
+    errors.push('Informe a senha atual.');
+  } else if (request.senhaAtualSolicitante.length > 1024) {
+    errors.push('A senha atual é longa demais.');
   }
+  if (!request.novaSenha || passwordRules.some(({ key }) => newPasswordErrors?.[key])) {
+    errors.push('A nova senha não atende à política.');
+  }
+  if (!request.confirmacaoNovaSenha) {
+    errors.push('Informe a confirmação da nova senha.');
+  } else if (request.novaSenha !== request.confirmacaoNovaSenha) {
+    errors.push('A confirmação deve ser idêntica à nova senha.');
+  }
+  return errors;
 }
 
 function isSimpleSequence(password: string): boolean {
@@ -395,28 +229,86 @@ function passesRule(rule: PasswordRule, password: string): boolean {
   }
 }
 
-function passwordChangeError(error: unknown): string {
-  if (error instanceof HttpErrorResponse) {
-    if (error.status === 403) {
-      return 'Você não tem permissão para alterar a senha deste usuário.';
-    }
-    if (error.status === 429) {
-      return 'Muitas tentativas de alteração de senha. Aguarde e tente novamente.';
-    }
-    if (error.status === 400) {
-      return 'A senha atual pode estar incorreta ou a nova senha não atende à política do servidor.';
-    }
+function passwordChangeError(error: unknown, isOwnAccount: boolean): string {
+  const failure = error instanceof PasswordChangeFailure ? error : undefined;
+  const response = failure?.originalError instanceof HttpErrorResponse ? failure.originalError : error;
+  const stage = failure?.stage ?? 'password';
+
+  if (!(response instanceof HttpErrorResponse)) {
+    return 'Falha inesperada ao alterar a senha. Tente novamente.';
   }
-  return 'Não foi possível alterar a senha. Tente novamente.';
+  if (response.status === 0) {
+    return stage === 'csrf'
+      ? 'Falha de rede ao obter o token CSRF. Verifique a conexão e o proxy da API.'
+      : 'Falha de rede ao enviar a alteração de senha. Verifique a conexão e o proxy da API.';
+  }
+  if (response.status === 401) {
+    return stage === 'csrf'
+      ? 'Sessão inválida ou expirada ao obter o token CSRF. Entre novamente.'
+      : 'Sessão inválida ou expirada. Entre novamente.';
+  }
+  if (response.status === 403) {
+    return stage === 'csrf'
+      ? 'A API recusou a emissão do token CSRF. Verifique a sessão e tente novamente.'
+      : 'Você não tem permissão para alterar a senha deste usuário.';
+  }
+  if (response.status === 404) {
+    if (stage === 'csrf' || isOwnAccount || isMissingRoute(response.error)) {
+      return stage === 'csrf'
+        ? 'Rota GET /api/Auth/csrf não encontrada no backend.'
+        : 'Rota POST de alteração de senha não encontrada no backend.';
+    }
+    return 'Usuário alvo não encontrado para alteração de senha.';
+  }
+  if (response.status === 409) {
+    return 'Conflito: a conta ou o usuário alvo foi alterado ou desativado. Atualize os dados e tente novamente.';
+  }
+  if (response.status === 429) {
+    return 'Limite de tentativas excedido. Aguarde antes de tentar novamente.';
+  }
+  if (response.status === 400) {
+    if (stage === 'csrf') {
+      return 'O backend recusou a emissão do token CSRF. Verifique o cookie e a configuração HTTPS.';
+    }
+    return validationProblemMessage(response.error);
+  }
+  if (response.status >= 500) {
+    return `Erro ${response.status} no backend ao ${stage === 'csrf' ? 'obter o token CSRF' : 'alterar a senha'}. Tente novamente.`;
+  }
+  return `Falha HTTP ${response.status} ao ${stage === 'csrf' ? 'obter o token CSRF' : 'alterar a senha'}.`;
 }
 
-function emailChangeError(error: unknown): string {
-  if (error instanceof HttpErrorResponse && error.status === 409) {
-    return 'Este e-mail já está sendo usado por outro usuário.';
+function validationProblemMessage(body: unknown): string {
+  if (typeof body !== 'object' || body === null || !('errors' in body)) {
+    return 'Dados inválidos ou senha atual incorreta. Confira os campos e tente novamente.';
   }
-  return 'Não foi possível alterar o e-mail. Tente novamente.';
+
+  const errors = (body as { errors?: Record<string, unknown> }).errors;
+  const entries = Object.entries(errors ?? {});
+  const field = entries.map(([key]) => key.toLowerCase());
+  const messages = entries.flatMap(([, value]) => Array.isArray(value) ? value : []);
+  if (!messages.length) {
+    return 'Dados inválidos. Confira os campos e tente novamente.';
+  }
+
+  const detail = messages.filter((value): value is string => typeof value === 'string').join(' ');
+  if (field.some(key => key.includes('senhaatual')) || /senha atual|senhaAtualSolicitante/i.test(detail)) {
+    return 'A senha atual não confere ou está inválida.';
+  }
+  if (field.some(key => key === 'novasenha') || /nova senha|novaSenha/i.test(detail)) {
+    return `A nova senha não atende à política. ${detail}`;
+  }
+  if (field.some(key => key.includes('confirmacao')) || /confirmacaoNovaSenha|confirmação/i.test(detail)) {
+    return 'A confirmação não corresponde à nova senha.';
+  }
+  return `Dados inválidos. ${detail}`;
 }
 
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
+function isMissingRoute(body: unknown): boolean {
+  if (typeof body !== 'object' || body === null) {
+    return false;
+  }
+  const problem = body as { title?: unknown; detail?: unknown };
+  const message = `${String(problem.title ?? '')} ${String(problem.detail ?? '')}`;
+  return /no route|not found|não existe|rota/i.test(message);
 }

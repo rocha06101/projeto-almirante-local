@@ -201,9 +201,6 @@
           <app-password-change-modal
             [targetUserId]="user()?.id ?? ''"
             [isOwnAccount]="true"
-            [originalEmail]="user()?.email ?? ''"
-            [targetUserName]="user()?.nome ?? ''"
-            [targetUserCargoId]="user()?.cargo?.id ?? user()?.cargoId ?? ''"
             (closed)="closePasswordModal()"
           />
         }

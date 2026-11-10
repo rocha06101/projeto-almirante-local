@@ -33,6 +33,16 @@ export interface PasswordChangeRequest {
   confirmacaoNovaSenha: string;
 }
 
+export class PasswordChangeFailure extends Error {
+  constructor(
+    readonly stage: 'csrf' | 'password',
+    readonly originalError: unknown,
+  ) {
+    super(`Password-change request failed during ${stage}.`);
+    this.name = 'PasswordChangeFailure';
+  }
+}
+
 /** Chave usada por versões anteriores para guardar o token; removida por segurança. */
 const LEGACY_TOKEN_KEY = 'auth_token';
 const CSRF_HEADER = 'X-CSRF-TOKEN';
@@ -148,20 +158,34 @@ export class AuthService {
 
   alterarMinhaSenha(request: PasswordChangeRequest): Observable<void> {
     return this.csrfToken(true).pipe(
+      catchError((error: unknown) =>
+        throwError(() => new PasswordChangeFailure('csrf', error)),
+      ),
       switchMap(csrf =>
         this.api.post<void>('/Auth/alterar-senha', request, {
           headers: { [CSRF_HEADER]: csrf },
-        }),
+        }).pipe(
+          catchError((error: unknown) =>
+            throwError(() => new PasswordChangeFailure('password', error)),
+          ),
+        ),
       ),
     );
   }
 
   alterarSenhaDeUsuario(usuarioId: string, request: PasswordChangeRequest): Observable<void> {
     return this.csrfToken(true).pipe(
+      catchError((error: unknown) =>
+        throwError(() => new PasswordChangeFailure('csrf', error)),
+      ),
       switchMap(csrf =>
         this.api.post<void>(`/Usuarios/${encodeURIComponent(usuarioId)}/alterar-senha`, request, {
           headers: { [CSRF_HEADER]: csrf },
-        }),
+        }).pipe(
+          catchError((error: unknown) =>
+            throwError(() => new PasswordChangeFailure('password', error)),
+          ),
+        ),
       ),
     );
   }

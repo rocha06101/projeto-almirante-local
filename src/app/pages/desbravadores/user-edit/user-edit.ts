@@ -168,6 +168,11 @@ export class UserEdit implements OnDestroy {
     return this.usuario()?.email ?? '';
   }
 
+  get isOwnAccount(): boolean {
+    const userId = this.usuario()?.id;
+    return !!userId && userId === this.auth.user()?.id;
+  }
+
   enablePersonalInfoEditing(): void {
     if (this.canEditSection()) {
       this.personalInfoInactive.set(false);

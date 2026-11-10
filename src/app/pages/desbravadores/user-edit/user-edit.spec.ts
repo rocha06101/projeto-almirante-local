@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
+import { By } from '@angular/platform-browser';
 import { provideRouter, Router } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
 import { CepLookupResponse, User as UserModel } from '../../../core/models/user.model';
@@ -8,6 +9,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { AuthService } from '../../../core/services/auth';
 import { User as UserService } from '../../../core/services/user';
 import { UserAvatarService } from '../../../core/services/user-avatar.service';
+import { PasswordChangeModal } from '../../../shared/components/password-change-modal/password-change-modal';
 import { UserEdit } from './user-edit';
 
 const usuario: UserModel = {
@@ -102,6 +104,35 @@ describe('UserEdit', () => {
   });
 
   afterEach(() => vi.useRealTimers());
+
+  it('seleciona a rota própria ou administrativa pela comparação dos IDs e mantém o alvo editado', async () => {
+    await createComponent();
+    const auth = TestBed.inject(AuthService);
+    const component = fixture.componentInstance;
+    auth.user.set({
+      id: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      cargo: usuario.cargo!,
+    });
+    component.openPasswordModal();
+    fixture.detectChanges();
+
+    let modal = fixture.debugElement.query(By.directive(PasswordChangeModal)).componentInstance as PasswordChangeModal;
+    expect(modal.isOwnAccount).toBe(true);
+    expect(modal.targetUserId).toBe(usuario.id);
+
+    auth.user.set({
+      id: 'operator-1',
+      nome: 'Operador',
+      email: 'operator@example.com',
+      cargo: usuario.cargo!,
+    });
+    fixture.detectChanges();
+    modal = fixture.debugElement.query(By.directive(PasswordChangeModal)).componentInstance as PasswordChangeModal;
+    expect(modal.isOwnAccount).toBe(false);
+    expect(modal.targetUserId).toBe(usuario.id);
+  });
 
   it('atualiza o avatar da própria conta somente após confirmar a foto', async () => {
     await createComponent();

@@ -149,4 +149,61 @@ describe('AuthService', () => {
     await expect(token).resolves.toBe('jwt-current');
     expect(auth.accessToken()).toBe('jwt-current');
   });
+
+  it('altera a própria senha com CSRF autenticado e Bearer no endpoint Auth', async () => {
+    const login = firstValueFrom(auth.login('maria@example.com', 'segredo'));
+    (await next('/Auth/csrf')).flush({ csrfToken: 'login-csrf' });
+    (await next('/Auth/login', 'POST')).flush(tokenBody('jwt-password'));
+    (await next('/Auth/Me')).flush(me);
+    await login;
+
+    const changed = firstValueFrom(
+      auth.alterarMinhaSenha({
+        senhaAtualSolicitante: 'senha atual',
+        novaSenha: 'VidaNova!2026Claro',
+        confirmacaoNovaSenha: 'VidaNova!2026Claro',
+      }),
+    );
+    const csrf = await next('/Auth/csrf');
+    expect(csrf.request.headers.get('Authorization')).toMatch(/^Bearer /);
+    csrf.flush({ csrfToken: 'password-csrf' });
+
+    const request = await next('/Auth/alterar-senha', 'POST');
+    expect(request.request.headers.get('X-CSRF-TOKEN')).toBe('password-csrf');
+    expect(request.request.headers.get('Authorization')).toMatch(/^Bearer /);
+    expect(request.request.withCredentials).toBe(true);
+    expect(request.request.body).toEqual({
+      senhaAtualSolicitante: 'senha atual',
+      novaSenha: 'VidaNova!2026Claro',
+      confirmacaoNovaSenha: 'VidaNova!2026Claro',
+    });
+    request.flush(null, { status: 204, statusText: 'No Content' });
+    await changed;
+  });
+
+  it('altera senha de terceiro pelo ID solicitado com CSRF autenticado', async () => {
+    const login = firstValueFrom(auth.login('maria@example.com', 'segredo'));
+    (await next('/Auth/csrf')).flush({ csrfToken: 'login-csrf' });
+    (await next('/Auth/login', 'POST')).flush(tokenBody('jwt-admin'));
+    (await next('/Auth/Me')).flush(me);
+    await login;
+
+    const changed = firstValueFrom(
+      auth.alterarSenhaDeUsuario('target-user', {
+        senhaAtualSolicitante: 'senha do operador',
+        novaSenha: 'VidaNova!2026Claro',
+        confirmacaoNovaSenha: 'VidaNova!2026Claro',
+      }),
+    );
+    const csrf = await next('/Auth/csrf');
+    expect(csrf.request.headers.get('Authorization')).toMatch(/^Bearer /);
+    csrf.flush({ csrfToken: 'admin-password-csrf' });
+
+    const request = await next('/Usuarios/target-user/alterar-senha', 'POST');
+    expect(request.request.headers.get('X-CSRF-TOKEN')).toBe('admin-password-csrf');
+    expect(request.request.headers.get('Authorization')).toMatch(/^Bearer /);
+    expect(request.request.body.senhaAtualSolicitante).toBe('senha do operador');
+    request.flush(null, { status: 204, statusText: 'No Content' });
+    await changed;
+  });
 });

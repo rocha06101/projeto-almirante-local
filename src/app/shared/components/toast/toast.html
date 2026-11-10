@@ -12,6 +12,19 @@
             <span class="toast__icon" aria-hidden="true">{{ iconFor(toast.type) }}</span>
             <div class="toast__content">
               <p class="toast__message">{{ toast.message }}</p>
+              @if (toast.actions?.length) {
+                <div class="toast__actions">
+                  @for (action of toast.actions; track action.label) {
+                    <button
+                      type="button"
+                      class="toast__action"
+                      (click)="runAction(toast, action)"
+                    >
+                      {{ action.label }}
+                    </button>
+                  }
+                </div>
+              }
             </div>
             <button
               type="button"

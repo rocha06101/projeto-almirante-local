@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, inject } from '@angular/core';
-import { ToastPosition, ToastRecord, ToastService } from '../../../core/services/toast.service';
+import { ToastAction, ToastPosition, ToastRecord, ToastService } from '../../../core/services/toast.service';
 
 const POSITION_ORDER: ToastPosition[] = [
   'top-right',
@@ -43,6 +43,11 @@ export class ToastComponent {
 
   dismiss(id: string): void {
     this.toastService.dismiss(id);
+  }
+
+  runAction(toast: ToastRecord, action: ToastAction): void {
+    this.toastService.dismiss(toast.id);
+    action.onClick();
   }
 
   iconFor(type: ToastRecord['type']): string {

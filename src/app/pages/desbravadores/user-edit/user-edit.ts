@@ -94,6 +94,8 @@ export class UserEdit implements OnDestroy {
   readonly personalInfoInactive = signal(true);
   readonly responsibleInfoInactive = signal(true);
   readonly addressInfoInactive = signal(true);
+  readonly cpfEditable = signal(false);
+  readonly rgEditable = signal(false);
   readonly passwordModalOpen = signal(false);
   readonly saving = signal(false);
   readonly redirecting = signal(false);
@@ -115,11 +117,11 @@ export class UserEdit implements OnDestroy {
 
   readonly form = this.fb.nonNullable.group({
     nome: ['', [Validators.required, Validators.maxLength(200)]],
-    cpf: ['', [Validators.required, cpfValidator]],
+    cpf: ['', cpfValidator],
     rg: ['', [Validators.maxLength(20), Validators.pattern(/\d/)]],
     dataNascimento: ['', [Validators.maxLength(10), (control: AbstractControl) =>
       isValidFormDate(String(control.value ?? '')) ? null : { dateInvalid: true }]],
-    responsavelNome: [''],
+    responsavelNome: ['', Validators.maxLength(200)],
     responsavelTelefone: [''],
     responsavelEmail: ['', Validators.email],
     telefone: [''],
@@ -150,7 +152,7 @@ export class UserEdit implements OnDestroy {
     if (isValidSelectedUser(candidate)) {
       this.usuario.set(candidate);
       this.isLoaded.set(true);
-      this.setRgValidators(candidate.ehCin ?? false);
+      this.setRgValidators();
       this.patchUsuario(candidate);
       this.loadPhoto(candidate);
     } else {
@@ -191,6 +193,10 @@ export class UserEdit implements OnDestroy {
   }
 
   salvar(): void {
+    this.salvarAlteracoes(false);
+  }
+
+  private salvarAlteracoes(ignorarDocumentosVazios: boolean): void {
     const usuario = this.usuario();
     if (!usuario || !this.isLoaded() || this.saving() || this.redirecting()) {
       return;
@@ -200,7 +206,6 @@ export class UserEdit implements OnDestroy {
     this.successMessage.set('');
     const values = this.form.getRawValue();
     const hasDataChanges = this.hasDataChanges(usuario, values);
-    const hasResponsibleChanges = this.responsibleDataChanged(usuario, values);
     const pendingPhoto = this.pendingPhoto();
     if (pendingPhoto && !this.isValidPhotoFile(pendingPhoto)) {
       const message = 'Selecione uma foto JPEG, PNG ou WebP de até 10 MB.';
@@ -208,17 +213,14 @@ export class UserEdit implements OnDestroy {
       this.toast.error(message);
       return;
     }
-    if ((hasDataChanges || hasResponsibleChanges) && this.form.invalid) {
-      this.form.markAllAsTouched();
-      const message = this.validationMessage();
-      this.errorMessage.set(message);
-      this.toast.error(message);
+    const documentosVazios = this.documentosObrigatoriosVazios(usuario, values);
+    if (documentosVazios.length && !ignorarDocumentosVazios) {
+      this.confirmarDocumentosVazios(documentosVazios);
       return;
     }
-
-    if (hasResponsibleChanges) {
-      const message =
-        'Os dados do responsável foram alterados, mas a API disponível não confirma que esses campos possam ser salvos. Nenhuma alteração foi enviada.';
+    if (hasDataChanges && this.form.invalid) {
+      this.form.markAllAsTouched();
+      const message = this.validationMessage();
       this.errorMessage.set(message);
       this.toast.error(message);
       return;
@@ -400,6 +402,8 @@ export class UserEdit implements OnDestroy {
     this.personalInfoInactive.set(true);
     this.responsibleInfoInactive.set(true);
     this.addressInfoInactive.set(true);
+    this.cpfEditable.set(false);
+    this.rgEditable.set(false);
   }
 
   private replaceNavigationUser(usuario: UserModel): void {
@@ -410,14 +414,55 @@ export class UserEdit implements OnDestroy {
     });
   }
 
-  private setRgValidators(ehCin: boolean): void {
+  private setRgValidators(): void {
     const rg = this.form.controls.rg;
-    rg.setValidators(
-      ehCin
-        ? [Validators.maxLength(20), Validators.pattern(/\d/)]
-        : [Validators.required, Validators.maxLength(20), Validators.pattern(/\d/)],
-    );
+    rg.setValidators([Validators.maxLength(20), Validators.pattern(/\d/)]);
     rg.updateValueAndValidity({ emitEvent: false });
+  }
+
+  private documentosObrigatoriosVazios(
+    usuario: UserModel,
+    values: ReturnType<typeof this.form.getRawValue>,
+  ): Array<'cpf' | 'rg'> {
+    const campos: Array<'cpf' | 'rg'> = [];
+    if (!onlyDigits(values.cpf)) {
+      campos.push('cpf');
+    }
+    if (!(usuario.ehCin ?? false) && !values.rg.trim()) {
+      campos.push('rg');
+    }
+    return campos;
+  }
+
+  private confirmarDocumentosVazios(campos: Array<'cpf' | 'rg'>): void {
+    const nomes = campos.map(campo => campo.toUpperCase());
+    const textoCampos = nomes.length === 2 ? 'CPF e RG' : nomes[0];
+    this.toast.warning(
+      `${textoCampos} ${nomes.length === 1 ? 'está' : 'estão'} vazio${nomes.length === 1 ? '' : 's'}.`,
+      {
+        duration: 0,
+        position: 'bottom-center',
+        actions: [
+          {
+            label: `Editar ${textoCampos}`,
+            onClick: () => {
+              if (campos.includes('cpf')) {
+                this.cpfEditable.set(true);
+                this.form.controls.cpf.markAsTouched();
+              }
+              if (campos.includes('rg')) {
+                this.rgEditable.set(true);
+                this.form.controls.rg.markAsTouched();
+              }
+            },
+          },
+          {
+            label: 'Manter assim',
+            onClick: () => this.salvarAlteracoes(true),
+          },
+        ],
+      },
+    );
   }
 
   private setCepValidators(hasExistingCep: boolean): void {
@@ -446,6 +491,7 @@ export class UserEdit implements OnDestroy {
       onlyDigits(values.telefone) !== onlyDigits(usuario.telefone) ||
       this.changed(values.tipoSanguineo, usuario.tipoSanguineo ?? '') ||
       this.changed(values.doencasAlergias, usuario.doencasAlergias ?? '') ||
+      this.responsibleDataChanged(usuario, values) ||
       this.addressChanged(usuario, values)
     );
   }
@@ -459,9 +505,12 @@ export class UserEdit implements OnDestroy {
       nome: values.nome.trim(),
       email: usuario.email,
       cargoId: usuario.cargo?.id ?? usuario.cargoId!,
-      cpf: values.cpf.trim(),
-      ehCin,
-      ...(!ehCin ? { rg: values.rg.trim() } : {}),
+      ...(onlyDigits(values.cpf) !== onlyDigits(usuario.cpf)
+        ? { cpf: values.cpf.trim() }
+        : {}),
+      ...(!ehCin && this.changed(values.rg, usuario.rg ?? '')
+        ? { rg: values.rg.trim() }
+        : {}),
       ...(this.changed(values.dataNascimento, apiDateToForm(usuario.dataNascimento))
         ? { dataNascimento: formDateToApi(values.dataNascimento) }
         : {}),
@@ -473,6 +522,15 @@ export class UserEdit implements OnDestroy {
         : {}),
       ...(this.changed(values.doencasAlergias, usuario.doencasAlergias ?? '')
         ? { doencasAlergias: values.doencasAlergias.trim() || null }
+        : {}),
+      ...(this.changed(values.responsavelNome, usuario.responsavelNome)
+        ? { responsavelNome: values.responsavelNome.trim() || null }
+        : {}),
+      ...(onlyDigits(values.responsavelTelefone) !== onlyDigits(usuario.responsavelTelefone)
+        ? { responsavelTelefone: values.responsavelTelefone.trim() || null }
+        : {}),
+      ...(this.changed(values.responsavelEmail, usuario.responsavelEmail)
+        ? { responsavelEmail: values.responsavelEmail.trim() || null }
         : {}),
       ...(this.addressChanged(usuario, values)
         ? {
@@ -543,11 +601,9 @@ export class UserEdit implements OnDestroy {
     usuario: UserModel,
     values: ReturnType<typeof this.form.getRawValue>,
   ): boolean {
-    return (
-      this.changed(values.responsavelNome, usuario.responsavelNome) ||
+    return this.changed(values.responsavelNome, usuario.responsavelNome) ||
       onlyDigits(values.responsavelTelefone) !== onlyDigits(usuario.responsavelTelefone) ||
-      this.changed(values.responsavelEmail, usuario.responsavelEmail)
-    );
+      this.changed(values.responsavelEmail, usuario.responsavelEmail);
   }
 
   private changed(value: string, original: string | null | undefined): boolean {
@@ -685,7 +741,7 @@ export class UserEdit implements OnDestroy {
 
   private validationMessage(): string {
     const controls = this.form.controls;
-    if (controls.cpf.hasError('required') || controls.cpf.hasError('cpfInvalid')) {
+    if (controls.cpf.hasError('cpfInvalid')) {
       return 'Informe um CPF válido; o CPF cadastrado não pode ser removido.';
     }
     if (controls.rg.invalid && !(this.usuario()?.ehCin ?? false)) {

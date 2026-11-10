@@ -123,7 +123,10 @@ export interface UpdateUserRequest {
   dataNascimento?: string | null;
   telefone?: string | null;
   rg?: string | null;
-  ehCin: boolean;
+  ehCin?: boolean;
+  responsavelNome?: string | null;
+  responsavelEmail?: string | null;
+  responsavelTelefone?: string | null;
   tipoSanguineo?: string | null;
   doencasAlergias?: string | null;
   endereco?: UserAddressUpdate;
@@ -135,7 +138,7 @@ export interface UpdateMyProfileRequest {
   dataNascimento?: string | null;
   telefone?: string | null;
   rg?: string | null;
-  ehCin: boolean;
+  ehCin?: boolean;
   tipoSanguineo?: string | null;
   doencasAlergias?: string | null;
   endereco?: UserAddressUpdate;

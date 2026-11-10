@@ -17,12 +17,19 @@ export interface ToastOptions {
   position?: ToastPosition;
   backgroundColor?: string;
   textColor?: string;
+  actions?: ToastAction[];
+}
+
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
 }
 
 export interface ToastRecord extends Required<Pick<ToastOptions, 'message' | 'type' | 'duration' | 'position'>> {
   id: string;
   backgroundColor?: string;
   textColor?: string;
+  actions?: ToastAction[];
 }
 
 const DEFAULT_DURATIONS: Record<ToastType, number> = {
@@ -65,6 +72,7 @@ export class ToastService {
       position: options.position ?? 'top-center',
       backgroundColor: options.backgroundColor,
       textColor: options.textColor,
+      actions: options.actions,
     };
 
     const visible = this.toasts().filter(item => item.position === toast.position);

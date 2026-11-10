@@ -131,6 +131,91 @@ describe('UserEdit', () => {
     expect(service.atualizarUsuario).not.toHaveBeenCalled();
   });
 
+  it('oferece editar ou manter CPF e RG ausentes e ativa somente os campos faltantes', async () => {
+    await createComponent({
+      usuario: { ...usuario, cpf: null, rg: null },
+    });
+    const component = fixture.componentInstance;
+    const page = fixture.nativeElement as HTMLElement;
+
+    expect(page.querySelector<HTMLInputElement>('[formcontrolname="cpf"] input')?.disabled).toBe(true);
+    expect(page.querySelector<HTMLInputElement>('[formcontrolname="rg"] input')?.disabled).toBe(true);
+    component.form.controls.telefone.setValue('(21) 98888-7777');
+    component.salvar();
+
+    const toast = TestBed.inject(ToastService).toasts().find(record => record.type === 'warning');
+    expect(toast?.message).toContain('CPF e RG');
+    expect(toast?.position).toBe('bottom-center');
+    expect(toast?.duration).toBe(0);
+    expect(toast?.actions?.map(action => action.label)).toEqual([
+      'Editar CPF e RG',
+      'Manter assim',
+    ]);
+
+    toast?.actions?.[0].onClick();
+    fixture.detectChanges();
+    expect(page.querySelector<HTMLInputElement>('[formcontrolname="cpf"] input')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('[formcontrolname="rg"] input')?.disabled).toBe(false);
+  });
+
+  it('mantém documentos vazios e salva os demais dados sem enviá-los', async () => {
+    await createComponent({
+      usuario: { ...usuario, cpf: null, rg: null },
+    });
+    const component = fixture.componentInstance;
+    component.form.controls.telefone.setValue('(21) 98888-7777');
+    component.salvar();
+
+    const actions = TestBed.inject(ToastService).toasts().find(record => record.type === 'warning')?.actions;
+    actions?.[1].onClick();
+
+    expect(service.atualizarUsuario).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ telefone: '(21) 98888-7777' }),
+    );
+    const payload = service.atualizarUsuario.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('cpf');
+    expect(payload).not.toHaveProperty('rg');
+    expect(payload).not.toHaveProperty('ehCin');
+    expect(component.successMessage()).toContain('atualizados com sucesso');
+  });
+
+  it('permite editar CPF ausente sem exigir RG para usuário com CIN', async () => {
+    await createComponent({
+      usuario: { ...usuario, cpf: null, rg: null, ehCin: true },
+    });
+    const component = fixture.componentInstance;
+    component.salvar();
+
+    const actions = TestBed.inject(ToastService).toasts().find(record => record.type === 'warning')?.actions;
+    expect(actions?.map(action => action.label)).toEqual(['Editar CPF', 'Manter assim']);
+    actions?.[0].onClick();
+    fixture.detectChanges();
+
+    expect(component.cpfEditable()).toBe(true);
+    expect(component.rgEditable()).toBe(false);
+  });
+
+  it('envia CPF e RG preenchidos após escolher editá-los', async () => {
+    await createComponent({
+      usuario: { ...usuario, cpf: null, rg: null },
+    });
+    const component = fixture.componentInstance;
+    component.salvar();
+    const actions = TestBed.inject(ToastService).toasts().find(record => record.type === 'warning')?.actions;
+    actions?.[0].onClick();
+
+    component.form.controls.cpf.setValue('52998224725');
+    component.form.controls.rg.setValue('987654321');
+    component.salvar();
+
+    expect(service.atualizarUsuario).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ cpf: '52998224725', rg: '987654321' }),
+    );
+    expect(service.atualizarUsuario.mock.calls[0][1]).not.toHaveProperty('ehCin');
+  });
+
   it('não atualiza o avatar da sessão ao salvar a foto de outra pessoa', async () => {
     await createComponent();
     const auth = TestBed.inject(AuthService);
@@ -292,6 +377,12 @@ describe('UserEdit', () => {
     expect(component.form.controls.responsavelNome.value).toBe('Maria Silva');
     expect(component.form.controls.responsavelTelefone.value).toBe('11988887777');
     expect(component.form.controls.responsavelEmail.value).toBe('maria@example.com');
+    expect(page.querySelector<HTMLInputElement>('.responsible-card [formcontrolname="responsavelNome"] input')?.value)
+      .toBe('Maria Silva');
+    expect(page.querySelector<HTMLInputElement>('.responsible-card [formcontrolname="responsavelTelefone"] input')?.value)
+      .toBe('(11) 98888-7777');
+    expect(page.querySelector<HTMLInputElement>('.responsible-card [formcontrolname="responsavelEmail"] input')?.value)
+      .toBe('maria@example.com');
     expect(component.form.controls.tipoSanguineo.value).toBe('O+');
     expect(component.form.controls.doencasAlergias.value).toBe('Alergia a amendoim');
     expect(component.form.controls.cep.value).toBe('01001000');
@@ -370,7 +461,7 @@ describe('UserEdit', () => {
     expect(component.errorMessage()).toContain('e-mail válido');
   });
 
-  it('não declara salvo dado do responsável alterado enquanto o contrato da API não for confirmado', async () => {
+  it('salva somente os dados do responsável que foram alterados', async () => {
     await createComponent();
     const component = fixture.componentInstance;
     component.enableResponsibleInfoEditing();
@@ -378,10 +469,15 @@ describe('UserEdit', () => {
 
     component.salvar();
 
-    expect(service.atualizarUsuario).not.toHaveBeenCalled();
-    expect(component.form.controls.responsavelTelefone.value).toBe('(21) 98888-7777');
-    expect(component.errorMessage()).toContain('API disponível não confirma');
-    expect(component.responsibleInfoInactive()).toBe(false);
+    expect(service.atualizarUsuario).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ responsavelTelefone: '(21) 98888-7777' }),
+    );
+    const payload = service.atualizarUsuario.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('responsavelNome');
+    expect(payload).not.toHaveProperty('responsavelEmail');
+    expect(payload).not.toHaveProperty('responsavelCpf');
+    expect(component.successMessage()).toContain('atualizados com sucesso');
   });
 
   it('cancela a consulta anterior e só preenche o endereço do CEP atual', async () => {
@@ -521,9 +617,6 @@ describe('UserEdit', () => {
         nome: 'Ana Silva',
         email: 'ana@example.com',
         cargoId: 'cargo-1',
-        cpf: '52998224725',
-        ehCin: false,
-        rg: '123456789',
         telefone: '(21) 98765-4321',
         doencasAlergias: null,
       }),
@@ -533,6 +626,9 @@ describe('UserEdit', () => {
     expect(payload).not.toHaveProperty('dataExpiracao');
     expect(payload).not.toHaveProperty('responsavelNome');
     expect(payload).not.toHaveProperty('endereco');
+    expect(payload).not.toHaveProperty('cpf');
+    expect(payload).not.toHaveProperty('rg');
+    expect(payload).not.toHaveProperty('ehCin');
     expect(component.successMessage()).toContain('atualizados com sucesso');
     expect(toast.toasts().find(record => record.type === 'success')).toMatchObject({
       message: 'Os dados do usuário foram atualizados com sucesso.',
@@ -575,12 +671,12 @@ describe('UserEdit', () => {
     expect(service.atualizarUsuario).toHaveBeenCalledWith(
       'user-1',
       expect.objectContaining({
-        ehCin: true,
         dataNascimento: '2005-04-15',
         telefone: '(11) 91234-5678',
       }),
     );
     expect(service.atualizarUsuario.mock.calls[0][1]).not.toHaveProperty('rg');
+    expect(service.atualizarUsuario.mock.calls[0][1]).not.toHaveProperty('ehCin');
     expect(component.form.controls.dataNascimento.value).toBe('15/04/2005');
     expect(component.form.controls.telefone.value).toBe('(11) 91234-5678');
   });

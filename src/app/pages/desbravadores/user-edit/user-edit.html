@@ -99,7 +99,7 @@
             placeholder="000.000.000-00"
             mask="cpf"
             [compact]="true"
-            [inactive]="true"
+            [inactive]="!cpfEditable() || saving()"
             formControlName="cpf"
           ></app-primary-input>
           <app-primary-input
@@ -107,7 +107,7 @@
             placeholder="00.000.000-0"
             mask="rg"
             [compact]="true"
-            [inactive]="personalInfoInactive() || saving() || (usuario()?.ehCin ?? false)"
+            [inactive]="!rgEditable() || saving() || (usuario()?.ehCin ?? false)"
             formControlName="rg"
           ></app-primary-input>
           <app-primary-input
@@ -159,10 +159,6 @@
       <section class="info-card responsible-card" aria-labelledby="responsible-title">
         <h2 id="responsible-title">Dados do responsável</h2>
         <div class="card-fields">
-          <p class="api-contract-note">
-            A gravação desses dados depende da confirmação do contrato da API. Eles não serão enviados
-            até essa confirmação.
-          </p>
           <app-primary-input
             label="Nome do responsável"
             [compact]="true"

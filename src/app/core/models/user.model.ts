@@ -131,7 +131,7 @@ export interface UpdateUserRequest {
 
 /** Corpo de `PUT /api/Me`; propriedades ausentes preservam os valores armazenados. */
 export interface UpdateMyProfileRequest {
-  cpf?: string;
+  nome?: string;
   dataNascimento?: string | null;
   telefone?: string | null;
   rg?: string | null;

@@ -71,8 +71,9 @@
             label="RG"
             placeholder="00.000.000-0"
             type="text"
+            mask="rg"
             formControlName="rg"
-            [style.--primary-input-background]="form.controls.ehCin.value ? '#f1f2f5' : null"
+            [style.--primary-input-background]="form.controls.ehCin.value ? '#D9D9D9' : null"
             [invalid]="!!fieldError('rg')"
             describedBy="user-register-rg-error"
           ></app-primary-input>
@@ -205,11 +206,11 @@
             <div class="password-policy" id="user-register-senha-policy">
               <strong>A senha deve:</strong>
               <ul>
-                <li>ter entre {{ senhaMinimo }} e {{ senhaMaximo }} caracteres;</li>
-                <li>não ser formada por um ou dois caracteres repetidos;</li>
-                <li>não ser uma sequência simples (ex.: 123456789012, abcdefghijkl);</li>
-                <li>não ser trivial ou muito comum (ex.: "senha", "admin", "desbravador");</li>
-                <li>não conter o e-mail do usuário.</li>
+                <li>8 a 15 caracteres;</li>
+                <li>mínimo 1 caractere especial (ex.: # ou @);</li>
+                <li>mínimo um número;</li>
+                <li>mínimo uma letra maiúscula;</li>
+                <li>não ser uma sequência simples (ex.: "1234", "abcd").</li>
               </ul>
             </div>
           }

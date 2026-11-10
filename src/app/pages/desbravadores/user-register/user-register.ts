@@ -132,8 +132,8 @@ export class UserRegister implements OnInit, OnDestroy {
         '',
         [
           Validators.required,
-          Validators.maxLength(20),
-          Validators.pattern(/^(?=.*[A-Za-z0-9])[A-Za-z0-9.-]+$/),
+          Validators.maxLength(12),
+          Validators.pattern(/^(?:\d{9}|\d{2}\.\d{3}\.\d{3}-\d)$/),
         ],
       ],
       dataNascimento: [
@@ -251,6 +251,7 @@ export class UserRegister implements OnInit, OnDestroy {
     this.errorMessage.set('');
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.toast.error('Verifique os campos destacados.');
       return;
     }
 
@@ -366,7 +367,7 @@ export class UserRegister implements OnInit, OnDestroy {
       return 'Digite um CPF válido.';
     }
     if (name === 'rg' && control.hasError('pattern')) {
-      return 'Use letras ASCII, números, pontos ou hífens no RG.';
+      return 'Informe um RG completo no formato 00.000.000-0.';
     }
     if (name === 'dataNascimento' && control.hasError('dateInvalid')) {
       return 'Informe uma data válida no formato dd/mm/aaaa.';
@@ -598,8 +599,8 @@ export class UserRegister implements OnInit, OnDestroy {
     } else {
       rg.setValidators([
         Validators.required,
-        Validators.maxLength(20),
-        Validators.pattern(/^(?=.*[A-Za-z0-9])[A-Za-z0-9.-]+$/),
+        Validators.maxLength(12),
+        Validators.pattern(/^(?:\d{9}|\d{2}\.\d{3}\.\d{3}-\d)$/),
       ]);
       if (!this.form.disabled) {
         rg.enable({ emitEvent: false });

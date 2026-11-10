@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 import { Notificacao } from '../../../core/models/notificacao.model';
 import { AuthService } from '../../../core/services/auth';
 import { NotificacoesService } from '../../../core/services/notificacoes';
+import { UserAvatarService } from '../../../core/services/user-avatar.service';
 
 @Component({
   selector: 'app-topbar',
@@ -19,6 +20,7 @@ export class TopbarComponent {
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
   private readonly notificacoesService = inject(NotificacoesService);
+  readonly userAvatar = inject(UserAvatarService);
   private readonly datePipe = inject(DatePipe);
   private readonly readingIds = new Set<string>();
 
@@ -41,9 +43,13 @@ export class TopbarComponent {
     return {
       name: user?.nome ?? 'Usuário',
       role: user?.cargo?.nome ?? '',
-      avatar: '/icons/user-icon2.svg',
+      avatar: this.userAvatar.avatarUrl(),
     };
   });
+
+  onAvatarError(event: Event): void {
+    this.userAvatar.onImageError(event);
+  }
 
   onSearch(event: Event) {
     const target = event.target as HTMLInputElement;

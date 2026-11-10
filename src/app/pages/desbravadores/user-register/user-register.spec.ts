@@ -302,22 +302,37 @@ describe('UserRegister', () => {
       .toContain('10 ou 11 dígitos');
   });
 
-  it('aceita RG alfanumérico até o limite do contrato e envia o valor informado', async () => {
-    service.criarUsuario.mockReturnValue(of({ ...usuario, id: 'novo' }));
+  it('aplica a máscara de RG e mantém o valor formatado no formulário', async () => {
     await setup();
-    const rg = 'AB-12345678901234567';
+    const input = host.querySelector<HTMLInputElement>(
+      'app-primary-input[formcontrolname="rg"] input',
+    )!;
+    input.value = '12a3456789';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(input.value).toBe('12.345.678-9');
+    expect(component.form.controls.rg.value).toBe('12.345.678-9');
+  });
+
+  it('rejeita RG incompleto e exibe a validação no toast', async () => {
+    await setup();
     preencher({
       nome: 'Ana Souza',
       email: 'ana@example.com',
       senha: SENHA_VALIDA,
       confirmarSenha: SENHA_VALIDA,
       cargoId: 'c-sec',
-      rg,
+      rg: '12.345.678',
     });
 
     clicarSalvar();
 
-    expect(service.criarUsuario).toHaveBeenCalledWith(expect.objectContaining({ rg }));
+    expect(service.criarUsuario).not.toHaveBeenCalled();
+    expect(host.querySelector('#user-register-rg-error')?.textContent)
+      .toContain('RG completo no formato 00.000.000-0.');
+    expect(TestBed.inject(ToastService).toasts().find(record => record.type === 'error'))
+      .toMatchObject({ message: 'Verifique os campos destacados.' });
   });
 
   it('cria o usuário antes do upload e permite reenviar somente a foto após falha', async () => {

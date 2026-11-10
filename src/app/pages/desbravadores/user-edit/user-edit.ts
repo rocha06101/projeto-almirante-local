@@ -1,12 +1,38 @@
 import { CommonModule, Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, OnDestroy, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  Injector,
+  OnDestroy,
+  afterNextRender,
+  computed,
+  inject,
+  runInInjectionContext,
+  signal,
+} from '@angular/core';
 import { AbstractControl, FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
-import { catchError, distinctUntilChanged, finalize, map, of, switchMap, take, timer } from 'rxjs';
+import {
+  EMPTY,
+  catchError,
+  concatMap,
+  distinctUntilChanged,
+  finalize,
+  map,
+  merge,
+  of,
+  switchMap,
+  take,
+  tap,
+  timer,
+  Subject,
+} from 'rxjs';
 import { User as UserModel } from '../../../core/models/user.model';
+import { AuthService } from '../../../core/services/auth';
 import { User as UserService } from '../../../core/services/user';
+import { UserAvatarService } from '../../../core/services/user-avatar.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { PasswordChangeModal } from '../../../shared/components/password-change-modal/password-change-modal';
 import { PrimaryInput } from '../../../shared/components/primary-input/primary-input';
@@ -30,6 +56,13 @@ const isValidSelectedUser = (value: UserModel | undefined): value is UserModel =
   typeof (value.cargo?.id ?? value.cargoId) === 'string' &&
   !!(value.cargo?.id ?? value.cargoId)?.trim();
 
+type CepFeedbackStatus = 'neutral' | 'loading' | 'success' | 'error';
+
+interface CepFeedback {
+  status: CepFeedbackStatus;
+  message: string;
+}
+
 @Component({
   selector: 'app-user-edit',
   standalone: true,
@@ -50,12 +83,17 @@ export class UserEdit implements OnDestroy {
   private readonly location = inject(Location);
   private readonly fb = inject(FormBuilder);
   private readonly userService = inject(UserService);
+  private readonly auth = inject(AuthService);
+  private readonly userAvatar = inject(UserAvatarService);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
 
   readonly usuario = signal<UserModel | null>(null);
   readonly isLoaded = signal(false);
   readonly personalInfoInactive = signal(true);
+  readonly responsibleInfoInactive = signal(true);
+  readonly addressInfoInactive = signal(true);
   readonly passwordModalOpen = signal(false);
   readonly saving = signal(false);
   readonly redirecting = signal(false);
@@ -63,16 +101,17 @@ export class UserEdit implements OnDestroy {
   readonly photoLoading = signal(false);
   readonly errorMessage = signal('');
   readonly successMessage = signal('');
-  readonly cepLoading = signal(false);
-  readonly cepFeedback = signal('');
+  readonly cepFeedback = signal<CepFeedback>({ status: 'neutral', message: '' });
   readonly fotoAtual = signal<string | null>(null);
+  readonly pendingPhoto = signal<File | null>(null);
+  readonly hasPendingPhoto = computed(() => this.pendingPhoto() !== null);
+  private readonly cepRetry$ = new Subject<string>();
+  private readonly cepReset$ = new Subject<void>();
   private fotoObjectUrl: string | null = null;
   private pendingPhotoObjectUrl: string | null = null;
+  private readonly retiredPhotoObjectUrls = new Set<string>();
 
-  readonly nomeResumo = new FormControl('', { nonNullable: true });
-  readonly emailResumo = new FormControl('', { nonNullable: true });
   readonly cargoResumo = new FormControl('', { nonNullable: true });
-  readonly emailCredenciais = new FormControl('', { nonNullable: true });
 
   readonly form = this.fb.nonNullable.group({
     nome: ['', [Validators.required, Validators.maxLength(200)]],
@@ -80,6 +119,9 @@ export class UserEdit implements OnDestroy {
     rg: ['', [Validators.maxLength(20), Validators.pattern(/\d/)]],
     dataNascimento: ['', [Validators.maxLength(10), (control: AbstractControl) =>
       isValidFormDate(String(control.value ?? '')) ? null : { dateInvalid: true }]],
+    responsavelNome: [''],
+    responsavelTelefone: [''],
+    responsavelEmail: ['', Validators.email],
     telefone: [''],
     tipoSanguineo: [''],
     doencasAlergias: ['', Validators.maxLength(2000)],
@@ -90,6 +132,8 @@ export class UserEdit implements OnDestroy {
     complemento: [''],
   });
 
+  readonly nomeResumo = this.form.controls.nome;
+  readonly emailResumo = new FormControl('', { nonNullable: true });
   readonly tipoSanguineoOptions = [
     { label: 'A+', value: 'A+' },
     { label: 'A-', value: 'A-' },
@@ -123,8 +167,24 @@ export class UserEdit implements OnDestroy {
   }
 
   enablePersonalInfoEditing(): void {
-    if (this.isLoaded() && !this.saving()) {
+    if (this.canEditSection()) {
       this.personalInfoInactive.set(false);
+      this.errorMessage.set('');
+      this.successMessage.set('');
+    }
+  }
+
+  enableResponsibleInfoEditing(): void {
+    if (this.canEditSection()) {
+      this.responsibleInfoInactive.set(false);
+      this.errorMessage.set('');
+      this.successMessage.set('');
+    }
+  }
+
+  enableAddressEditing(): void {
+    if (this.canEditSection()) {
+      this.addressInfoInactive.set(false);
       this.errorMessage.set('');
       this.successMessage.set('');
     }
@@ -138,84 +198,106 @@ export class UserEdit implements OnDestroy {
 
     this.errorMessage.set('');
     this.successMessage.set('');
-    if (this.form.invalid) {
+    const values = this.form.getRawValue();
+    const hasDataChanges = this.hasDataChanges(usuario, values);
+    const hasResponsibleChanges = this.responsibleDataChanged(usuario, values);
+    const pendingPhoto = this.pendingPhoto();
+    if (pendingPhoto && !this.isValidPhotoFile(pendingPhoto)) {
+      const message = 'Selecione uma foto JPEG, PNG ou WebP de até 10 MB.';
+      this.errorMessage.set(message);
+      this.toast.error(message);
+      return;
+    }
+    if ((hasDataChanges || hasResponsibleChanges) && this.form.invalid) {
       this.form.markAllAsTouched();
-      this.errorMessage.set(this.validationMessage());
+      const message = this.validationMessage();
+      this.errorMessage.set(message);
+      this.toast.error(message);
       return;
     }
 
-    const values = this.form.getRawValue();
-    if (this.addressChanged(usuario, values) && this.addressNeedsCep(values)) {
-      this.form.controls.cep.markAsTouched();
-      this.errorMessage.set('Informe um CEP válido antes de atualizar o endereço.');
+    if (hasResponsibleChanges) {
+      const message =
+        'Os dados do responsável foram alterados, mas a API disponível não confirma que esses campos possam ser salvos. Nenhuma alteração foi enviada.';
+      this.errorMessage.set(message);
+      this.toast.error(message);
       return;
     }
-    const hasChanges = this.hasChanges(usuario, values);
-    if (!hasChanges) {
-      this.personalInfoInactive.set(true);
+
+    if (hasDataChanges && this.addressChanged(usuario, values) && this.addressNeedsCep(values)) {
+      this.form.controls.cep.markAsTouched();
+      const message = 'Informe um CEP válido antes de atualizar o endereço.';
+      this.errorMessage.set(message);
+      this.toast.error(message);
+      return;
+    }
+    if (!hasDataChanges && !pendingPhoto) {
+      this.setSectionsInactive();
       this.form.markAsPristine();
       this.toast.error('Nenhuma alteração foi feita. Edite alguma informação antes de salvar.');
       return;
     }
 
-    const ehCin = usuario.ehCin ?? false;
-    const payload = {
-      nome: values.nome.trim(),
-      email: usuario.email,
-      cargoId: usuario.cargo?.id ?? usuario.cargoId!,
-      cpf: values.cpf.trim(),
-      ehCin,
-      ...(!ehCin ? { rg: values.rg.trim() } : {}),
-      ...(this.changed(values.dataNascimento, apiDateToForm(usuario.dataNascimento))
-        ? { dataNascimento: formDateToApi(values.dataNascimento) }
-        : {}),
-      ...(this.changed(values.telefone, usuario.telefone ?? '')
-        ? { telefone: values.telefone.trim() || null }
-        : {}),
-      ...(this.changed(values.tipoSanguineo, usuario.tipoSanguineo ?? '')
-        ? { tipoSanguineo: values.tipoSanguineo || null }
-        : {}),
-      ...(this.changed(values.doencasAlergias, usuario.doencasAlergias ?? '')
-        ? { doencasAlergias: values.doencasAlergias.trim() || null }
-        : {}),
-      ...(this.addressChanged(usuario, values)
-        ? {
-            endereco: {
-              ...(onlyDigits(values.cep) ? { cep: onlyDigits(values.cep) } : {}),
-              numero: values.numero.trim() || null,
-              complemento: values.complemento.trim() || null,
-            },
-          }
-        : {}),
-    };
-
+    const payload = hasDataChanges ? this.createUserPayload(usuario, values) : null;
+    let dataWasSaved = false;
+    let photoUploadStarted = false;
     this.saving.set(true);
-    this.userService
-      .atualizarUsuario(usuario.id, payload)
+    const dataSave$ = payload
+      ? this.userService.atualizarUsuario(usuario.id, payload).pipe(
+          take(1),
+          tap(updated => {
+            dataWasSaved = true;
+            this.commitUsuario(updated);
+          }),
+        )
+      : of(usuario);
+
+    dataSave$
       .pipe(
-        take(1),
-        finalize(() => this.saving.set(false)),
+        concatMap(() => {
+          if (!pendingPhoto) {
+            return of(null);
+          }
+          photoUploadStarted = true;
+          this.photoSaving.set(true);
+          return this.userService.enviarFoto(usuario.id, pendingPhoto).pipe(
+            take(1),
+            tap(updated => {
+              this.commitUsuario(updated);
+              this.commitPendingPhoto();
+              if (this.auth.user()?.id === updated.id) {
+                this.userAvatar.reloadCurrentUserPhoto();
+              }
+            }),
+          );
+        }),
+        catchError((error: unknown) => {
+          if (photoUploadStarted && dataWasSaved) {
+            const message =
+              'Os dados foram salvos, mas a foto não pôde ser enviada. Clique em Salvar para tentar novamente.';
+            this.errorMessage.set(message);
+            this.toast.error(message);
+          } else if (photoUploadStarted) {
+            const message = describeUsuarioError(error, 'Não foi possível enviar a foto.');
+            this.errorMessage.set(message);
+            this.toast.error(message);
+          } else {
+            this.handleSaveError(error);
+          }
+          return EMPTY;
+        }),
+        finalize(() => {
+          this.photoSaving.set(false);
+          this.saving.set(false);
+        }),
       )
       .subscribe({
-        next: updated => {
-          this.usuario.set(updated);
-          this.replaceNavigationUser(updated);
-          this.patchUsuario(updated);
-          this.form.markAsPristine();
-          this.personalInfoInactive.set(true);
-          this.successMessage.set('Os dados do usuário foram atualizados com sucesso.');
-          this.redirecting.set(true);
-          this.toast.success('Os dados do usuário foram atualizados com sucesso.', { duration: 2000 });
-          timer(2000)
-            .pipe(takeUntilDestroyed(this.destroyRef))
-            .subscribe(() => void this.router.navigate(['/desbravadores']));
-        },
-        error: error => this.handleSaveError(error),
+        next: () => this.finishSaveSuccess(),
       });
   }
 
   openPasswordModal(): void {
-    if (this.isLoaded()) {
+    if (this.canEditSection()) {
       this.passwordModalOpen.set(true);
     }
   }
@@ -233,59 +315,52 @@ export class UserEdit implements OnDestroy {
   }
 
   selecionarFoto(event: Event): void {
-    const file = (event.target as HTMLInputElement).files?.[0];
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
     const usuario = this.usuario();
-    if (!file || !usuario || this.photoSaving() || this.photoLoading()) {
+    if (!file || !usuario || this.saving() || this.photoLoading()) {
       return;
     }
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) {
-      this.errorMessage.set('Selecione uma foto JPEG, PNG ou WebP de até 10 MB.');
-      (event.target as HTMLInputElement).value = '';
+    if (!this.isValidPhotoFile(file)) {
+      const message = 'Selecione uma foto JPEG, PNG ou WebP de até 10 MB.';
+      this.errorMessage.set(message);
+      this.toast.error(message);
       return;
     }
 
+    let previewUrl: string;
+    try {
+      previewUrl = URL.createObjectURL(file);
+    } catch {
+      const message = 'Não foi possível preparar a prévia da foto. Tente novamente.';
+      this.errorMessage.set(message);
+      this.toast.error(message);
+      return;
+    }
     this.errorMessage.set('');
-    const previousPhoto = this.fotoAtual();
-    this.revokePendingPhoto();
-    this.pendingPhotoObjectUrl = URL.createObjectURL(file);
+    const previousPreviewUrl = this.pendingPhotoObjectUrl;
+    this.pendingPhotoObjectUrl = previewUrl;
+    this.pendingPhoto.set(file);
     this.fotoAtual.set(this.pendingPhotoObjectUrl);
-    this.photoSaving.set(true);
-    this.userService
-      .enviarFoto(usuario.id, file)
-      .pipe(
-        take(1),
-        finalize(() => this.photoSaving.set(false)),
-      )
-      .subscribe({
-        next: updated => {
-          this.usuario.set(updated);
-          this.replaceNavigationUser(updated);
-          this.revokeCurrentPhoto();
-          this.fotoAtual.set(this.pendingPhotoObjectUrl);
-          this.fotoObjectUrl = this.pendingPhotoObjectUrl;
-          this.pendingPhotoObjectUrl = null;
-        },
-        error: error => {
-          this.revokePendingPhoto();
-          this.fotoAtual.set(previousPhoto);
-          const message = describeUsuarioError(error, 'Não foi possível enviar a foto.');
-          this.errorMessage.set(message);
-          this.toast.error(message);
-        },
-      });
-    (event.target as HTMLInputElement).value = '';
+    this.retirePhotoObjectUrl(previousPreviewUrl);
   }
 
   cancel(): void {
-    if (this.redirecting()) {
+    if (this.saving() || this.redirecting()) {
       return;
     }
+    this.discardPendingPhoto();
     void this.router.navigate(['/desbravadores']);
   }
 
   ngOnDestroy(): void {
     this.revokeCurrentPhoto();
     this.revokePendingPhoto();
+    for (const url of this.retiredPhotoObjectUrls) {
+      URL.revokeObjectURL(url);
+    }
+    this.retiredPhotoObjectUrls.clear();
   }
 
   private patchUsuario(usuario: UserModel): void {
@@ -297,6 +372,9 @@ export class UserEdit implements OnDestroy {
         cpf: usuario.cpf ?? '',
         rg: usuario.rg ?? '',
         dataNascimento: apiDateToForm(usuario.dataNascimento),
+        responsavelNome: usuario.responsavelNome ?? '',
+        responsavelTelefone: usuario.responsavelTelefone ?? '',
+        responsavelEmail: usuario.responsavelEmail ?? '',
         telefone: usuario.telefone ?? '',
         tipoSanguineo: usuario.tipoSanguineo ?? '',
         doencasAlergias: usuario.doencasAlergias ?? '',
@@ -308,10 +386,20 @@ export class UserEdit implements OnDestroy {
       },
       { emitEvent: false },
     );
+    this.cepReset$.next();
     this.nomeResumo.setValue(usuario.nome ?? '');
     this.emailResumo.setValue(usuario.email ?? '');
-    this.emailCredenciais.setValue(usuario.email ?? '');
     this.cargoResumo.setValue(usuario.cargo?.nome ?? usuario.funcao ?? '');
+  }
+
+  private canEditSection(): boolean {
+    return this.isLoaded() && !this.saving() && !this.redirecting();
+  }
+
+  private setSectionsInactive(): void {
+    this.personalInfoInactive.set(true);
+    this.responsibleInfoInactive.set(true);
+    this.addressInfoInactive.set(true);
   }
 
   private replaceNavigationUser(usuario: UserModel): void {
@@ -341,7 +429,12 @@ export class UserEdit implements OnDestroy {
     cep.updateValueAndValidity({ emitEvent: false });
   }
 
-  private hasChanges(
+  hasUnsavedChanges(): boolean {
+    const usuario = this.usuario();
+    return !!usuario && (this.hasDataChanges(usuario, this.form.getRawValue()) || this.hasPendingPhoto());
+  }
+
+  private hasDataChanges(
     usuario: UserModel,
     values: ReturnType<typeof this.form.getRawValue>,
   ): boolean {
@@ -355,6 +448,76 @@ export class UserEdit implements OnDestroy {
       this.changed(values.doencasAlergias, usuario.doencasAlergias ?? '') ||
       this.addressChanged(usuario, values)
     );
+  }
+
+  private createUserPayload(
+    usuario: UserModel,
+    values: ReturnType<typeof this.form.getRawValue>,
+  ) {
+    const ehCin = usuario.ehCin ?? false;
+    return {
+      nome: values.nome.trim(),
+      email: usuario.email,
+      cargoId: usuario.cargo?.id ?? usuario.cargoId!,
+      cpf: values.cpf.trim(),
+      ehCin,
+      ...(!ehCin ? { rg: values.rg.trim() } : {}),
+      ...(this.changed(values.dataNascimento, apiDateToForm(usuario.dataNascimento))
+        ? { dataNascimento: formDateToApi(values.dataNascimento) }
+        : {}),
+      ...(this.changed(values.telefone, usuario.telefone ?? '')
+        ? { telefone: values.telefone.trim() || null }
+        : {}),
+      ...(this.changed(values.tipoSanguineo, usuario.tipoSanguineo ?? '')
+        ? { tipoSanguineo: values.tipoSanguineo || null }
+        : {}),
+      ...(this.changed(values.doencasAlergias, usuario.doencasAlergias ?? '')
+        ? { doencasAlergias: values.doencasAlergias.trim() || null }
+        : {}),
+      ...(this.addressChanged(usuario, values)
+        ? {
+            endereco: {
+              ...(onlyDigits(values.cep) ? { cep: onlyDigits(values.cep) } : {}),
+              numero: values.numero.trim() || null,
+              complemento: values.complemento.trim() || null,
+            },
+          }
+        : {}),
+    };
+  }
+
+  private commitUsuario(usuario: UserModel): void {
+    this.usuario.set(usuario);
+    this.replaceNavigationUser(usuario);
+    this.patchUsuario(usuario);
+    this.form.markAsPristine();
+    this.setSectionsInactive();
+  }
+
+  private commitPendingPhoto(): void {
+    const confirmedPreview = this.pendingPhotoObjectUrl;
+    this.revokeCurrentPhoto();
+    this.fotoObjectUrl = confirmedPreview;
+    this.pendingPhotoObjectUrl = null;
+    this.pendingPhoto.set(null);
+    this.fotoAtual.set(confirmedPreview);
+  }
+
+  private discardPendingPhoto(): void {
+    const previousPreviewUrl = this.pendingPhotoObjectUrl;
+    this.pendingPhotoObjectUrl = null;
+    this.pendingPhoto.set(null);
+    this.fotoAtual.set(this.fotoObjectUrl);
+    this.retirePhotoObjectUrl(previousPreviewUrl);
+  }
+
+  private finishSaveSuccess(): void {
+    this.successMessage.set('Os dados do usuário foram atualizados com sucesso.');
+    this.redirecting.set(true);
+    this.toast.success('Os dados do usuário foram atualizados com sucesso.', { duration: 2000 });
+    timer(2000)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => void this.router.navigate(['/desbravadores']));
   }
 
   private addressChanged(
@@ -376,30 +539,78 @@ export class UserEdit implements OnDestroy {
     );
   }
 
+  private responsibleDataChanged(
+    usuario: UserModel,
+    values: ReturnType<typeof this.form.getRawValue>,
+  ): boolean {
+    return (
+      this.changed(values.responsavelNome, usuario.responsavelNome) ||
+      onlyDigits(values.responsavelTelefone) !== onlyDigits(usuario.responsavelTelefone) ||
+      this.changed(values.responsavelEmail, usuario.responsavelEmail)
+    );
+  }
+
   private changed(value: string, original: string | null | undefined): boolean {
     return value.trim() !== (original ?? '').trim();
   }
 
+  private isValidPhotoFile(file: File): boolean {
+    return ['image/jpeg', 'image/png', 'image/webp'].includes(file.type) && file.size <= 10 * 1024 * 1024;
+  }
+
   private configureCepLookup(): void {
-    this.form.controls.cep.valueChanges
-      .pipe(
+    merge(
+      this.form.controls.cep.valueChanges.pipe(
         map(cep => onlyDigits(cep)),
         distinctUntilChanged(),
-        switchMap(cep => {
+        map(cep => ({ cep, clearAddress: true })),
+      ),
+      this.cepRetry$.pipe(map(cep => ({ cep, clearAddress: false }))),
+      this.cepReset$.pipe(map(() => null)),
+    )
+      .pipe(
+        switchMap(request => {
+          if (!request) {
+            return of(null);
+          }
+          const { cep, clearAddress } = request;
+          if (clearAddress) {
+            this.form.patchValue({ logradouro: '', bairro: '' }, { emitEvent: false });
+          }
           if (cep.length !== 8) {
-            this.cepLoading.set(false);
-            this.cepFeedback.set('');
+            this.cepFeedback.set({
+              status: 'neutral',
+              message:
+                this.form.controls.cep.dirty || this.form.controls.cep.touched
+                  ? 'Informe os 8 dígitos do CEP.'
+                  : '',
+            });
             return of(null);
           }
 
-          this.cepLoading.set(true);
-          this.cepFeedback.set('Consultando CEP...');
+          this.cepFeedback.set({ status: 'loading', message: 'Buscando endereço...' });
           return this.userService.consultarCep(cep).pipe(
-            map(endereco => ({ endereco, error: null as unknown })),
-            catchError((error: unknown) => of({ endereco: null, error })),
+            map(endereco =>
+              endereco.erro
+                ? {
+                    status: 'error' as const,
+                    message: 'CEP não encontrado. Confira os 8 dígitos.',
+                    endereco: null,
+                  }
+                : { status: 'success' as const, endereco },
+            ),
+            catchError(() =>
+              of({
+                status: 'error' as const,
+                message: 'Não foi possível consultar o CEP. Tente novamente.',
+                endereco: null,
+              }),
+            ),
             finalize(() => {
               if (onlyDigits(this.form.controls.cep.value) === cep) {
-                this.cepLoading.set(false);
+                if (this.cepFeedback().status === 'loading') {
+                  this.cepFeedback.set({ status: 'neutral', message: '' });
+                }
               }
             }),
           );
@@ -410,24 +621,29 @@ export class UserEdit implements OnDestroy {
         if (!result) {
           return;
         }
-        if (result.error) {
-          this.cepFeedback.set(describeUsuarioError(result.error, 'Não foi possível consultar o CEP.'));
-          return;
-        }
-        if (!result.endereco || result.endereco.erro) {
-          this.cepFeedback.set('CEP não encontrado. Confira os 8 dígitos.');
+        if (result.status === 'error') {
+          this.cepFeedback.set({ status: 'error', message: result.message });
           return;
         }
 
         this.form.patchValue(
           {
-            logradouro: result.endereco.logradouro ?? '',
-            bairro: result.endereco.bairro ?? '',
+            logradouro: result.endereco?.logradouro ?? '',
+            bairro: result.endereco?.bairro ?? '',
           },
           { emitEvent: false },
         );
-        this.cepFeedback.set('Endereço preenchido pela consulta de CEP.');
+        this.cepFeedback.set({
+          status: 'success',
+          message: 'Endereço encontrado. Confira os dados e informe o número.',
+        });
       });
+  }
+
+  retryCepLookup(): void {
+    if (this.cepFeedback().status === 'error') {
+      this.cepRetry$.next(onlyDigits(this.form.controls.cep.value));
+    }
   }
 
   private loadPhoto(usuario: UserModel): void {
@@ -484,6 +700,9 @@ export class UserEdit implements OnDestroy {
     if (controls.nome.invalid) {
       return 'Informe um nome com até 200 caracteres.';
     }
+    if (controls.responsavelEmail.invalid) {
+      return 'Informe um e-mail válido para o responsável.';
+    }
     return 'Verifique os campos destacados.';
   }
 
@@ -500,5 +719,20 @@ export class UserEdit implements OnDestroy {
       URL.revokeObjectURL(this.pendingPhotoObjectUrl);
       this.pendingPhotoObjectUrl = null;
     }
+    this.pendingPhoto.set(null);
+  }
+
+  private retirePhotoObjectUrl(url: string | null): void {
+    if (!url) {
+      return;
+    }
+    this.retiredPhotoObjectUrls.add(url);
+    runInInjectionContext(this.injector, () => {
+      afterNextRender(() => {
+        if (this.fotoAtual() !== url && this.retiredPhotoObjectUrls.delete(url)) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    });
   }
 }

@@ -79,7 +79,6 @@ export class MyProfile implements OnInit, OnDestroy {
   readonly user = signal<MyProfileResponse | null>(null);
   readonly isLoading = signal(true);
   readonly isLoaded = signal(false);
-  readonly personalInfoInactive = signal(true);
   readonly passwordModalOpen = signal(false);
   readonly saving = signal(false);
   readonly photoSaving = signal(false);
@@ -141,15 +140,6 @@ export class MyProfile implements OnInit, OnDestroy {
     this.loadProfile();
   }
 
-  enablePersonalInfoEditing(): void {
-    if (!this.isLoaded() || this.saving()) {
-      return;
-    }
-    this.personalInfoInactive.set(false);
-    this.errorMessage.set('');
-    this.successMessage.set('');
-  }
-
   salvar(): void {
     const user = this.user();
     if (!user || !this.isLoaded() || this.saving()) {
@@ -183,7 +173,6 @@ export class MyProfile implements OnInit, OnDestroy {
       return;
     }
     if (!hasDataChanges && !pendingPhoto) {
-      this.personalInfoInactive.set(true);
       this.form.markAsPristine();
       this.toast.error('Nenhuma alteração foi feita. Edite alguma informação antes de salvar.');
       return;
@@ -444,7 +433,6 @@ export class MyProfile implements OnInit, OnDestroy {
     this.setRgValidators(profile.ehCin ?? false);
     this.patchProfile(profile);
     this.form.markAsPristine();
-    this.personalInfoInactive.set(true);
   }
 
   private commitPendingPhoto(): void {

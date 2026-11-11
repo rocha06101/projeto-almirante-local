@@ -162,15 +162,15 @@ describe('UserEdit', () => {
     expect(service.atualizarUsuario).not.toHaveBeenCalled();
   });
 
-  it('oferece editar ou manter CPF e RG ausentes e ativa somente os campos faltantes', async () => {
+  it('deixa editar CPF e RG ausentes e oferece somente manter documentos vazios', async () => {
     await createComponent({
       usuario: { ...usuario, cpf: null, rg: null },
     });
     const component = fixture.componentInstance;
     const page = fixture.nativeElement as HTMLElement;
 
-    expect(page.querySelector<HTMLInputElement>('[formcontrolname="cpf"] input')?.disabled).toBe(true);
-    expect(page.querySelector<HTMLInputElement>('[formcontrolname="rg"] input')?.disabled).toBe(true);
+    expect(page.querySelector<HTMLInputElement>('[formcontrolname="cpf"] input')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('[formcontrolname="rg"] input')?.disabled).toBe(false);
     component.form.controls.telefone.setValue('(21) 98888-7777');
     component.salvar();
 
@@ -178,15 +178,8 @@ describe('UserEdit', () => {
     expect(toast?.message).toContain('CPF e RG');
     expect(toast?.position).toBe('bottom-center');
     expect(toast?.duration).toBe(0);
-    expect(toast?.actions?.map(action => action.label)).toEqual([
-      'Editar CPF e RG',
-      'Manter assim',
-    ]);
-
-    toast?.actions?.[0].onClick();
-    fixture.detectChanges();
-    expect(page.querySelector<HTMLInputElement>('[formcontrolname="cpf"] input')?.disabled).toBe(false);
-    expect(page.querySelector<HTMLInputElement>('[formcontrolname="rg"] input')?.disabled).toBe(false);
+    expect(toast?.actions?.map(action => action.label)).toEqual(['Manter assim']);
+    expect(toast?.actions?.map(action => action.label).join(' ')).not.toContain('Editar');
   });
 
   it('mantém documentos vazios e salva os demais dados sem enviá-los', async () => {
@@ -198,7 +191,7 @@ describe('UserEdit', () => {
     component.salvar();
 
     const actions = TestBed.inject(ToastService).toasts().find(record => record.type === 'warning')?.actions;
-    actions?.[1].onClick();
+    actions?.[0].onClick();
 
     expect(service.atualizarUsuario).toHaveBeenCalledWith(
       'user-1',
@@ -211,7 +204,7 @@ describe('UserEdit', () => {
     expect(component.successMessage()).toContain('atualizados com sucesso');
   });
 
-  it('permite editar CPF ausente sem exigir RG para usuário com CIN', async () => {
+  it('mantém CPF ausente editável e RG bloqueado para usuário com CIN', async () => {
     await createComponent({
       usuario: { ...usuario, cpf: null, rg: null, ehCin: true },
     });
@@ -219,23 +212,21 @@ describe('UserEdit', () => {
     component.salvar();
 
     const actions = TestBed.inject(ToastService).toasts().find(record => record.type === 'warning')?.actions;
-    expect(actions?.map(action => action.label)).toEqual(['Editar CPF', 'Manter assim']);
-    actions?.[0].onClick();
-    fixture.detectChanges();
+    expect(actions?.map(action => action.label)).toEqual(['Manter assim']);
+    expect((fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      '[formcontrolname="cpf"] input',
+    )?.disabled).toBe(false);
+    expect((fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      '[formcontrolname="rg"] input',
+    )?.disabled).toBe(true);
 
-    expect(component.cpfEditable()).toBe(true);
-    expect(component.rgEditable()).toBe(false);
   });
 
-  it('envia CPF e RG preenchidos após escolher editá-los', async () => {
+  it('envia CPF e RG preenchidos quando estavam ausentes no cadastro', async () => {
     await createComponent({
       usuario: { ...usuario, cpf: null, rg: null },
     });
     const component = fixture.componentInstance;
-    component.salvar();
-    const actions = TestBed.inject(ToastService).toasts().find(record => record.type === 'warning')?.actions;
-    actions?.[0].onClick();
-
     component.form.controls.cpf.setValue('52998224725');
     component.form.controls.rg.setValue('987654321');
     component.salvar();
@@ -245,6 +236,22 @@ describe('UserEdit', () => {
       expect.objectContaining({ cpf: '52998224725', rg: '987654321' }),
     );
     expect(service.atualizarUsuario.mock.calls[0][1]).not.toHaveProperty('ehCin');
+  });
+
+  it('ignora alterações programáticas em CPF e RG já cadastrados', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    component.form.controls.cpf.setValue('11144477735');
+    component.form.controls.rg.setValue('987654321');
+
+    expect(component.hasUnsavedChanges()).toBe(false);
+
+    component.form.controls.telefone.setValue('(21) 98888-7777');
+    component.salvar();
+
+    const payload = service.atualizarUsuario.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('cpf');
+    expect(payload).not.toHaveProperty('rg');
   });
 
   it('não atualiza o avatar da sessão ao salvar a foto de outra pessoa', async () => {
@@ -286,7 +293,6 @@ describe('UserEdit', () => {
     input.type = 'file';
     Object.defineProperty(input, 'files', { value: [file] });
     component.selecionarFoto({ target: input } as unknown as Event);
-    component.enablePersonalInfoEditing();
     component.form.controls.telefone.setValue('21999999999');
 
     component.salvar();
@@ -319,7 +325,6 @@ describe('UserEdit', () => {
     input.type = 'file';
     Object.defineProperty(input, 'files', { value: [file] });
     component.selecionarFoto({ target: input } as unknown as Event);
-    component.enablePersonalInfoEditing();
     component.form.controls.telefone.setValue('21999999999');
 
     component.salvar();
@@ -376,7 +381,6 @@ describe('UserEdit', () => {
     input.type = 'file';
     Object.defineProperty(input, 'files', { value: [file] });
     component.selecionarFoto({ target: input } as unknown as Event);
-    component.enablePersonalInfoEditing();
     component.form.controls.nome.setValue('');
     component.salvar();
 
@@ -428,11 +432,20 @@ describe('UserEdit', () => {
         '.personal-card app-primary-input[formcontrolname], .personal-card app-primary-select[formcontrolname], .personal-card app-primary-textarea[formcontrolname]',
       ).length,
     ).toBe(7);
-    expect(
-      [...page.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
-        '.cards-grid app-primary-input[formcontrolname] input, .cards-grid app-primary-select[formcontrolname] select, .cards-grid app-primary-textarea[formcontrolname] textarea',
-      )].every(control => control.disabled),
-    ).toBe(true);
+    expect(page.querySelector<HTMLInputElement>('.personal-card [formcontrolname="nome"] input')?.disabled)
+      .toBe(false);
+    expect(page.querySelector<HTMLInputElement>('.personal-card [formcontrolname="cpf"] input')?.disabled)
+      .toBe(true);
+    expect(page.querySelector<HTMLInputElement>('.personal-card [formcontrolname="rg"] input')?.disabled)
+      .toBe(true);
+    expect(page.querySelector<HTMLInputElement>('.responsible-card [formcontrolname="responsavelNome"] input')?.disabled)
+      .toBe(false);
+    expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="cep"] input')?.disabled)
+      .toBe(false);
+    expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="logradouro"] input')?.disabled)
+      .toBe(true);
+    expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="bairro"] input')?.disabled)
+      .toBe(true);
     expect(component.nomeResumo).toBe(component.form.controls.nome);
     const cepIds = [...page.querySelectorAll<HTMLInputElement>(
       '.personal-card [formcontrolname="cep"] input, .address-card [formcontrolname="cep"] input',
@@ -447,7 +460,6 @@ describe('UserEdit', () => {
     const component = fixture.componentInstance;
     const page = fixture.nativeElement as HTMLElement;
 
-    component.enablePersonalInfoEditing();
     component.form.controls.nome.setValue('Ana atualizada');
     fixture.detectChanges();
 
@@ -482,7 +494,6 @@ describe('UserEdit', () => {
   it('valida o e-mail do responsável e preserva o texto inválido sem enviar', async () => {
     await createComponent();
     const component = fixture.componentInstance;
-    component.enableResponsibleInfoEditing();
     component.form.controls.responsavelEmail.setValue('email-invalido');
 
     component.salvar();
@@ -495,7 +506,6 @@ describe('UserEdit', () => {
   it('salva somente os dados do responsável que foram alterados', async () => {
     await createComponent();
     const component = fixture.componentInstance;
-    component.enableResponsibleInfoEditing();
     component.form.controls.responsavelTelefone.setValue('(21) 98888-7777');
 
     component.salvar();
@@ -578,7 +588,6 @@ describe('UserEdit', () => {
     const component = fixture.componentInstance;
     const page = fixture.nativeElement as HTMLElement;
 
-    component.enableAddressEditing();
     component.form.controls.cep.setValue('20000000');
     fixture.detectChanges();
 
@@ -637,7 +646,6 @@ describe('UserEdit', () => {
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     vi.useFakeTimers();
 
-    component.enablePersonalInfoEditing();
     component.form.controls.telefone.setValue('(21) 98765-4321');
     component.form.controls.doencasAlergias.setValue('');
     component.salvar();
@@ -671,7 +679,7 @@ describe('UserEdit', () => {
     expect(navigate).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(navigate).toHaveBeenCalledWith(['/desbravadores']);
-    expect(component.personalInfoInactive()).toBe(true);
+    expect(component.redirecting()).toBe(true);
     vi.useRealTimers();
   });
 
@@ -688,7 +696,6 @@ describe('UserEdit', () => {
     const component = fixture.componentInstance;
     const page = fixture.nativeElement as HTMLElement;
     const rg = page.querySelector<HTMLInputElement>('[formcontrolname="rg"] input');
-    component.enablePersonalInfoEditing();
     fixture.detectChanges();
     expect(rg?.disabled).toBe(true);
 
@@ -715,7 +722,6 @@ describe('UserEdit', () => {
   it('mantém os dados salvos no estado de navegação após reabrir a edição', async () => {
     await createComponent();
     const component = fixture.componentInstance;
-    component.enablePersonalInfoEditing();
     component.form.controls.telefone.setValue('(21) 98765-4321');
     service.atualizarUsuario.mockReturnValueOnce(of({ ...usuario, telefone: '21987654321' }));
     component.salvar();
@@ -741,7 +747,6 @@ describe('UserEdit', () => {
   it('envia endereço sem campos ViaCEP quando um campo visível muda', async () => {
     await createComponent();
     const component = fixture.componentInstance;
-    component.enableAddressEditing();
     component.form.controls.numero.setValue('200');
     component.salvar();
 
@@ -757,7 +762,6 @@ describe('UserEdit', () => {
   it('evita PUT quando não há alterações e apresenta erro HTTP 403', async () => {
     await createComponent();
     const component = fixture.componentInstance;
-    component.enablePersonalInfoEditing();
     component.salvar();
     expect(service.atualizarUsuario).not.toHaveBeenCalled();
 
@@ -775,7 +779,6 @@ describe('UserEdit', () => {
   it('mapeia erros de validação HTTP 400 e conflitos HTTP 409 sem limpar o formulário', async () => {
     await createComponent();
     const component = fixture.componentInstance;
-    component.enablePersonalInfoEditing();
     component.form.controls.telefone.setValue('21987654321');
     service.atualizarUsuario.mockReturnValueOnce(
       throwError(
@@ -800,52 +803,38 @@ describe('UserEdit', () => {
     expect(component.successMessage()).toBe('');
   });
 
-  it('habilita edição pessoal sem liberar campos derivados do CEP', async () => {
+  it('mantém os campos permitidos editáveis e bloqueia resumo, documentos cadastrados e dados do CEP', async () => {
     await createComponent();
     const page = fixture.nativeElement as HTMLElement;
     expectRenderedProfile(page);
-    page.querySelector<HTMLButtonElement>('.personal-card .card-footer button')?.click();
-    fixture.detectChanges();
 
-    expect(fixture.componentInstance.personalInfoInactive()).toBe(false);
-    expect(fixture.componentInstance.responsibleInfoInactive()).toBe(true);
-    expect(fixture.componentInstance.addressInfoInactive()).toBe(true);
+    expect(page.querySelectorAll('.card-footer button')).toHaveLength(0);
     expectRenderedProfile(page);
     expect(page.querySelector<HTMLInputElement>('input[autocomplete="street-address"]')?.disabled).toBe(true);
     expect(page.querySelector<HTMLInputElement>('input[autocomplete="address-level3"]')?.disabled).toBe(true);
     expect(page.querySelector<HTMLInputElement>('.personal-card input[autocomplete="name"]')?.disabled).toBe(false);
     expect(page.querySelector<HTMLInputElement>('.personal-card [formcontrolname="cpf"] input')?.disabled).toBe(true);
-    expect(page.querySelector<HTMLInputElement>('.responsible-card [formcontrolname="responsavelNome"] input')?.disabled).toBe(true);
+    expect(page.querySelector<HTMLInputElement>('.responsible-card [formcontrolname="responsavelNome"] input')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="cep"] input')?.disabled).toBe(false);
   });
 
-  it('habilita somente a seção de responsável e preserva os valores das outras seções', async () => {
+  it('deixa os dados do responsável editáveis sem controles de liberação por seção', async () => {
     await createComponent();
     const component = fixture.componentInstance;
     const page = fixture.nativeElement as HTMLElement;
     component.form.controls.nome.setValue('Nome mantido durante edição');
-
-    page.querySelector<HTMLButtonElement>('.responsible-card .card-footer button')?.click();
     fixture.detectChanges();
 
-    expect(component.personalInfoInactive()).toBe(true);
-    expect(component.responsibleInfoInactive()).toBe(false);
-    expect(component.addressInfoInactive()).toBe(true);
     expect(component.form.controls.nome.value).toBe('Nome mantido durante edição');
     expect(page.querySelector<HTMLInputElement>('.responsible-card [formcontrolname="responsavelNome"] input')?.disabled).toBe(false);
-    expect(page.querySelector<HTMLInputElement>('.personal-card [formcontrolname="nome"] input')?.disabled).toBe(true);
-    expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="cep"] input')?.disabled).toBe(true);
+    expect(page.querySelector<HTMLInputElement>('.personal-card [formcontrolname="nome"] input')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="cep"] input')?.disabled).toBe(false);
   });
 
-  it('habilita somente a seção de endereço, mantendo CEP editável e campos derivados bloqueados', async () => {
+  it('mantém CEP editável e campos de endereço derivados bloqueados', async () => {
     await createComponent();
     const page = fixture.nativeElement as HTMLElement;
 
-    page.querySelector<HTMLButtonElement>('.address-card .card-footer button')?.click();
-    fixture.detectChanges();
-
-    expect(fixture.componentInstance.personalInfoInactive()).toBe(true);
-    expect(fixture.componentInstance.responsibleInfoInactive()).toBe(true);
-    expect(fixture.componentInstance.addressInfoInactive()).toBe(false);
     expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="cep"] input')?.disabled).toBe(false);
     expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="numero"] input')?.disabled).toBe(false);
     expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="complemento"] input')?.disabled).toBe(false);
@@ -853,7 +842,7 @@ describe('UserEdit', () => {
     expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="bairro"] input')?.disabled).toBe(true);
   });
 
-  it('abre credenciais no botão superior sem habilitar cartões nem enviar o formulário', async () => {
+  it('preserva o modal de credenciais sem alterar os campos editáveis', async () => {
     await createComponent();
     const component = fixture.componentInstance;
     const page = fixture.nativeElement as HTMLElement;
@@ -861,33 +850,42 @@ describe('UserEdit', () => {
 
     expect(button?.textContent?.trim()).toBe('Editar credenciais');
     expect(button?.type).toBe('button');
-    expect(page.querySelectorAll('.card-footer button')).toHaveLength(3);
+    expect(page.querySelectorAll('.card-footer button')).toHaveLength(0);
 
     button?.click();
     fixture.detectChanges();
 
     expect(page.querySelector('[role="dialog"]')?.textContent).toContain('Alterar senha');
     expect(page.querySelector('.password-button')).toBeNull();
-    expect(component.personalInfoInactive()).toBe(true);
-    expect(component.responsibleInfoInactive()).toBe(true);
-    expect(component.addressInfoInactive()).toBe(true);
+    expect(page.querySelector<HTMLInputElement>('.personal-card [formcontrolname="nome"] input')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('.responsible-card [formcontrolname="responsavelNome"] input')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="cep"] input')?.disabled).toBe(false);
     expect(service.atualizarUsuario).not.toHaveBeenCalled();
   });
 
-  it('não habilita seções nem abre credenciais durante salvamento', async () => {
+  it('bloqueia campos permitidos durante salvamento e redirecting', async () => {
     await createComponent();
     const component = fixture.componentInstance;
 
+    const page = fixture.nativeElement as HTMLElement;
+    const editableInputs = [
+      '.personal-card [formcontrolname="nome"] input',
+      '.responsible-card [formcontrolname="responsavelNome"] input',
+      '.address-card [formcontrolname="cep"] input',
+    ];
     component.saving.set(true);
-    component.enablePersonalInfoEditing();
-    component.enableResponsibleInfoEditing();
-    component.enableAddressEditing();
+    fixture.detectChanges();
+    expect(editableInputs.every(selector =>
+      page.querySelector<HTMLInputElement>(selector)?.disabled,
+    )).toBe(true);
     component.openPasswordModal();
-
-    expect(component.personalInfoInactive()).toBe(true);
-    expect(component.responsibleInfoInactive()).toBe(true);
-    expect(component.addressInfoInactive()).toBe(true);
     expect(component.passwordModalOpen()).toBe(false);
+    component.saving.set(false);
+    component.redirecting.set(true);
+    fixture.detectChanges();
+    expect(editableInputs.every(selector =>
+      page.querySelector<HTMLInputElement>(selector)?.disabled,
+    )).toBe(true);
   });
 
   it('mantém vazios apenas os campos ausentes ou nulos, sem inventar endereço', async () => {

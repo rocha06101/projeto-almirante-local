@@ -91,11 +91,6 @@ export class UserEdit implements OnDestroy {
 
   readonly usuario = signal<UserModel | null>(null);
   readonly isLoaded = signal(false);
-  readonly personalInfoInactive = signal(true);
-  readonly responsibleInfoInactive = signal(true);
-  readonly addressInfoInactive = signal(true);
-  readonly cpfEditable = signal(false);
-  readonly rgEditable = signal(false);
   readonly passwordModalOpen = signal(false);
   readonly saving = signal(false);
   readonly redirecting = signal(false);
@@ -173,30 +168,6 @@ export class UserEdit implements OnDestroy {
     return !!userId && userId === this.auth.user()?.id;
   }
 
-  enablePersonalInfoEditing(): void {
-    if (this.canEditSection()) {
-      this.personalInfoInactive.set(false);
-      this.errorMessage.set('');
-      this.successMessage.set('');
-    }
-  }
-
-  enableResponsibleInfoEditing(): void {
-    if (this.canEditSection()) {
-      this.responsibleInfoInactive.set(false);
-      this.errorMessage.set('');
-      this.successMessage.set('');
-    }
-  }
-
-  enableAddressEditing(): void {
-    if (this.canEditSection()) {
-      this.addressInfoInactive.set(false);
-      this.errorMessage.set('');
-      this.successMessage.set('');
-    }
-  }
-
   salvar(): void {
     this.salvarAlteracoes(false);
   }
@@ -239,7 +210,6 @@ export class UserEdit implements OnDestroy {
       return;
     }
     if (!hasDataChanges && !pendingPhoto) {
-      this.setSectionsInactive();
       this.form.markAsPristine();
       this.toast.error('Nenhuma alteração foi feita. Edite alguma informação antes de salvar.');
       return;
@@ -304,7 +274,7 @@ export class UserEdit implements OnDestroy {
   }
 
   openPasswordModal(): void {
-    if (this.canEditSection()) {
+    if (this.isLoaded() && !this.saving() && !this.redirecting()) {
       this.passwordModalOpen.set(true);
     }
   }
@@ -326,7 +296,7 @@ export class UserEdit implements OnDestroy {
     const file = input.files?.[0];
     input.value = '';
     const usuario = this.usuario();
-    if (!file || !usuario || this.saving() || this.photoLoading()) {
+    if (!file || !usuario || this.saving() || this.redirecting() || this.photoLoading()) {
       return;
     }
     if (!this.isValidPhotoFile(file)) {
@@ -399,18 +369,6 @@ export class UserEdit implements OnDestroy {
     this.cargoResumo.setValue(usuario.cargo?.nome ?? usuario.funcao ?? '');
   }
 
-  private canEditSection(): boolean {
-    return this.isLoaded() && !this.saving() && !this.redirecting();
-  }
-
-  private setSectionsInactive(): void {
-    this.personalInfoInactive.set(true);
-    this.responsibleInfoInactive.set(true);
-    this.addressInfoInactive.set(true);
-    this.cpfEditable.set(false);
-    this.rgEditable.set(false);
-  }
-
   private replaceNavigationUser(usuario: UserModel): void {
     const currentState = this.location.getState();
     this.location.replaceState(this.location.path(), '', {
@@ -449,19 +407,6 @@ export class UserEdit implements OnDestroy {
         position: 'bottom-center',
         actions: [
           {
-            label: `Editar ${textoCampos}`,
-            onClick: () => {
-              if (campos.includes('cpf')) {
-                this.cpfEditable.set(true);
-                this.form.controls.cpf.markAsTouched();
-              }
-              if (campos.includes('rg')) {
-                this.rgEditable.set(true);
-                this.form.controls.rg.markAsTouched();
-              }
-            },
-          },
-          {
             label: 'Manter assim',
             onClick: () => this.salvarAlteracoes(true),
           },
@@ -490,8 +435,8 @@ export class UserEdit implements OnDestroy {
   ): boolean {
     return (
       this.changed(values.nome, usuario.nome) ||
-      onlyDigits(values.cpf) !== onlyDigits(usuario.cpf) ||
-      (!usuario.ehCin && this.changed(values.rg, usuario.rg ?? '')) ||
+      (!usuario.cpf?.trim() && onlyDigits(values.cpf) !== onlyDigits(usuario.cpf)) ||
+      (!usuario.ehCin && !usuario.rg?.trim() && this.changed(values.rg, usuario.rg ?? '')) ||
       this.changed(values.dataNascimento, apiDateToForm(usuario.dataNascimento)) ||
       onlyDigits(values.telefone) !== onlyDigits(usuario.telefone) ||
       this.changed(values.tipoSanguineo, usuario.tipoSanguineo ?? '') ||
@@ -510,10 +455,10 @@ export class UserEdit implements OnDestroy {
       nome: values.nome.trim(),
       email: usuario.email,
       cargoId: usuario.cargo?.id ?? usuario.cargoId!,
-      ...(onlyDigits(values.cpf) !== onlyDigits(usuario.cpf)
+      ...(!usuario.cpf?.trim() && onlyDigits(values.cpf) !== onlyDigits(usuario.cpf)
         ? { cpf: values.cpf.trim() }
         : {}),
-      ...(!ehCin && this.changed(values.rg, usuario.rg ?? '')
+      ...(!ehCin && !usuario.rg?.trim() && this.changed(values.rg, usuario.rg ?? '')
         ? { rg: values.rg.trim() }
         : {}),
       ...(this.changed(values.dataNascimento, apiDateToForm(usuario.dataNascimento))
@@ -554,7 +499,6 @@ export class UserEdit implements OnDestroy {
     this.replaceNavigationUser(usuario);
     this.patchUsuario(usuario);
     this.form.markAsPristine();
-    this.setSectionsInactive();
   }
 
   private commitPendingPhoto(): void {

@@ -120,11 +120,12 @@ describe('MyProfile', () => {
     expect(page.textContent).toContain('Meu Perfil');
     expect(service.obterMinhaFoto).not.toHaveBeenCalled();
     expect(service.consultarCep).not.toHaveBeenCalled();
-    expect(
-      [...page.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
-        '.container-rigth app-primary-input[formcontrolname] input, .container-rigth app-primary-select[formcontrolname] select, .container-rigth app-primary-textarea[formcontrolname] textarea',
-      )].every(control => control.disabled),
-    ).toBe(true);
+    expect(page.querySelector<HTMLInputElement>('[formcontrolname="nome"] input')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('[formcontrolname="cpf"] input')?.disabled).toBe(true);
+    expect(page.querySelector<HTMLInputElement>('[formcontrolname="rg"] input')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('[formcontrolname="cep"] input')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('[formcontrolname="logradouro"] input')?.disabled).toBe(true);
+    expect(page.querySelector<HTMLInputElement>('[formcontrolname="bairro"] input')?.disabled).toBe(true);
   });
 
   it('cancela a consulta anterior e só preenche o endereço do CEP atual', () => {
@@ -190,7 +191,6 @@ describe('MyProfile', () => {
     const component = fixture.componentInstance;
     const toast = TestBed.inject(ToastService);
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
-    component.enablePersonalInfoEditing();
     component.form.controls.telefone.setValue('(21) 98765-4321');
     component.form.controls.tipoSanguineo.setValue('');
     component.salvar();
@@ -223,7 +223,7 @@ describe('MyProfile', () => {
       duration: 2000,
     });
     expect(navigate).not.toHaveBeenCalled();
-    expect(component.personalInfoInactive()).toBe(true);
+    expect(component.form.controls.telefone.enabled).toBe(true);
     fixture.detectChanges();
     const page = fixture.nativeElement as HTMLElement;
     expect(
@@ -251,7 +251,6 @@ describe('MyProfile', () => {
     const component = fixture.componentInstance;
     const page = fixture.nativeElement as HTMLElement;
     const rg = page.querySelector<HTMLInputElement>('[formcontrolname="rg"] input');
-    component.enablePersonalInfoEditing();
     fixture.detectChanges();
     expect(rg?.disabled).toBe(true);
 
@@ -274,7 +273,6 @@ describe('MyProfile', () => {
 
   it('envia CEP, número e complemento sem os metadados do ViaCEP', () => {
     const component = fixture.componentInstance;
-    component.enablePersonalInfoEditing();
     component.form.controls.complemento.setValue('Casa');
     component.salvar();
 
@@ -334,7 +332,6 @@ describe('MyProfile', () => {
     for (const testCase of cases) {
       service.atualizarMeuPerfil.mockClear();
       service.atualizarMeuPerfil.mockReturnValueOnce(of(profile));
-      component.enablePersonalInfoEditing();
       testCase.control.setValue(testCase.value);
       component.salvar();
       expect(service.atualizarMeuPerfil.mock.calls[0][0]).toMatchObject({
@@ -357,7 +354,6 @@ describe('MyProfile', () => {
       service.atualizarMeuPerfil.mockReturnValueOnce(
         of({ ...profile, cpf, telefone: '(21) 98765-4321' }),
       );
-      component.enablePersonalInfoEditing();
       component.form.controls.telefone.setValue('(21) 98765-4321');
       component.salvar();
 
@@ -380,7 +376,6 @@ describe('MyProfile', () => {
     const component = fixture.componentInstance;
     expect(component.form.controls.rg.disabled).toBe(true);
     expect(component.form.controls.rg.status).toBe('DISABLED');
-    component.enablePersonalInfoEditing();
     component.form.controls.telefone.setValue('(21) 98765-4321');
     component.salvar();
     expect(service.atualizarMeuPerfil.mock.calls.at(-1)?.[0]).not.toHaveProperty('rg');
@@ -392,7 +387,6 @@ describe('MyProfile', () => {
     const nonCin = fixture.componentInstance;
     const toast = TestBed.inject(ToastService);
     service.atualizarMeuPerfil.mockClear();
-    nonCin.enablePersonalInfoEditing();
     nonCin.form.controls.rg.setValue('');
     nonCin.salvar();
     expect(nonCin.form.controls.rg.hasError('required')).toBe(true);
@@ -406,7 +400,6 @@ describe('MyProfile', () => {
   it('mostra validação específica no formulário e exige CEP ao alterar endereço', async () => {
     const component = fixture.componentInstance;
     const toast = TestBed.inject(ToastService);
-    component.enablePersonalInfoEditing();
     component.form.controls.nome.setValue('   ');
     component.salvar();
 
@@ -429,7 +422,6 @@ describe('MyProfile', () => {
     await fixture.whenStable();
     const noAddress = fixture.componentInstance;
     service.atualizarMeuPerfil.mockClear();
-    noAddress.enablePersonalInfoEditing();
     noAddress.form.controls.numero.setValue('10');
     noAddress.salvar();
 
@@ -442,7 +434,6 @@ describe('MyProfile', () => {
   it('valida data e limite de alergias/doenças com mensagens específicas', () => {
     const component = fixture.componentInstance;
     const toast = TestBed.inject(ToastService);
-    component.enablePersonalInfoEditing();
     component.form.controls.dataNascimento.setValue('31/02/2000');
     component.salvar();
     expect(toast.toasts().at(-1)?.message).toBe(
@@ -462,7 +453,6 @@ describe('MyProfile', () => {
     const component = fixture.componentInstance;
     const toast = TestBed.inject(ToastService);
     toast.clear();
-    component.enablePersonalInfoEditing();
     component.form.controls.nome.setValue('Ana Maria');
     service.atualizarMeuPerfil.mockReturnValueOnce(of({ ...profile, nome: 'Ana Maria' }));
     component.salvar();
@@ -471,7 +461,7 @@ describe('MyProfile', () => {
     expect(component.nomeResumo.value).toBe('Ana Maria');
     expect(component.form.controls.nome.value).toBe('Ana Maria');
     expect(component.form.pristine).toBe(true);
-    expect(component.personalInfoInactive()).toBe(true);
+    expect(component.form.controls.nome.enabled).toBe(true);
     expect(component.saving()).toBe(false);
     expect(toast.toasts()).toHaveLength(1);
     expect(toast.toasts()[0]).toMatchObject({
@@ -494,12 +484,11 @@ describe('MyProfile', () => {
         ),
       )
       .mockReturnValueOnce(of(profile));
-    component.enablePersonalInfoEditing();
     component.form.controls.cep.setValue('02000000');
     component.salvar();
 
     expect(component.form.controls.cep.hasError('server')).toBe(true);
-    expect(component.personalInfoInactive()).toBe(false);
+    expect(component.form.controls.cep.enabled).toBe(true);
     expect(component.form.controls.cep.value).toBe('02000000');
     expect(toast.toasts().at(-1)?.message).toBe('CEP não aceito.');
 
@@ -514,7 +503,6 @@ describe('MyProfile', () => {
     const component = fixture.componentInstance;
     const response = new Subject<MyProfileResponse>();
     service.atualizarMeuPerfil.mockReturnValue(response);
-    component.enablePersonalInfoEditing();
     component.form.controls.telefone.setValue('(21) 98765-4321');
 
     component.salvar();
@@ -522,9 +510,25 @@ describe('MyProfile', () => {
 
     expect(component.saving()).toBe(true);
     expect(service.atualizarMeuPerfil).toHaveBeenCalledOnce();
+    fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+    const editableFields = [
+      '[formcontrolname="nome"] input',
+      '[formcontrolname="rg"] input',
+      '[formcontrolname="cep"] input',
+      '[formcontrolname="numero"] input',
+      '[formcontrolname="complemento"] input',
+    ];
+    expect(editableFields.every(selector =>
+      page.querySelector<HTMLInputElement>(selector)?.disabled,
+    )).toBe(true);
+
     response.next({ ...profile, telefone: '(21) 98765-4321' });
     response.complete();
     expect(component.saving()).toBe(false);
+    fixture.detectChanges();
+    expect(page.querySelector<HTMLInputElement>('[formcontrolname="nome"] input')?.disabled).toBe(false);
+    expect(page.querySelector<HTMLInputElement>('[formcontrolname="rg"] input')?.disabled).toBe(false);
   });
 
   it('mostra erro para foto inválida e avisa quando o perfil não carrega', async () => {
@@ -566,7 +570,6 @@ describe('MyProfile', () => {
   it('não chama PUT quando nada mudou e mantém campos administrativos somente leitura', () => {
     const component = fixture.componentInstance;
     const toast = TestBed.inject(ToastService);
-    component.enablePersonalInfoEditing();
     component.salvar();
     expect(service.atualizarMeuPerfil).not.toHaveBeenCalled();
     expect(toast.toasts()[0]).toMatchObject({
@@ -601,7 +604,6 @@ describe('MyProfile', () => {
   it('recarrega do GET /api/Me os valores persistidos após salvar', async () => {
     const updatedProfile = { ...profile, telefone: '21987654321' };
     const component = fixture.componentInstance;
-    component.enablePersonalInfoEditing();
     component.form.controls.telefone.setValue('(21) 98765-4321');
     service.atualizarMeuPerfil.mockReturnValueOnce(of(updatedProfile));
     component.salvar();
@@ -669,14 +671,13 @@ describe('MyProfile', () => {
     service.atualizarMeuPerfil.mockReturnValueOnce(
       throwError(() => new HttpErrorResponse({ status: 409, error: { detail: 'Conflito no perfil.' } })),
     );
-    component.enablePersonalInfoEditing();
     component.form.controls.telefone.setValue('21987654321');
     component.salvar();
 
     expect(component.errorMessage()).toBe('Conflito no perfil.');
     expect(component.successMessage()).toBe('');
     expect(component.form.controls.telefone.value).toBe('21987654321');
-    expect(component.personalInfoInactive()).toBe(false);
+    expect(component.form.controls.telefone.enabled).toBe(true);
     expect(component.saving()).toBe(false);
     expect(toast.toasts().at(-1)).toMatchObject({
       message: 'Conflito no perfil.',
@@ -690,7 +691,6 @@ describe('MyProfile', () => {
     service.atualizarMeuPerfil.mockReturnValueOnce(
       throwError(() => new HttpErrorResponse({ status: 403 })),
     );
-    component.enablePersonalInfoEditing();
     component.form.controls.telefone.setValue('21987654321');
     component.salvar();
 
@@ -698,7 +698,7 @@ describe('MyProfile', () => {
       message: 'Você não tem permissão para esta operação.',
       type: 'error',
     });
-    expect(component.personalInfoInactive()).toBe(false);
+    expect(component.form.controls.telefone.enabled).toBe(true);
     expect(component.saving()).toBe(false);
   });
 
@@ -782,7 +782,6 @@ describe('MyProfile', () => {
     input.type = 'file';
     Object.defineProperty(input, 'files', { value: [file] });
     component.selecionarFoto({ target: input } as unknown as Event);
-    component.enablePersonalInfoEditing();
     component.form.controls.telefone.setValue('21999999999');
 
     component.salvar();
@@ -814,7 +813,6 @@ describe('MyProfile', () => {
     input.type = 'file';
     Object.defineProperty(input, 'files', { value: [file] });
     component.selecionarFoto({ target: input } as unknown as Event);
-    component.enablePersonalInfoEditing();
     component.form.controls.telefone.setValue('21999999999');
 
     component.salvar();

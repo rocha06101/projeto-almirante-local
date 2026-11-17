@@ -1,4 +1,5 @@
-import { Component } from '@angular/core';
+import { PermissoesService } from '../../core/services/permissoes';
+import { Component, inject } from '@angular/core';
 import { KpiComponent } from "../../shared/components/kpi-component/kpi-component";
 import { FinancialEntriesComponent } from "../../shared/components/financial-entries-component/financial-entries-component";
 import { ChartConfiguration, ChartData } from 'chart.js';
@@ -11,6 +12,7 @@ import { BaseChartDirective } from 'ng2-charts';
   styleUrl: './treasury.scss',
 })
 export class Treasury {
+  readonly permissoes = inject(PermissoesService);
 
 public barChartData: ChartData<'bar'> = {
   labels: ['Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago'],

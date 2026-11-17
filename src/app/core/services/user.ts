@@ -7,6 +7,7 @@ import {
   CreateUserRequest,
   ListUsersOptions,
   MyProfileResponse,
+  MembroResumo,
   UpdateMyProfileRequest,
   UpdateUserRequest,
   User as UserModel,
@@ -18,6 +19,10 @@ import { ApiService } from './api';
 })
 export class User {
   private api = inject(ApiService);
+
+  listarMembros(): Observable<MembroResumo[]> {
+    return this.api.get<MembroResumo[]>('/Membros');
+  }
 
   /** Por padrão a API retorna somente os ativos. */
   listarUsuarios(options: ListUsersOptions = {}): Observable<UserModel[]> {

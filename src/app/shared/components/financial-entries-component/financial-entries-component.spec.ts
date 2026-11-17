@@ -1,3 +1,4 @@
+import { PermissoesService } from '../../../core/services/permissoes';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, Subject, throwError } from 'rxjs';
@@ -53,8 +54,9 @@ describe('FinancialEntriesComponent', () => {
     TestBed.configureTestingModule({
       imports: [FinancialEntriesComponent],
       providers: [
+        { provide: PermissoesService, useValue: { tem: () => true } },
         { provide: LancamentosService, useValue: service },
-        { provide: UsuarioService, useValue: { listarUsuarios: () => of([{ id: 'm1', nome: 'Guilherme', email: 'g@x', dataCriacao: '' }]) } },
+        { provide: UsuarioService, useValue: { listarMembros: () => of([{ id: 'm1', nome: 'Guilherme', email: 'g@x', dataCriacao: '' }]) } },
       ],
     });
   });

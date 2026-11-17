@@ -23,6 +23,7 @@
             }
           </div>
         </div>
+        @if (permissoes.tem('usuarios.foto.alterar')) {
         <input
           #photoInput
           type="file"
@@ -42,6 +43,7 @@
         >
           {{ photoSaving() ? 'Enviando...' : photoLoading() ? 'Carregando...' : 'Alterar Foto' }}
         </button>
+        }
       </div>
 
       <div class="summary-fields">
@@ -71,6 +73,7 @@
         </div>
       </div>
 
+      @if (permissoes.tem('usuarios.senha.alterar-terceiros')) {
       <div class="summary-actions">
         <app-refresh-button
           type="button"
@@ -80,6 +83,7 @@
           Editar credenciais
         </app-refresh-button>
       </div>
+      }
     </div>
 
     <div class="cards-grid">

@@ -3,6 +3,7 @@
         <h1>Tesouraria</h1>
     </div>
     <section>
+        @if (permissoes.tem('financeiro.tesouraria.consultar')) {
         <div class="kpi-components">
             <app-kpi-component
                 icon="/icons/wallet-icon.svg"
@@ -50,8 +51,11 @@
                 </canvas>
             </div>
         </div>
+        }
+        @if (permissoes.tem('financeiro.lancamentos.consultar')) {
         <app-financial-entries-component>
         </app-financial-entries-component>
+        }
 
     </section>
 </div>

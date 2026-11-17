@@ -1,0 +1,206 @@
+<section class="container-fluid py-4">
+  <header class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <h1>Cargos e permissões</h1>
+    @if (pode('criar') && !carregando() && !erroLista()) {
+      <button type="button" class="btn btn-primary" (click)="abrir({ tipo: 'criar' })">Criar cargo</button>
+    }
+  </header>
+  @if (sucesso()) { <p class="alert alert-success" role="status">{{ sucesso() }}</p> }
+  @if (erroLista()) {
+    <p class="alert alert-danger" role="alert">{{ erroLista() }}</p>
+    <button type="button" class="btn btn-outline-primary" (click)="carregar()">Tentar novamente</button>
+  } @else if (carregando()) {
+    <p role="status">Carregando cargos…</p>
+  } @else {
+    <div class="d-flex flex-wrap gap-3 mb-3">
+      <label>Buscar por nome ou role
+        <input class="form-control" type="search" [(ngModel)]="busca">
+      </label>
+      <label>Situação
+        <select class="form-select" [(ngModel)]="situacao">
+          <option value="todos">Todas</option>
+          <option value="ativos">Ativos</option>
+          <option value="inativos">Inativos</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="table-responsive" tabindex="0" role="region" aria-label="Lista de cargos">
+      <table class="table align-middle">
+        <thead><tr>
+          <th scope="col">Role</th><th scope="col">Nome</th><th scope="col">Descrição</th>
+          <th scope="col">Situação</th><th scope="col">Ações</th>
+        </tr></thead>
+        <tbody>
+          @for (cargo of cargosFiltrados(); track cargo.id) {
+            <tr>
+              <th scope="row">{{ cargo.role }}</th>
+              <td>{{ cargo.nome }}</td>
+              <td>{{ cargo.descricao }}</td>
+              <td>
+                {{ cargo.ativo ? 'Ativo' : 'Inativo' }}
+                @if (cargo.sistemaProtegido) {
+                  <small class="d-block">Sistema protegido · desativação bloqueada</small>
+                }
+              </td>
+              <td>
+                <div class="d-flex flex-wrap gap-2">
+                  @if (pode('editar')) {
+                    <button class="btn btn-sm btn-outline-primary" type="button" (click)="abrir({ tipo: 'editar', cargo })">Editar</button>
+                    <button class="btn btn-sm btn-outline-secondary" type="button"
+                      [disabled]="cargo.ativo && cargo.sistemaProtegido" (click)="abrir({ tipo: 'situacao', cargo })">
+                      {{ cargo.ativo ? 'Desativar' : 'Reativar' }}
+                    </button>
+                  }
+                  <button class="btn btn-sm btn-outline-primary" type="button" (click)="abrir({ tipo: 'permissoes', cargo })">Permissões</button>
+                  <button class="btn btn-sm btn-outline-primary" type="button" (click)="abrir({ tipo: 'regras', cargo })">Regras por alvo</button>
+                </div>
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="5">Nenhum cargo encontrado.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
+
+@if (editor(); as atual) {
+  <div class="editor-overlay" (keydown.escape)="fechar()">
+    <section class="editor card p-3 p-md-4" role="dialog" aria-modal="true" aria-labelledby="cargo-titulo"
+      cdkTrapFocus [cdkTrapFocusAutoCapture]="true">
+      <h2 id="cargo-titulo">
+        @switch (atual.tipo) {
+          @case ('criar') { Criar cargo }
+          @case ('editar') { Editar cargo }
+          @case ('situacao') { {{ atual.cargo.ativo ? 'Desativar cargo' : 'Reativar cargo' }} }
+          @case ('permissoes') { Permissões }
+          @case ('regras') { Regras por alvo }
+        }
+      </h2>
+      @if (atual.tipo !== 'criar') {
+        <p>{{ atual.cargo.nome }} · {{ atual.cargo.role }}
+          @if (atual.cargo.sistemaProtegido) { · Sistema protegido }
+        </p>
+      }
+
+      @let falha = falhaCarga();
+      <form (ngSubmit)="salvar()">
+        @if (atual.tipo === 'criar') {
+          <p>O cargo é criado ativo e sem permissões.</p>
+          <label class="d-block mb-2">Role
+            <input class="form-control" name="role" [(ngModel)]="role"
+              (ngModelChange)="erroRole.set('')" maxlength="20" required
+              [attr.aria-invalid]="!!erroRole()" [attr.aria-describedby]="erroRole() ? 'cargo-role-erro' : null">
+          </label>
+          @if (erroRole()) { <p id="cargo-role-erro" class="text-danger" role="alert">{{ erroRole() }}</p> }
+        }
+        @if (atual.tipo === 'criar' || atual.tipo === 'editar') {
+          <label class="d-block mb-2">Nome
+            <input class="form-control" name="nome" [(ngModel)]="nome" maxlength="200" required>
+          </label>
+          <label class="d-block mb-3">Descrição
+            <textarea class="form-control" name="descricao" [(ngModel)]="descricao" maxlength="1000" required></textarea>
+          </label>
+        }
+        @if (carregandoEditor()) {
+          <p role="status">Carregando…</p>
+        } @else if (!falha && !conflito() && atual.tipo === 'permissoes' && !confirmando) {
+          @for (grupo of grupos(); track grupo[0]) {
+            <fieldset class="border rounded p-3 mb-3">
+              <legend class="fs-6 fw-semibold">{{ grupo[0] }}</legend>
+              @for (p of grupo[1]; track p.chave) {
+                @let bloqueio = bloqueioPermissao(p);
+                <label class="permission-row">
+                  <input type="checkbox" [checked]="selecao().has(p.chave)"
+                    [disabled]="!pode('permissoes') || !!bloqueio"
+                    (change)="alternar(p.chave, p.chave, $any($event.target).checked)">
+                  <span><strong>{{ p.chave }}</strong><small>{{ p.descricao }}</small>
+                    @if (bloqueio) { <small>{{ bloqueio }}</small> }
+                  </span>
+                </label>
+              }
+            </fieldset>
+          }
+        } @else if (!falha && !conflito() && atual.tipo === 'regras' && !confirmando) {
+          <p>Sem regra, o acesso é negado. A regra exige também a concessão da operação ao cargo solicitante. Não há hierarquia automática.</p>
+          <div class="table-responsive" tabindex="0" role="region" aria-label="Matriz de regras por alvo">
+            <table class="table table-bordered align-middle">
+              <thead><tr><th scope="col">Operação</th>
+                @for (alvo of cargos(); track alvo.id) { <th scope="col">{{ alvo.nome }} ({{ alvo.role }})</th> }
+              </tr></thead>
+              <tbody>
+                @for (p of operacoes(); track p.chave) {
+                  <tr><th scope="row">{{ p.chave }}<small class="d-block fw-normal">{{ p.descricao }}</small></th>
+                    @for (alvo of cargos(); track alvo.id) {
+                      @let chave = chaveRegra(p.chave, alvo.id);
+                      @let bloqueio = bloqueioRegra(p, alvo);
+                      <td><input type="checkbox" [checked]="selecao().has(chave)"
+                        [attr.aria-label]="p.chave + ' sobre ' + alvo.nome"
+                        [disabled]="!pode('regras') || !!bloqueio" [attr.title]="bloqueio || null"
+                        (change)="alternar(chave, p.chave + ' → ' + alvo.role, $any($event.target).checked)">
+                        @if (bloqueio) { <small class="d-block">{{ bloqueio }}</small> }
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        @let conjunto = atual.tipo === 'permissoes' || atual.tipo === 'regras';
+        @if (conjunto && confirmando && !falha && !conflito()) {
+          <h3 class="fs-5">Resumo da alteração</h3>
+          <p><strong>Concedidas</strong> · {{ adicionadas().join(', ') || 'Nenhuma' }}</p>
+          <p><strong>Revogadas</strong> · {{ removidas().join(', ') || 'Nenhuma' }}</p>
+        }
+        @if (pode(atual.tipo) && (!conjunto || confirmando) && !falha && !conflito()) {
+          <label class="d-block mb-2">Motivo
+            <textarea class="form-control" name="motivo" maxlength="255" [(ngModel)]="motivo" required></textarea>
+          </label>
+          <label for="cargo-senha">Confirme sua senha</label>
+          <div class="input-group mb-3">
+            <input class="form-control" id="cargo-senha" name="senha" [type]="mostrarSenha ? 'text' : 'password'"
+              [(ngModel)]="senha" autocomplete="current-password" required>
+            <app-password-toggle [(visible)]="mostrarSenha" />
+          </div>
+        }
+        @if (falha) { <p class="alert alert-danger" role="alert">{{ falha.mensagem }}</p> }
+        @if (erro()) { <p class="alert alert-danger" role="alert">{{ erro() }}</p> }
+        <div class="d-flex flex-wrap gap-2 justify-content-end">
+          <button class="btn btn-outline-secondary" type="button" [disabled]="salvando() || carregandoEditor()" (click)="fechar()">Fechar</button>
+          @if (falha) {
+            @switch (falha.acao) {
+              @case ('tentar') {
+                <button class="btn btn-outline-primary" type="button" (click)="recarregar()">Tentar novamente</button>
+              }
+              @case ('login') {
+                <a class="btn btn-outline-primary" routerLink="/login">Entrar novamente</a>
+              }
+              @case ('lista') {
+                <button class="btn btn-outline-primary" type="button" (click)="voltarLista()">Atualizar lista</button>
+              }
+            }
+          } @else if (conflito()) {
+            <button class="btn btn-outline-primary" type="button" (click)="recarregar()">Recarregar dados</button>
+          } @else if (pode(atual.tipo) && !carregandoEditor()) {
+            @if (conjunto && !confirmando) {
+              <button class="btn btn-primary" type="button" [disabled]="!adicionadas().length && !removidas().length"
+                (click)="confirmando = true">Revisar alterações</button>
+            } @else {
+              @if (conjunto) {
+                <button class="btn btn-outline-primary" type="button" [disabled]="salvando()"
+                  (click)="confirmando = false; senha = ''; mostrarSenha = false">Voltar à seleção</button>
+              }
+              <button class="btn btn-primary" type="submit" [disabled]="salvando() || !motivo.trim() || !senha">
+                {{ salvando() ? 'Salvando…' : 'Confirmar e salvar' }}
+              </button>
+            }
+          }
+        </div>
+      </form>
+    </section>
+  </div>
+}

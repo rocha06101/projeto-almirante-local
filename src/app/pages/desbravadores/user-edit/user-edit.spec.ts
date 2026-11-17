@@ -1,3 +1,4 @@
+import { PermissoesService } from '../../../core/services/permissoes';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -83,6 +84,7 @@ describe('UserEdit', () => {
       imports: [UserEdit],
       providers: [
         provideRouter([]),
+        { provide: PermissoesService, useValue: { tem: () => true } },
         { provide: UserService, useValue: service },
         { provide: UserAvatarService, useValue: userAvatar },
       ],

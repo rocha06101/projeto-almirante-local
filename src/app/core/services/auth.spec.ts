@@ -59,6 +59,7 @@ describe('AuthService', () => {
     const profile = await next('/Auth/Me');
     expect(profile.request.headers.get('Authorization')).toBe('Bearer jwt-1');
     profile.flush(me);
+    (await next('/Me/Permissoes')).flush({ cargo: me.cargo, permissoes: [], versaoAutorizacao: 1 });
 
     await expect(done).resolves.toEqual(me);
     expect(auth.isLoggedIn()).toBe(true);
@@ -86,6 +87,7 @@ describe('AuthService', () => {
     const profile = await next('/Auth/Me');
     expect(profile.request.headers.get('Authorization')).toBe('Bearer jwt-2');
     profile.flush(me);
+    (await next('/Me/Permissoes')).flush({ cargo: me.cargo, permissoes: [], versaoAutorizacao: 1 });
 
     await expect(done).resolves.toBe(true);
     expect(auth.accessToken()).toBe('jwt-2');
@@ -96,6 +98,7 @@ describe('AuthService', () => {
     (await next('/Auth/csrf')).flush({ csrfToken: 'a' });
     (await next('/Auth/login', 'POST')).flush(tokenBody('jwt-3'));
     (await next('/Auth/Me')).flush(me);
+    (await next('/Me/Permissoes')).flush({ cargo: me.cargo, permissoes: [], versaoAutorizacao: 1 });
     await login;
 
     const done = firstValueFrom(auth.logout());
@@ -138,6 +141,7 @@ describe('AuthService', () => {
     (await next('/Auth/csrf')).flush({ csrfToken: 'login-csrf' });
     (await next('/Auth/login', 'POST')).flush(tokenBody('jwt-expired', -1));
     (await next('/Auth/Me')).flush(me);
+    (await next('/Me/Permissoes')).flush({ cargo: me.cargo, permissoes: [], versaoAutorizacao: 1 });
     await login;
 
     const token = auth.accessTokenForSignalR();
@@ -155,6 +159,7 @@ describe('AuthService', () => {
     (await next('/Auth/csrf')).flush({ csrfToken: 'login-csrf' });
     (await next('/Auth/login', 'POST')).flush(tokenBody('jwt-password'));
     (await next('/Auth/Me')).flush(me);
+    (await next('/Me/Permissoes')).flush({ cargo: me.cargo, permissoes: [], versaoAutorizacao: 1 });
     await login;
 
     const changed = firstValueFrom(
@@ -186,6 +191,7 @@ describe('AuthService', () => {
     (await next('/Auth/csrf')).flush({ csrfToken: 'login-csrf' });
     (await next('/Auth/login', 'POST')).flush(tokenBody('jwt-admin'));
     (await next('/Auth/Me')).flush(me);
+    (await next('/Me/Permissoes')).flush({ cargo: me.cargo, permissoes: [], versaoAutorizacao: 1 });
     await login;
 
     const changed = firstValueFrom(

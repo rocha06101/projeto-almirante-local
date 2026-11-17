@@ -28,7 +28,7 @@ export default defineConfig({
   workers: process.env['CI'] ? 2 : 4,
   reporter: [['list']],
   use: {
-    channel: 'chrome',
+    channel: process.env['E2E_BROWSER_CHANNEL'] ?? 'chrome',
     ignoreHTTPSErrors: true,
     trace: 'off',
   },
@@ -40,7 +40,7 @@ export default defineConfig({
     },
     {
       name: 'real-backend',
-      testMatch: /(auth|lancamentos)\.real\.spec\.ts/,
+      testMatch: /(auth|lancamentos|rbac)\.real\.spec\.ts/,
       use: { baseURL: 'https://localhost:4201' },
       fullyParallel: false,
       workers: 1,

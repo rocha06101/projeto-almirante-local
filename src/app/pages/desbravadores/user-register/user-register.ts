@@ -13,7 +13,7 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, filter, finalize, map, of, switchMap, take, timer } from 'rxjs';
 import { Cargo, UserAddress, UserAddressRequest, User as UserModel } from '../../../core/models/user.model';
-import { AuthService } from '../../../core/services/auth';
+import { PermissoesService } from '../../../core/services/permissoes';
 import { ToastService } from '../../../core/services/toast.service';
 import { User as UserService } from '../../../core/services/user';
 import { PrimaryInput } from '../../../shared/components/primary-input/primary-input';
@@ -71,7 +71,6 @@ function senhasIguais(group: AbstractControl): ValidationErrors | null {
   return senha.value === confirmar.value ? null : { senhasDiferentes: true };
 }
 
-const PERFIS_GESTAO_CADASTROS = new Set(['ADM', 'DIR', 'DIRA', 'SEC', 'TES']);
 
 function descreverErroFoto(error: unknown, fallback: string): string {
   if (!(error instanceof HttpErrorResponse)) {
@@ -112,14 +111,14 @@ export class UserRegister implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private userService = inject(UserService);
   private destroyRef = inject(DestroyRef);
-  private auth = inject(AuthService);
+  private readonly permissoes = inject(PermissoesService);
   private toast = inject(ToastService);
   private sanitizer = inject(DomSanitizer);
 
   readonly senhaMinimo = SENHA_MINIMO;
   readonly senhaMaximo = SENHA_MAXIMO;
   readonly podeGerenciarCadastros = computed(() =>
-    PERFIS_GESTAO_CADASTROS.has(this.auth.user()?.cargo.role ?? ''),
+    this.permissoes.tem('usuarios.foto.alterar'),
   );
 
   form = this.fb.nonNullable.group(

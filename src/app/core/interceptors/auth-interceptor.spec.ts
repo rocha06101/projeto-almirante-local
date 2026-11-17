@@ -28,6 +28,7 @@ describe('authInterceptor', () => {
     (await next('/api/Auth/csrf')).flush({ csrfToken: 'c' });
     (await next('/api/Auth/login', 'POST')).flush(tokenBody(token));
     (await next('/api/Auth/Me')).flush({ id: '1', nome: 'N', email: 'e', cargo: { id: 'c', nome: 'C', role: 'R' } });
+    (await next('/api/Me/Permissoes')).flush({ permissoes: ['usuarios.consultar'], versaoAutorizacao: 1 });
     await done;
   };
 
@@ -82,6 +83,7 @@ describe('authInterceptor', () => {
     const result = firstValueFrom(client.get('/api/Usuarios')).catch(e => e);
     (await next('/api/Usuarios')).flush({}, { status: 403, statusText: 'Forbidden' });
 
+    (await next('/api/Me/Permissoes')).flush({ permissoes: [], versaoAutorizacao: 2 });
     expect((await result).status).toBe(403);
     expect(auth.isLoggedIn()).toBe(true);
   });

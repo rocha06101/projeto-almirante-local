@@ -1,3 +1,4 @@
+import { PermissoesService } from '../../core/services/permissoes';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { Treasury } from './treasury';
@@ -8,7 +9,8 @@ describe('Treasury', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [Treasury]
+      imports: [Treasury],
+      providers: [{ provide: PermissoesService, useValue: { tem: () => false } }]
     })
     .compileComponents();
 

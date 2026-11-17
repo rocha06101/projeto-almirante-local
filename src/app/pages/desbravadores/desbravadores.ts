@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { A11yModule } from '@angular/cdk/a11y';
-import { finalize, take } from 'rxjs';
+import { Observable, finalize, map, take } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { User as UserModel } from '../../core/models/user.model';
 import { User as UserService } from '../../core/services/user';
@@ -10,6 +10,10 @@ import { Router, RouterModule } from '@angular/router';
 import { RefreshButton } from '../../shared/components/refresh-button/refresh-button';
 import { UsuarioNavigationState, readNavigationState } from './usuario-navigation';
 import { describeUsuarioError } from './usuarios-api-errors';
+import { PermissoesService } from '../../core/services/permissoes';
+
+type UsuarioListagem = Omit<UserModel, 'email' | 'dataCriacao'> &
+  Partial<Pick<UserModel, 'email' | 'dataCriacao'>>;
 
 const normalizar = (texto: string) => texto.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 
@@ -27,10 +31,11 @@ export class Desbravadores implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly fotosCache = new Map<string, { fotoUrl: string; objectUrl: string }>();
   private readonly fotosEmCarregamento = new Map<string, string>();
+  readonly permissoes = inject(PermissoesService);
   fotoSources = signal<Record<string, string>>({});
   fotosFalhas = signal<Record<string, string>>({});
 
-  usuarios = signal<UserModel[]>([]);
+  usuarios = signal<UsuarioListagem[]>([]);
   isLoading = signal(true);
   errorMessage = signal('');
 
@@ -51,7 +56,7 @@ export class Desbravadores implements OnInit {
   /** Mensagem de sucesso (cadastro/alteração vindos do formulário, ou exclusão). */
   successMessage = signal(readNavigationState(this.router).feedback ?? '');
 
-  usuarioParaExcluir = signal<UserModel | null>(null);
+  usuarioParaExcluir = signal<UsuarioListagem | null>(null);
   isDeleting = signal(false);
   deleteError = signal('');
 
@@ -75,8 +80,13 @@ export class Desbravadores implements OnInit {
     this.isLoading.set(true);
     this.errorMessage.set('');
 
-    this.userService
-      .listarUsuarios({ includeInactive: this.includeInactive() })
+    const lista: Observable<UsuarioListagem[]> = this.permissoes.tem('usuarios.consultar')
+      ? this.userService.listarUsuarios({ includeInactive: this.includeInactive() })
+      : this.userService.listarMembros().pipe(
+          map(membros => membros.map(({ id, nome, cargo }) => ({ id, nome, funcao: cargo }))),
+        );
+
+    lista
       .pipe(
         take(1),
         finalize(() => this.isLoading.set(false)),
@@ -93,7 +103,7 @@ export class Desbravadores implements OnInit {
       });
   }
 
-  fotoExibicao(usuario: UserModel): string | null {
+  fotoExibicao(usuario: UsuarioListagem): string | null {
     const fotoUrl = usuario.fotoUrl;
     if (!fotoUrl || this.fotosFalhas()[usuario.id] === fotoUrl) {
       return null;
@@ -115,7 +125,7 @@ export class Desbravadores implements OnInit {
     }
   }
 
-  private carregarFotos(usuarios: UserModel[]): void {
+  private carregarFotos(usuarios: UsuarioListagem[]): void {
     const usuariosPorId = new Map(usuarios.map(usuario => [usuario.id, usuario]));
 
     for (const [usuarioId, foto] of this.fotosCache) {
@@ -190,11 +200,17 @@ export class Desbravadores implements OnInit {
     this.carregarUsuarios();
   }
 
-  editar(usuario: UserModel): void {
-    this.router.navigate(['/desbravadores/editar'], { state: { usuario } satisfies UsuarioNavigationState });
+  editar(usuario: UsuarioListagem): void {
+    const { email, dataCriacao } = usuario;
+    if (!this.permissoes.tem('usuarios.editar') || email === undefined || dataCriacao === undefined) return;
+    this.router.navigate(['/desbravadores/editar'], { state: { usuario: { ...usuario, email, dataCriacao } } satisfies UsuarioNavigationState });
   }
 
-  solicitarExclusao(usuario: UserModel): void {
+  solicitarExclusao(usuario: UsuarioListagem): void {
+    if (!this.permissoes.tem('usuarios.excluir')) {
+      this.toast.error('Você não tem permissão para excluir usuários.');
+      return;
+    }
     this.deleteError.set('');
     this.successMessage.set('');
     this.usuarioParaExcluir.set(usuario);
@@ -212,6 +228,10 @@ export class Desbravadores implements OnInit {
   confirmarExclusao(): void {
     const usuario = this.usuarioParaExcluir();
     if (!usuario || this.isDeleting()) {
+      return;
+    }
+    if (!this.permissoes.tem('usuarios.excluir')) {
+      this.deleteError.set('Você não tem permissão para excluir usuários.');
       return;
     }
 

@@ -38,4 +38,12 @@ describe('PermissoesService', () => {
     expect(request.cancelled).toBe(true);
     expect(service.carregadas()).toBe(false);
   });
+  it('remove concessões antigas quando a atualização falha', () => {
+    service.carregar().subscribe();
+    http.expectOne(url).flush({ permissoes: ['autorizacao.consultar'], versaoAutorizacao: 1 });
+    service.atualizar().subscribe();
+    http.expectOne(url).flush({}, { status: 403, statusText: 'Forbidden' });
+    expect(service.tem('autorizacao.consultar')).toBe(false);
+    expect(service.carregadas()).toBe(false);
+  });
 });

@@ -399,7 +399,7 @@ describe('UserRegister', () => {
       .toBe(true);
     expect(
       host.querySelector('app-primary-input[formcontrolname="rg"]')?.getAttribute('style'),
-    ).toContain('--primary-input-background: #f1f2f5');
+    ).toContain('--primary-input-background: #D9D9D9');
     expect(
       host.querySelector('app-primary-input[formcontrolname="rg"] label')?.textContent?.trim(),
     ).toBe('RG');

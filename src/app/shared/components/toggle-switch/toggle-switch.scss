@@ -18,7 +18,8 @@
   display: inline-flex;
   flex: 0 0 auto;
   width: 2.75rem;
-  height: 1.5rem;
+  height: 2.75rem;
+  align-items: center;
 
   input {
     position: absolute;
@@ -32,6 +33,7 @@
 }
 
 .toggle-track {
+  height: 1.5rem;
   display: flex;
   align-items: center;
   width: 100%;
@@ -52,6 +54,7 @@
 }
 
 input:checked + .toggle-track {
+  height: 1.5rem;
   border-color: var(--primary-button-color, #2563eb);
   background: var(--primary-button-color, #2563eb);
 
@@ -61,11 +64,13 @@ input:checked + .toggle-track {
 }
 
 input:focus-visible + .toggle-track {
+  height: 1.5rem;
   outline: 2px solid var(--primary-button-color, #2563eb);
   outline-offset: 2px;
 }
 
 input:disabled + .toggle-track {
+  height: 1.5rem;
   opacity: 0.55;
 }
 

@@ -8,8 +8,8 @@ import { permissaoGuard } from './permissao-guard';
 describe('permissaoGuard', () => {
   const auth = { isLoggedIn: () => true, validateSession: vi.fn() };
   const permissoes = { tem: vi.fn(), atualizar: vi.fn() };
-  const executar = () => firstValueFrom(TestBed.runInInjectionContext(() => permissaoGuard(
-    { data: { permissao: 'autorizacao.consultar' } } as unknown as ActivatedRouteSnapshot,
+  const executar = (data = { permissao: 'autorizacao.consultar' } as Record<string, unknown>) => firstValueFrom(TestBed.runInInjectionContext(() => permissaoGuard(
+    { data } as unknown as ActivatedRouteSnapshot,
     {} as RouterStateSnapshot,
   )) as Observable<true | ReturnType<Router['createUrlTree']>>);
 
@@ -37,5 +37,14 @@ describe('permissaoGuard', () => {
     expect((await executar()).toString()).toBe('/perfil');
     permissoes.tem.mockReturnValue(true);
     expect(await executar()).toBe(true);
+  });
+  it('aceita alternativas e exige todas as capacidades adicionais', async () => {
+    auth.validateSession.mockReturnValue(of(true));
+    permissoes.atualizar.mockReturnValue(of({}));
+    permissoes.tem.mockImplementation(chave => chave === 'segunda');
+    const data = { permissoes: ['primeira', 'segunda'], exige: ['adicional'] };
+    expect((await executar(data)).toString()).toBe('/perfil');
+    permissoes.tem.mockImplementation(chave => chave !== 'primeira');
+    expect(await executar(data)).toBe(true);
   });
 });

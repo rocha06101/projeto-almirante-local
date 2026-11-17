@@ -55,4 +55,27 @@ describe('Cargos', () => {
     expect([...tela.selecao().keys()]).toEqual([]);
     expect(tela.conflito()).toBe(false);
   });
+  it('impede escrita sem capacidade mesmo com confirmação preenchida', () => {
+    TestBed.overrideProvider(PermissoesService, { useValue: { tem: () => false } });
+    const tela = TestBed.createComponent(Cargos).componentInstance;
+    tela.abrir({ tipo: 'criar' });
+    tela.role = 'AUXSEC';
+    tela.nome = 'Auxiliar';
+    tela.descricao = 'Consulta';
+    tela.motivo = 'Teste';
+    tela.senha = 'segredo';
+    tela.salvar();
+    expect(api.post).not.toHaveBeenCalled();
+    expect(api.put).not.toHaveBeenCalled();
+  });
+
+  it.each(['motivo', 'senha'] as const)('exige %s antes de enviar', campo => {
+    const tela = TestBed.createComponent(Cargos).componentInstance;
+    tela.abrir({ tipo: 'editar', cargo });
+    tela.motivo = 'Teste';
+    tela.senha = 'segredo';
+    tela[campo] = '';
+    tela.salvar();
+    expect(api.put).not.toHaveBeenCalled();
+  });
 });

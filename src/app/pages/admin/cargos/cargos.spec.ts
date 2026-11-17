@@ -78,4 +78,91 @@ describe('Cargos', () => {
     tela.salvar();
     expect(api.put).not.toHaveBeenCalled();
   });
+
+  it.each(['criar', 'editar', 'situacao'] as const)('envia %s e limpa a senha no sucesso', tipo => {
+    api.get.mockReturnValue(of([]));
+    api.post.mockReturnValue(of(cargo));
+    api.put.mockReturnValue(of(cargo));
+    const tela = TestBed.createComponent(Cargos).componentInstance;
+    tela.abrir(tipo === 'criar' ? { tipo } : { tipo, cargo });
+    tela.role = 'auxsec';
+    tela.nome = 'Auxiliar';
+    tela.descricao = 'Consulta';
+    tela.motivo = 'Teste';
+    tela.senha = 'segredo';
+    tela.salvar();
+    expect(tela.senha).toBe('');
+    expect(tela.editor()).toBeNull();
+    if (tipo === 'editar') {
+      expect(api.put.mock.calls[0][1]).toEqual({
+        nome: 'Auxiliar', descricao: 'Consulta', versao: 1,
+        motivo: 'Teste', senhaAtualSolicitante: 'segredo',
+      });
+    } else {
+      expect(api.post.mock.calls[0][0]).toBe(tipo === 'criar' ? '/Cargos' : '/Cargos/cargo/Desativar');
+      if (tipo === 'criar') expect(api.post.mock.calls[0][1].role).toBe('AUXSEC');
+    }
+  });
+
+  it('mostra duplicidade no campo e limpa a senha após erro', () => {
+    api.post.mockReturnValue(throwError(() => new HttpErrorResponse({
+      status: 409, error: { errors: { role: ['Role em uso.'] } },
+    })));
+    const tela = TestBed.createComponent(Cargos).componentInstance;
+    tela.abrir({ tipo: 'criar' });
+    Object.assign(tela, { role: 'AUXSEC', nome: 'Auxiliar', descricao: 'Consulta', motivo: 'Teste', senha: 'segredo' });
+    tela.salvar();
+    expect(tela.erroRole()).toBe('Role em uso.');
+    expect(tela.senha).toBe('');
+  });
+
+  it('bloqueia desativação do protegido e permite reativar cargo inativo', () => {
+    api.get.mockReturnValue(of([]));
+    api.post.mockReturnValue(of(cargo));
+    const tela = TestBed.createComponent(Cargos).componentInstance;
+    tela.abrir({ tipo: 'situacao', cargo: { ...cargo, sistemaProtegido: true } });
+    tela.motivo = 'Teste';
+    tela.senha = 'segredo';
+    tela.salvar();
+    expect(api.post).not.toHaveBeenCalled();
+    tela.abrir({ tipo: 'situacao', cargo: { ...cargo, ativo: false } });
+    tela.motivo = 'Teste';
+    tela.senha = 'segredo';
+    tela.salvar();
+    expect(api.post.mock.calls[0][0]).toBe('/Cargos/cargo/Reativar');
+  });
+
+  it('resume e substitui regras completas, bloqueando 409 até recarregar', () => {
+    TestBed.overrideProvider(PermissoesService, { useValue: {
+      tem: () => true, cargo: () => ({ id: 'cargo' }), atualizar: () => of(null),
+    } });
+    api.get.mockReturnValue(of({ versao: 9, regras: [
+      { permissao: 'usuarios.criar', cargoAlvoId: 'alvo', cargoAlvoRole: 'AUXSEC' },
+    ] }));
+    api.put.mockReturnValue(throwError(() => new HttpErrorResponse({
+      status: 409, error: { versaoAtual: 10 },
+    })));
+    const tela = TestBed.createComponent(Cargos).componentInstance;
+    tela.abrir({ tipo: 'regras', cargo });
+    tela.alternar('usuarios.criar:alvo', 'usuarios.criar → AUXSEC', false);
+    tela.alternar('usuarios.editar:alvo', 'usuarios.editar → AUXSEC', true);
+    expect(tela.removidas()).toEqual(['usuarios.criar → AUXSEC']);
+    expect(tela.adicionadas()).toEqual(['usuarios.editar → AUXSEC']);
+    tela.confirmando = true;
+    tela.motivo = 'Teste';
+    tela.senha = 'segredo';
+    tela.salvar();
+    expect(api.put.mock.calls[0][1]).toEqual({
+      versao: 9, regras: [{ permissao: 'usuarios.editar', cargoAlvoId: 'alvo' }],
+      motivo: 'Teste', senhaAtualSolicitante: 'segredo',
+    });
+    expect(tela.senha).toBe('');
+    tela.senha = 'segredo';
+    tela.salvar();
+    expect(api.put).toHaveBeenCalledTimes(1);
+    api.get.mockReturnValue(of({ versao: 10, regras: [] }));
+    tela.recarregar();
+    expect(tela.conflito()).toBe(false);
+    expect(tela.selecao().size).toBe(0);
+  });
 });

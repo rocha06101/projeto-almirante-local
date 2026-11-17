@@ -136,3 +136,25 @@ test.describe('celular 390x844', () => {
     }
   });
 });
+
+test('administração com autorizacao.consultar isolada carrega sem ações de escrita', async ({ page }) => {
+  await page.route('**/api/Me/Permissoes', route => route.fulfill({ json: {
+    cargo: { id: 'c1', nome: 'Consulta', role: 'ADM' },
+    permissoes: ['autorizacao.consultar'], permissoesPorDesignacao: [], versaoAutorizacao: 1,
+  } }));
+  await page.route('**/api/Cargos', route => route.fulfill({ json: [{
+    id: 'c1', role: 'ADM', nome: 'Consulta administrativa', descricao: 'Consulta',
+    ativo: true, sistemaProtegido: true, versao: 1,
+  }] }));
+  await page.route('**/api/Permissoes', route => route.fulfill({ json: [] }));
+  await page.goto('/admin/cargos');
+  await expect(page.getByRole('link', { name: 'Cargos e permissões' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Consulta administrativa', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Criar cargo|Editar|Desativar|Reativar/ })).toHaveCount(0);
+  await page.route('**/api/Me/Permissoes', route => route.fulfill({ json: {
+    permissoes: [], permissoesPorDesignacao: [], versaoAutorizacao: 2,
+  } }));
+  await page.goto('/admin/cargos');
+  await expect(page).toHaveURL(/\/perfil$/);
+  await expect(page.getByRole('link', { name: 'Cargos e permissões' })).toHaveCount(0);
+});

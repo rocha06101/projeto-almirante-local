@@ -1,43 +1,47 @@
 # Validação da issue #186
 
-Validação local em 17/11/2026. Frontend em feature/issue-186-rbac-frontend, base 27217305fe1ed8dccc6cc7594e45506af185cf45. Backend em ../backend-issue-186, branch fix/issue-186-cargos-consulta, base 27f4af4adade9de7d3593ff50f048986e2b385ed com alterações locais. Nenhum AGENTS.md foi encontrado nos repositórios.
+Revisão local em 17/11/2026. Escopo conforme a [issue #186](https://github.com/LucasDevolps/Desbravadores.Backend/issues/186).
 
-## Reprodução e correção
+## Estado Git e arquivos da revisão
 
-GET /api/Cargos aceita cargos.consultar OU autorizacao.consultar. RequerQualquerPermissao gera um único requisito cuja avaliação usa Any. As exigências individuais de escrita permanecem nas actions. A rota/menu administrativos continuam exigindo autorizacao.consultar.
+- Frontend `rocha06101/projeto-almirante-local`, branch `feature/issue-186-rbac-frontend`, HEAD `867fb61c`, igual à referência remota local. A árvore começou limpa. Esta revisão deixa alterações locais em `src/app/core/services/permissoes{,.spec}.ts`, `src/app/core/guards/permissao-guard{,.spec}.ts`, `src/app/pages/admin/cargos/cargos{.ts,.html,.spec.ts}` e neste relatório.
+- Backend `LucasDevolps/Desbravadores.Backend`, worktree `../backend-issue-186`, branch `fix/issue-186-cargos-consulta`, HEAD `27f4af4`, igual à referência remota local de `develop`. A correção de leitura já estava em `src/Almirante.Api/Controllers/CargosController.cs` e `src/Almirante.Api/Security/PermissoesService.cs`, com teste em `src/Almirante.Api.Tests/RbacDinamicoTests.cs`. Esta revisão ajusta o atributo em `PermissoesService.cs` para expor as chaves e atualiza `src/Almirante.Api.Tests/PermissoesUnitTests.cs`.
+- Todos os arquivos com alterações locais nos dois worktrees pertencem à #186. No histórico do frontend, o diff `git diff --name-status main...HEAD` inclui a implementação RBAC e correções anteriores. O ajuste visual em `toggle-switch.scss` e a mudança isolada da expectativa de cor do RG em `user-register.spec.ts` são anteriores a esta revisão e alheios à autorização.
+- Alterações mantidas locais, sem commit, push, merge ou encerramento da issue. As referências remotas citadas são as já disponíveis no Git local.
 
-O teste ConsultaCargos_AceitaCadaCapacidadeSemLiberarEscrita usa AlmiranteApiFactory com EF InMemory isolado. O cargo protegido da fixture recebe cada permissão isoladamente. Confirma leitura com cada capacidade, 403 sem ambas, 401 anônimo e 403 para criar, editar, desativar, reativar, alterar concessões e regras. Nenhuma permissão do administrador compartilhado foi alterada para esse cenário.
+## Comportamento revisado
 
-Com a política anterior, dois casos passaram e o caso autorizacao.consultar falhou, recebendo Forbidden em vez de OK. A política corrigida foi restaurada após a reprodução.
-
-O cenário de navegador em shell.spec.ts intercepta a API com apenas autorizacao.consultar. Confirma lista carregada, menu presente, escrita ausente e bloqueio da rota/menu quando a permissão é retirada. A validação HTTP real dessa capacidade ocorre na fixture de integração do backend. O cenário completo de navegador contra a nova API instalada permanece pendente.
+- `PermissoesService.atualizar()` distingue permissão validada com lista vazia, falha com o erro original e consulta cancelada por fim da sessão. Uma falha invalida as permissões em memória. O guard exige validação antes de consultar as chaves, redireciona para o perfil com aviso quando a API falha e mantém o redirecionamento habitual ao perfil quando a lista válida não contém as chaves exigidas. Sessão encerrada redireciona ao login.
+- O editor de concessões e regras por alvo bloqueia seleção e escrita quando a leitura falha. Rede e erro genérico oferecem nova tentativa, 401 oferece login, 403 orienta sobre o acesso e permite fechar, 404 oferece atualizar a lista. Conflito de versão 409 ao salvar bloqueia novo envio até recarregar. Duplicidade de role e restrições de desativação continuam seguindo o ProblemDetails da API.
+- O GET `/api/Cargos` aceita `cargos.consultar` ou `autorizacao.consultar`. A API avalia as alternativas em um único requisito. Criar, editar, desativar e reativar continuam exigindo `autorizacao.cargos.gerenciar`. Alterar concessões exige `autorizacao.concessoes.gerenciar` e alterar regras exige `autorizacao.regras-alvo.gerenciar`. A rota administrativa do frontend exige `autorizacao.consultar`.
+- A integração RBAC testa cada capacidade de leitura isoladamente, 403 sem as duas, 401 anônimo e 403 para todas as escritas com apenas capacidade de consulta. O teste estrutural valida as chaves do requisito alternativo no catálogo e a ausência de requisitos acumulados.
 
 ## Comandos e resultados
 
-O Docker com mcr.microsoft.com/dotnet/sdk:10.0 resolveu NETSDK1045, preservando o SDK global e net10.0.
+Os comandos Angular e Playwright foram executados com Node 22 via `npx --yes --package=node@22 -- node`. O backend foi compilado e testado no contêiner `mcr.microsoft.com/dotnet/sdk:10.0` (SDK 10.0.404), pois o host tem só o SDK 8. O navegador foi Chromium.
 
-```sh
-docker run --rm -v "$(realpath ../backend-issue-186):/src" -w /src \
-  mcr.microsoft.com/dotnet/sdk:10.0 \
-  dotnet test src/Almirante.Api.Tests --filter FullyQualifiedName~RbacDinamicoTests
-npx --yes --package=node@22 -- node node_modules/@angular/cli/bin/ng.js build
-npx --yes --package=node@22 -- node node_modules/@angular/cli/bin/ng.js test --watch=false
-E2E_BROWSER_CHANNEL=chromium npx --yes --package=node@22 -- node \
-  node_modules/@playwright/test/cli.js test --project=layout e2e/shell.spec.ts
-```
+| Validação | Resultado |
+| --- | --- |
+| `ng build` | Aprovado, com avisos de orçamento do bundle inicial e de estilos. |
+| `ng test --watch=false` | 274 testes aprovados em 42 arquivos. |
+| `playwright test --project=pwa` | 3 testes aprovados. |
+| `dotnet build src/Almirante.slnx` | Aprovado. O restore reportou avisos NU1903 para dependências Aspire do AppHost. |
+| `dotnet test src/Almirante.Api.Tests --no-build --filter 'Category!=RequiresSqlServer'` | 1.509 aprovados e 1 falha em 1.510. O teste de corrida entre refresh e logout esperava 401 e recebeu 200. |
+| Filtro `RbacDinamicoTests\|PermissoesUnitTests\|RefreshQuePerdeACorridaParaUmLogout` | 22 aprovados. A falha de corrida da suíte ampla não se repetiu nesta rodada. |
+| `dotnet test src/Almirante.Api.Tests --no-build --filter Category=RequiresSqlServer` | Rodada ampla interrompida após perda da instância temporária, com falhas de handshake e conexão e sem total final. |
+| `dotnet vstest …/Almirante.Api.Tests.dll --TestCaseFilter:FullyQualifiedName~AutorizacaoSqlServerTests` | 4 aprovados em SQL Server 2022, em nova instância isolada com limite de memória e CPU. |
+| `playwright test --project=layout --workers=1 e2e/shell.spec.ts` | 9 aprovados, incluindo a interface com `autorizacao.consultar` isolada e a perda de acesso. |
+| `playwright test --project=real-backend --workers=1` | 2 aprovados, incluindo AUXSEC, e 3 falhas nos testes de login e tesouraria por seletor de senha ambíguo. |
 
-- Backend corrigido — dez testes de RbacDinamicoTests aprovados, zero falhas e zero ignorados, em 15 segundos. A rodada com política anterior teve a única falha esperada no acesso por autorizacao.consultar.
-- Build aprovado, com avisos de orçamento de bundle/estilos.
-- 265 testes unitários aprovados em 42 arquivos, zero ignorados.
-- Nove E2E de navegação aprovados, zero ignorados.
-- Um E2E AUXSEC real aprovado em 16,2 segundos, zero ignorados. Executado com --project=real-backend e2e/rbac.real.spec.ts, em localhost:8444 via frontend localhost:4201, usando credenciais de teste previamente configuradas sem impressão.
+A primeira rodada sem SQL identificou que `PermissoesUnitTests` classificava a política alternativa do GET como fora do catálogo. O teste estrutural foi corrigido e passou no filtro dedicado. A matriz ampla de navegador foi interrompida após a troca do proxy local e falhas de conexão e carregamento, de modo que a rodada independente de `shell.spec.ts` é a evidência para navegação.
 
-AUXSEC preserva sua limpeza de usuário, cargo, designação e regras temporárias. O histórico de auditoria permanece. A API local usada pelo AUXSEC ainda é a imagem almirante-api existente, sem instalação da correção deste worktree.
+O E2E AUXSEC passou em 13,2 segundos contra a API compilada deste worktree, com migrations e SQL Server 2022 em contêiner isolado. O frontend usou HTTPS em `localhost:4201` com proxy para a API HTTPS de teste. O cenário confirmou criação e alterações de cargo, concessões, regras, conflito de versão, designação de almoxarifado, acesso do auxiliar e 403 na próxima consulta depois da revogação. A limpeza prevista pelo teste também concluiu.
 
-## Cobertura e limites
+Os três testes E2E de login e tesouraria pararam em `getByLabel('Senha')`, que também encontra o controle de visibilidade da senha. As chamadas ambíguas já estavam em `main`. A automação desses outros fluxos fica fora desta correção.
 
-Os testes de Cargos cobrem criação normalizada, edição, duplicidade, desativação/reativação, protegido, motivo/senha obrigatórios, limpeza após sucesso/erro, ausência de capacidade, resumo e substituição integral de regras e concessões com versão e bloqueio após 409 até recarga.
 
-As causas das falhas de CIN já existiam no pai do commit revisado, conforme inspeção do código. O teste de RG agora exige #D9D9D9 e a área clicável oferece 44 px. Os testes correspondentes passaram.
+## Pendências para encerramento
 
-O código do backend está preparado e validado em fixture isolada, sem merge ou instalação na API compartilhada. Homologação compartilhada, suíte completa do backend e testes SQL Server permanecem não executados nesta rodada. A revisão/publicação das alterações nos dois repositórios e a instalação da API corrigida continuam necessárias para a entrega compartilhada.
+- Revisar e publicar as mudanças dos dois repositórios com autorização, instalar a versão corrigida na homologação compartilhada e registrar o checklist e estes resultados na #186.
+- Completar a suíte SQL ampla em uma instância estável. A execução focada cobre autorização e migrations. A execução no navegador cobre o fluxo AUXSEC na API corrigida em ambiente local isolado.
+- Acompanhar a falha intermitente no teste de corrida entre refresh e logout e corrigir os seletores dos E2E de login e tesouraria se essas suítes forem exigidas para o aceite.

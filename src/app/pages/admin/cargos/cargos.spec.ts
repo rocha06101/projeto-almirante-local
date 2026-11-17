@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { Observable, of, throwError } from 'rxjs';
 import { ApiService } from '../../../core/services/api';
@@ -18,6 +19,7 @@ describe('Cargos', () => {
     TestBed.configureTestingModule({
       imports: [Cargos],
       providers: [
+        provideRouter([]),
         { provide: ApiService, useValue: api },
         { provide: PermissoesService, useValue: { tem: () => true, atualizar: () => of(null) } },
         { provide: AuthService, useValue: {
@@ -55,6 +57,30 @@ describe('Cargos', () => {
     expect([...tela.selecao().keys()]).toEqual([]);
     expect(tela.conflito()).toBe(false);
   });
+  it.each([
+    [0, 'tentar', 'Falha de conexão'],
+    [401, 'login', 'Sessão expirada'],
+    [403, 'fechar', 'não tem permissão'],
+    [404, 'lista', 'Cargo não encontrado'],
+    [409, 'tentar', 'Não foi possível carregar'],
+  ])('trata HTTP %s na leitura sem marcar conflito ou permitir escrita', (status, acao, mensagem) => {
+    api.get.mockReturnValue(throwError(() => new HttpErrorResponse({ status })));
+    const tela = TestBed.createComponent(Cargos).componentInstance;
+    tela.abrir({ tipo: 'permissoes', cargo });
+    expect(tela.falhaCarga()).toEqual({ acao, mensagem: expect.stringContaining(mensagem) });
+    expect(tela.conflito()).toBe(false);
+    Object.assign(tela, { confirmando: true, motivo: 'Teste', senha: 'segredo' });
+    tela.salvar();
+    expect(api.put).not.toHaveBeenCalled();
+
+    if (acao === 'tentar') {
+      api.get.mockReturnValue(of({ versao: 2, permissoes: ['eventos.consultar'] }));
+      tela.recarregar();
+      expect(tela.falhaCarga()).toBeNull();
+      expect(tela.selecao().has('eventos.consultar')).toBe(true);
+    }
+  });
+
   it('impede escrita sem capacidade mesmo com confirmação preenchida', () => {
     TestBed.overrideProvider(PermissoesService, { useValue: { tem: () => false } });
     const tela = TestBed.createComponent(Cargos).componentInstance;

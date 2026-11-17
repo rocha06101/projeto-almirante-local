@@ -32,18 +32,34 @@ describe('PermissoesService', () => {
   });
 
   it('cancela a consulta pendente ao encerrar a sessão', () => {
-    service.carregar().subscribe();
+    const resultado = vi.fn();
+    service.atualizar().subscribe(resultado);
     const request = http.expectOne(url);
     service.limpar();
+    expect(resultado).toHaveBeenCalledWith({ tipo: 'cancelado' });
     expect(request.cancelled).toBe(true);
     expect(service.carregadas()).toBe(false);
   });
   it('remove concessões antigas quando a atualização falha', () => {
     service.carregar().subscribe();
     http.expectOne(url).flush({ permissoes: ['autorizacao.consultar'], versaoAutorizacao: 1 });
-    service.atualizar().subscribe();
+    const resultado = vi.fn();
+    service.atualizar().subscribe(resultado);
     http.expectOne(url).flush({}, { status: 403, statusText: 'Forbidden' });
+    expect(resultado).toHaveBeenCalledWith({
+      tipo: 'falha',
+      erro: expect.objectContaining({ status: 403 }),
+    });
     expect(service.tem('autorizacao.consultar')).toBe(false);
     expect(service.carregadas()).toBe(false);
+  });
+  it('valida uma lista vazia de permissões', () => {
+    const resultado = vi.fn();
+    const resposta = { permissoes: [], versaoAutorizacao: 2 };
+    service.atualizar().subscribe(resultado);
+    http.expectOne(url).flush(resposta);
+    expect(resultado).toHaveBeenCalledWith({ tipo: 'validado', permissoes: resposta });
+    expect(service.carregadas()).toBe(true);
+    expect(service.tem('autorizacao.consultar')).toBe(false);
   });
 });

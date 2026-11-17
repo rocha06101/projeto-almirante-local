@@ -85,6 +85,7 @@
         </p>
       }
 
+      @let falha = falhaCarga();
       <form (ngSubmit)="salvar()">
         @if (atual.tipo === 'criar') {
           <p>O cargo é criado ativo e sem permissões.</p>
@@ -105,7 +106,7 @@
         }
         @if (carregandoEditor()) {
           <p role="status">Carregando…</p>
-        } @else if (!conflito() && atual.tipo === 'permissoes' && !confirmando) {
+        } @else if (!falha && !conflito() && atual.tipo === 'permissoes' && !confirmando) {
           @for (grupo of grupos(); track grupo[0]) {
             <fieldset class="border rounded p-3 mb-3">
               <legend class="fs-6 fw-semibold">{{ grupo[0] }}</legend>
@@ -122,7 +123,7 @@
               }
             </fieldset>
           }
-        } @else if (!conflito() && atual.tipo === 'regras' && !confirmando) {
+        } @else if (!falha && !conflito() && atual.tipo === 'regras' && !confirmando) {
           <p>Sem regra, o acesso é negado. A regra exige também a concessão da operação ao cargo solicitante. Não há hierarquia automática.</p>
           <div class="table-responsive" tabindex="0" role="region" aria-label="Matriz de regras por alvo">
             <table class="table table-bordered align-middle">
@@ -150,12 +151,12 @@
         }
 
         @let conjunto = atual.tipo === 'permissoes' || atual.tipo === 'regras';
-        @if (conjunto && confirmando && !conflito()) {
+        @if (conjunto && confirmando && !falha && !conflito()) {
           <h3 class="fs-5">Resumo da alteração</h3>
           <p><strong>Concedidas</strong> · {{ adicionadas().join(', ') || 'Nenhuma' }}</p>
           <p><strong>Revogadas</strong> · {{ removidas().join(', ') || 'Nenhuma' }}</p>
         }
-        @if (pode(atual.tipo) && (!conjunto || confirmando) && !conflito()) {
+        @if (pode(atual.tipo) && (!conjunto || confirmando) && !falha && !conflito()) {
           <label class="d-block mb-2">Motivo
             <textarea class="form-control" name="motivo" maxlength="255" [(ngModel)]="motivo" required></textarea>
           </label>
@@ -166,10 +167,23 @@
             <app-password-toggle [(visible)]="mostrarSenha" />
           </div>
         }
+        @if (falha) { <p class="alert alert-danger" role="alert">{{ falha.mensagem }}</p> }
         @if (erro()) { <p class="alert alert-danger" role="alert">{{ erro() }}</p> }
         <div class="d-flex flex-wrap gap-2 justify-content-end">
           <button class="btn btn-outline-secondary" type="button" [disabled]="salvando() || carregandoEditor()" (click)="fechar()">Fechar</button>
-          @if (conflito()) {
+          @if (falha) {
+            @switch (falha.acao) {
+              @case ('tentar') {
+                <button class="btn btn-outline-primary" type="button" (click)="recarregar()">Tentar novamente</button>
+              }
+              @case ('login') {
+                <a class="btn btn-outline-primary" routerLink="/login">Entrar novamente</a>
+              }
+              @case ('lista') {
+                <button class="btn btn-outline-primary" type="button" (click)="voltarLista()">Atualizar lista</button>
+              }
+            }
+          } @else if (conflito()) {
             <button class="btn btn-outline-primary" type="button" (click)="recarregar()">Recarregar dados</button>
           } @else if (pode(atual.tipo) && !carregandoEditor()) {
             @if (conjunto && !confirmando) {

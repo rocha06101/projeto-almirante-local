@@ -1,8 +1,13 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, Subject, catchError, defaultIfEmpty, finalize, of, shareReplay, takeUntil, tap, throwError } from 'rxjs';
+import { Observable, Subject, catchError, defaultIfEmpty, finalize, map, of, shareReplay, takeUntil, tap, throwError } from 'rxjs';
 
 import { MinhasPermissoes } from '../models/permissoes.model';
 import { ApiService } from './api';
+
+type ResultadoAtualizacao =
+  | { tipo: 'validado'; permissoes: MinhasPermissoes }
+  | { tipo: 'falha'; erro: unknown }
+  | { tipo: 'cancelado' };
 
 @Injectable({
   providedIn: 'root',
@@ -27,8 +32,12 @@ export class PermissoesService {
   private readonly sessaoEncerrada = new Subject<void>();
   private carregamento?: Observable<MinhasPermissoes>;
 
-  atualizar(): Observable<MinhasPermissoes | null> {
-    return this.carregar().pipe(catchError(() => of(null)), defaultIfEmpty(null));
+  atualizar(): Observable<ResultadoAtualizacao> {
+    return this.carregar().pipe(
+      map((permissoes): ResultadoAtualizacao => ({ tipo: 'validado', permissoes })),
+      catchError((erro: unknown) => of({ tipo: 'falha', erro } as const)),
+      defaultIfEmpty({ tipo: 'cancelado' } as const),
+    );
   }
 
   carregar(): Observable<MinhasPermissoes> {

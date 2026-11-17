@@ -2,6 +2,7 @@ import { A11yModule } from '@angular/cdk/a11y';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Observable, finalize, forkJoin, map } from 'rxjs';
 import { ApiService } from '../../../core/services/api';
@@ -52,7 +53,7 @@ const capacidades = {
 };
 
 @Component({
-  imports: [FormsModule, A11yModule, PasswordToggleComponent],
+  imports: [FormsModule, A11yModule, PasswordToggleComponent, RouterLink],
   templateUrl: './cargos.html',
   styleUrl: './cargos.scss',
 })
@@ -70,6 +71,7 @@ export class Cargos implements OnInit {
   readonly erroLista = signal('');
   readonly erro = signal('');
   readonly erroRole = signal('');
+  readonly falhaCarga = signal<{ mensagem: string; acao: 'tentar' | 'login' | 'fechar' | 'lista' } | null>(null);
   readonly conflito = signal(false);
   readonly sucesso = signal('');
   readonly editor = signal<Editor | null>(null);
@@ -143,6 +145,7 @@ export class Cargos implements OnInit {
     this.erro.set('');
     this.erroRole.set('');
     this.conflito.set(false);
+    this.falhaCarga.set(null);
     this.confirmando = false;
     this.motivo = '';
     this.senha = '';
@@ -186,14 +189,18 @@ export class Cargos implements OnInit {
     this.editor.set(null);
   }
 
+  voltarLista(): void {
+    this.fechar();
+    this.carregar();
+  }
+
   recarregar(): void {
     const editor = this.editor();
     if (!editor || editor.tipo === 'criar') return;
     if (editor.tipo === 'permissoes' || editor.tipo === 'regras') {
       this.abrir(editor);
     } else {
-      this.fechar();
-      this.carregar();
+      this.voltarLista();
     }
   }
 
@@ -234,7 +241,7 @@ export class Cargos implements OnInit {
     const editor = this.editor();
     if (editor?.tipo === 'situacao' && editor.cargo.ativo && editor.cargo.sistemaProtegido) return;
     if ((editor?.tipo === 'permissoes' || editor?.tipo === 'regras') && !this.confirmando) return;
-    if (!editor || this.carregandoEditor() || !this.pode(editor.tipo) || this.salvando() || this.conflito() ||
+    if (!editor || this.carregandoEditor() || !this.pode(editor.tipo) || this.salvando() || this.conflito() || this.falhaCarga() ||
         !this.motivo.trim() || !this.senha) return;
 
     const confirmacao = { motivo: this.motivo.trim(), senhaAtualSolicitante: this.senha };
@@ -315,9 +322,23 @@ export class Cargos implements OnInit {
         this.versao = versao;
         this.definirSelecao(selecao);
       },
-      error: erro => {
-        this.erro.set(this.mensagem(erro));
-        this.conflito.set(true);
+      error: (erro: unknown) => {
+        switch (erro instanceof HttpErrorResponse ? erro.status : undefined) {
+          case 401:
+            this.falhaCarga.set({ mensagem: 'Sessão expirada. Entre novamente.', acao: 'login' });
+            break;
+          case 403:
+            this.falhaCarga.set({ mensagem: 'Você não tem permissão para consultar estes dados.', acao: 'fechar' });
+            break;
+          case 404:
+            this.falhaCarga.set({ mensagem: 'Cargo não encontrado. Atualize a lista de cargos.', acao: 'lista' });
+            break;
+          case 0:
+            this.falhaCarga.set({ mensagem: 'Falha de conexão ao carregar os dados do cargo.', acao: 'tentar' });
+            break;
+          default:
+            this.falhaCarga.set({ mensagem: 'Não foi possível carregar os dados do cargo.', acao: 'tentar' });
+        }
       },
     });
   }

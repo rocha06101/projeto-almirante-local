@@ -30,6 +30,7 @@ import {
   Subject,
 } from 'rxjs';
 import { User as UserModel } from '../../../core/models/user.model';
+import { PermissoesService } from '../../../core/services/permissoes';
 import { AuthService } from '../../../core/services/auth';
 import { User as UserService } from '../../../core/services/user';
 import { UserAvatarService } from '../../../core/services/user-avatar.service';
@@ -83,6 +84,7 @@ export class UserEdit implements OnDestroy {
   private readonly location = inject(Location);
   private readonly fb = inject(FormBuilder);
   private readonly userService = inject(UserService);
+  readonly permissoes = inject(PermissoesService);
   private readonly auth = inject(AuthService);
   private readonly userAvatar = inject(UserAvatarService);
   private readonly toast = inject(ToastService);

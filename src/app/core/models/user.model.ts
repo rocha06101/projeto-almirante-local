@@ -45,6 +45,13 @@ export interface UserAddressUpdate {
 }
 
 /** Item de `GET /api/Usuarios` (UsuarioListItemDto); também é a resposta de POST e PUT. */
+export interface MembroResumo {
+  id: string;
+  nome: string;
+  cargo: string;
+  role: string;
+}
+
 export interface User {
   id: string;
   nome: string;

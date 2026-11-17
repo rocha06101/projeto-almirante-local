@@ -1,3 +1,4 @@
+import { PermissoesService } from '../../core/services/permissoes';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router, provideRouter } from '@angular/router';
@@ -61,6 +62,7 @@ describe('Desbravadores', () => {
       imports: [Desbravadores],
       providers: [
         provideRouter([]),
+        { provide: PermissoesService, useValue: { tem: () => true } },
         { provide: UserService, useValue: service },
         { provide: ToastService, useValue: toast },
       ],

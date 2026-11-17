@@ -3,6 +3,7 @@ import { inject } from '@angular/core';
 import { catchError, switchMap, throwError } from 'rxjs';
 import { isApiUrl } from '../config/api-base';
 import { AuthService } from '../services/auth';
+import { PermissoesService } from '../services/permissoes';
 import { SKIP_AUTH } from './auth-context';
 
 const AUTH_ENDPOINT = /\/Auth\/(login|refresh|logout|csrf)\/?$/i;
@@ -21,6 +22,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   }
 
   const auth = inject(AuthService);
+  const permissoes = inject(PermissoesService);
   const base = req.clone({ withCredentials: true });
   const token = req.context.get(SKIP_AUTH) ? null : auth.accessToken();
 
@@ -42,6 +44,15 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
           return throwError(() => retryError);
         }),
       );
+    }),
+    catchError((error: unknown) => {
+      if (
+        token && auth.isLoggedIn() && error instanceof HttpErrorResponse && error.status === 403 &&
+        !AUTH_ENDPOINT.test(req.url) && !/\/Me\/Permissoes\/?$/i.test(req.url.split('?')[0])
+      ) {
+        return permissoes.atualizar().pipe(switchMap(() => throwError(() => error)));
+      }
+      return throwError(() => error);
     }),
   );
 };

@@ -1,26 +1,36 @@
 <section class="desbravadores-page">
   <header class="page-header">
     <div>
-      <span class="eyebrow">Gestao de usuarios</span>
+      <span class="eyebrow">
+        {{ permissoes.tem('usuarios.consultar') ? 'Gestão de usuários' : 'Consulta de membros' }}
+      </span>
       <h1>Desbravadores</h1>
     </div>
 
     <div class="header-actions">
-      <label class="inactive-toggle">
-        <input
-          type="checkbox"
-          [checked]="includeInactive()"
-          [disabled]="isLoading()"
-          (change)="alternarInativos($event)"
-        >
-        Exibir inativos
-      </label>
-
-      <app-refresh-button [routerLink]="['/desbravadores/cadastrar']">
-        Cadastrar
-      </app-refresh-button>
+      @if (permissoes.tem('usuarios.consultar')) {
+        <label class="inactive-toggle">
+          <input
+            type="checkbox"
+            [checked]="includeInactive()"
+            [disabled]="isLoading()"
+            (change)="alternarInativos($event)"
+          >
+          Exibir inativos
+        </label>
+      }
+      @if (permissoes.tem('usuarios.criar') && permissoes.tem('cargos.consultar')) {
+        <app-refresh-button [routerLink]="['/desbravadores/cadastrar']">
+          Cadastrar
+        </app-refresh-button>
+      }
     </div>
   </header>
+
+  @let podeEditar = permissoes.tem('usuarios.editar') &&
+    permissoes.tem('usuarios.consultar') && permissoes.tem('cargos.consultar');
+  @let podeExcluir = permissoes.tem('usuarios.excluir');
+  @let exibeAcoes = podeEditar || podeExcluir;
 
   @if (isLoading()) {
     <div class="state-card">
@@ -71,7 +81,9 @@
             <tr role="row">
               <th scope="col" role="columnheader">Nome</th>
               <th scope="col" role="columnheader">Cargo/Função</th>
+              @if (exibeAcoes) {
               <th scope="col" role="columnheader" class="cell-actions">Ações</th>
+            }
             </tr>
           </thead>
           <tbody role="rowgroup">
@@ -103,30 +115,36 @@
                 <td role="cell" data-label="Cargo/Função">
                   <span class="role-pill">{{ usuario.cargo?.nome ?? usuario.funcao ?? usuario.roles }}</span>
                 </td>
-                <td class="cell-actions" role="cell" data-label="Ações">
-                  @if (usuario.ativo !== false) {
-                    <div class="row-actions">
-                      <button
-                        type="button"
-                        class="action-button"
-                        [attr.aria-label]="'Editar ' + usuario.nome"
-                        (click)="editar(usuario)"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        class="action-button danger"
-                        [attr.aria-label]="'Excluir ' + usuario.nome"
-                        (click)="solicitarExclusao(usuario)"
-                      >
-                        Excluir
-                      </button>
-                    </div>
-                  } @else {
-                    <span class="muted">—</span>
-                  }
-                </td>
+                @if (exibeAcoes) {
+                  <td class="cell-actions" role="cell" data-label="Ações">
+                    @if (usuario.ativo !== false) {
+                      <div class="row-actions">
+                        @if (podeEditar) {
+                          <button
+                            type="button"
+                            class="action-button"
+                            [attr.aria-label]="'Editar ' + usuario.nome"
+                            (click)="editar(usuario)"
+                          >
+                            Editar
+                          </button>
+                        }
+                        @if (podeExcluir) {
+                          <button
+                            type="button"
+                            class="action-button danger"
+                            [attr.aria-label]="'Excluir ' + usuario.nome"
+                            (click)="solicitarExclusao(usuario)"
+                          >
+                            Excluir
+                          </button>
+                        }
+                      </div>
+                    } @else {
+                      <span class="muted">—</span>
+                    }
+                  </td>
+                }
               </tr>
             }
           </tbody>

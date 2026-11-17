@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
-import { AuthService } from '../../../core/services/auth';
+import { PermissoesService } from '../../../core/services/permissoes';
 import { ToastService } from '../../../core/services/toast.service';
 import { of, Subject, throwError } from 'rxjs';
 
@@ -56,7 +56,7 @@ describe('UserRegister', () => {
     obterFoto: ReturnType<typeof vi.fn>;
   };
   let navigate: ReturnType<typeof vi.spyOn>;
-  let loggedInRole = 'SEC';
+  let podeAlterarFoto = true;
 
   const setup = async (modo?: 'editar') => {
     TestBed.configureTestingModule({
@@ -64,7 +64,7 @@ describe('UserRegister', () => {
       providers: [
         provideRouter([]),
         { provide: UserService, useValue: service },
-        { provide: AuthService, useValue: { user: () => ({ cargo: { role: loggedInRole } }) } },
+        { provide: PermissoesService, useValue: { tem: () => podeAlterarFoto } },
         ...(modo ? [{ provide: ActivatedRoute, useValue: { snapshot: { data: { modo } } } }] : []),
       ],
     });
@@ -128,7 +128,7 @@ describe('UserRegister', () => {
       enviarFoto: vi.fn(),
       obterFoto: vi.fn(),
     };
-    loggedInRole = 'SEC';
+    podeAlterarFoto = true;
   });
 
   afterEach(() => {
@@ -438,7 +438,7 @@ describe('UserRegister', () => {
   });
 
   it('desabilita o upload para perfis sem permissão de gestão de cadastros', async () => {
-    loggedInRole = 'DS';
+    podeAlterarFoto = false;
     await setup();
 
     expect(host.querySelector<HTMLElement>('app-upload-foto .upload-foto-container')?.getAttribute('aria-disabled'))

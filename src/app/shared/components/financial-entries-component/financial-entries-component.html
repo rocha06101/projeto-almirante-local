@@ -41,9 +41,11 @@
         <input type="date" [ngModel]="selectedDate()" (ngModelChange)="selectedDate.set($event); onFilterChange()" />
       </label>
 
+      @if (permissoes.tem('financeiro.lancamentos.criar') && permissoes.tem('membros.consultar')) {
       <button type="button" class="primary-button" (click)="openNewEntry()">
         Novo lançamento
       </button>
+      }
     </div>
   </header>
 
@@ -227,12 +229,16 @@
                 <button type="button" class="icon-button" [attr.aria-label]="'Visualizar lançamento de ' + item.membroNome" title="Visualizar" (click)="viewEntry(item)">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>
                 </button>
+                @if (permissoes.tem('financeiro.lancamentos.editar')) {
                 <button type="button" class="icon-button" [attr.aria-label]="'Editar lançamento de ' + item.membroNome" [title]="isFromEvento(item) ? 'Gerado por evento: edite em Eventos' : 'Editar'" [disabled]="isFromEvento(item)" (click)="openEditEntry(item)">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm14.71-9.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.26 1.26 3.75 3.75 1.26-1.26Z"/></svg>
                 </button>
+                }
+                @if (permissoes.tem('financeiro.lancamentos.excluir')) {
                 <button type="button" class="icon-button danger" [attr.aria-label]="'Excluir lançamento de ' + item.membroNome" [title]="isFromEvento(item) ? 'Gerado por evento: exclua em Eventos' : 'Excluir'" [disabled]="isFromEvento(item)" (click)="openDelete(item)">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-1 7h2v8H8v-8Zm6 0h2v8h-2v-8ZM5 7h14l-1 12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7Z"/></svg>
                 </button>
+                }
               </div>
             </td>
           </tr>

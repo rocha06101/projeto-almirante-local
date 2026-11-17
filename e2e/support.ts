@@ -66,6 +66,22 @@ export async function mockApi(page: Page) {
     if (path.endsWith('/auth/login') || path.endsWith('/auth/refresh')) {
       return json(route, { token: { accessToken: 'token-de-teste', expiresAtUtc: expires() } });
     }
+    if (path.endsWith('/me/permissoes')) {
+      return json(route, {
+        permissoes: [
+          'dashboard.consultar', 'usuarios.consultar', 'usuarios.criar', 'usuarios.editar',
+          'usuarios.excluir', 'usuarios.foto.alterar', 'usuarios.senha.alterar-terceiros',
+          'cargos.consultar', 'membros.consultar', 'financeiro.tesouraria.consultar',
+          'financeiro.lancamentos.consultar', 'financeiro.lancamentos.criar',
+          'financeiro.lancamentos.editar', 'financeiro.lancamentos.excluir',
+        ],
+        permissoesPorDesignacao: [],
+        versaoAutorizacao: 1,
+      });
+    }
+    if (path.endsWith('/membros')) {
+      return json(route, [{ id: 'm1', nome: 'Membro 1', cargo: 'Desbravador', role: 'DS' }]);
+    }
     if (path.endsWith('/auth/me')) {
       return json(route, {
         id: '11111111-1111-1111-1111-111111111111',

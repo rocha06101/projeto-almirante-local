@@ -1,0 +1,28 @@
+.editor-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(15 23 42 / 55%);
+}
+
+.editor {
+  width: min(100%, 60rem);
+  max-height: 100%;
+  overflow: auto;
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.permission-row {
+  display: flex;
+  gap: .75rem;
+  align-items: flex-start;
+  margin-bottom: .5rem;
+
+  small {
+    display: block;
+  }
+}

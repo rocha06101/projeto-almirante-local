@@ -13,7 +13,8 @@ import {
   RegistrarLancamentoInput,
 } from '../../../features/lancamentos/models/lancamento.model';
 import { LancamentosService } from '../../../features/lancamentos/services/lancamentos.service';
-import { User as UsuarioModel } from '../../../core/models/user.model';
+import { MembroResumo } from '../../../core/models/user.model';
+import { PermissoesService } from '../../../core/services/permissoes';
 import { User as UsuarioService } from '../../../core/services/user';
 
 type ModalMode = 'new' | 'edit' | 'view' | 'delete';
@@ -53,6 +54,7 @@ export function parseCurrencyInput(text: string): number | null {
 })
 export class FinancialEntriesComponent implements OnInit, OnDestroy {
   private readonly lancamentosService = inject(LancamentosService);
+  readonly permissoes = inject(PermissoesService);
   private readonly usuarioService = inject(UsuarioService);
 
   private searchTimer?: ReturnType<typeof setTimeout>;
@@ -83,7 +85,7 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
   readonly selected = signal<Lancamento | null>(null);
   readonly saving = signal(false);
   readonly formError = signal('');
-  readonly usuarios = signal<UsuarioModel[]>([]);
+  readonly usuarios = signal<MembroResumo[]>([]);
   readonly usuariosError = signal('');
   motivoExclusao = '';
   lancamentoAtual: LancamentoForm = this.emptyForm();
@@ -244,11 +246,14 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
 
     switch (this.modalMode()) {
       case 'new':
-        return this.salvarNovo();
+        if (this.permissoes.tem('financeiro.lancamentos.criar')) this.salvarNovo();
+        return;
       case 'edit':
-        return this.salvarEdicao();
+        if (this.permissoes.tem('financeiro.lancamentos.editar')) this.salvarEdicao();
+        return;
       case 'delete':
-        return this.excluir();
+        if (this.permissoes.tem('financeiro.lancamentos.excluir')) this.excluir();
+        return;
       default:
         return this.closeModal();
     }
@@ -351,7 +356,7 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
     }
 
     this.usuariosError.set('');
-    this.usuarioService.listarUsuarios().subscribe({
+    this.usuarioService.listarMembros().subscribe({
       next: usuarios => this.usuarios.set([...usuarios].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))),
       error: (error: unknown) =>
         this.usuariosError.set(this.describe(error, 'Não foi possível carregar os membros.')),

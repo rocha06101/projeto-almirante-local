@@ -18,6 +18,7 @@ import {
 import { SKIP_AUTH } from '../interceptors/auth-context';
 import { CurrentUser } from '../models/user.model';
 import { ApiService } from './api';
+import { PermissoesService } from './permissoes';
 
 interface TokenResponse {
   token: { accessToken: string; expiresAtUtc: string };
@@ -62,6 +63,7 @@ const EXPIRY_SKEW_MS = 30_000;
 export class AuthService {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
+  private readonly permissoes = inject(PermissoesService);
 
   private token: string | null = null;
   private tokenExpiresAt = 0;
@@ -201,14 +203,27 @@ export class AuthService {
     this.tokenExpiresAt = 0;
     this.user.set(null);
     this.isLoggedIn.set(false);
+    this.permissoes.limpar();
   }
 
   private loadProfile(): Observable<CurrentUser> {
     return this.api.get<CurrentUser>('/Auth/Me').pipe(
+      switchMap(user => this.permissoes.atualizar().pipe(map(() => {
+        if (!this.token) {
+          throw new HttpErrorResponse({ status: 401, statusText: 'Unauthorized' });
+        }
+        return user;
+      }))),
       tap(user => {
         this.user.set(user);
         this.isLoggedIn.set(true);
       }),
+    );
+  }
+
+  comCsrf<T>(enviar: (headers: Record<string, string>) => Observable<T>): Observable<T> {
+    return this.csrfToken(true).pipe(
+      switchMap(csrf => enviar({ [CSRF_HEADER]: csrf })),
     );
   }
 

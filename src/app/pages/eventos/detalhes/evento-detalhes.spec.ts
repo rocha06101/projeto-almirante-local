@@ -94,4 +94,118 @@ describe('Detalhes: exclusão e carregamento atual', () => {
     expect(antigo.cancelled).toBe(true); http.expectOne('/api/Eventos/e3').flush({}, { status: 404, statusText: 'Not Found' });
     expect(c.evento()).toBeNull(); expect(c.erro()).toContain('não encontrado');
   });
+  function pago(c: EventoDetalhes) {
+    c.evento.set({ ...evento, titulo: 'Passeio', devolucoes: [], lancamentos: [{ ...evento.lancamentos[0], status: 'Pago' }] });
+  }
+  function devolucao(status: 'Pendente' | 'Pago' = 'Pendente') {
+    return { id: 'd1', membroId: 'm1', lancamentoOrigemId: 'l1', valor: 2, vencimento: '2026-11-17', status,
+      valorDevolvido: status === 'Pago' ? 1 : null, dataDevolucao: status === 'Pago' ? '2026-11-18' : null,
+      motivo: 'Cancelamento', justificativa: status === 'Pago' ? 'Valor acordado' : null };
+  }
+  it('estorno usa somente membro e cadastro selecionados, motivo e versão; atualiza por GET', () => {
+    const c = detalhes(); pago(c);
+    const atualizado = vi.fn(); c.atualizado.subscribe(atualizado);
+    c.pedirEstorno('de-outro-grupo'); expect(c.alvoEstorno).toBeNull();
+    c.pedirEstorno('m1'); c.estornar(); http.expectNone(r => r.method === 'POST');
+    c.motivo = ' Cancelamento '; c.confirmaEstorno = true; c.estornar(); c.estornar();
+    const req = http.expectOne('/api/Eventos/e1/Participantes/m1/Estorno');
+    expect(req.request.body).toEqual({ motivo: 'Cancelamento', versao: evento.versao });
+    expect(atualizado).not.toHaveBeenCalled();
+    req.flush({ ...c.evento(), devolucoes: [devolucao()], versao: 'nova' });
+    expect(atualizado).toHaveBeenCalledOnce();
+    expect(TestBed.inject(ToastService).success).toHaveBeenCalledWith('Solicitação de estorno registrada. A devolução aguarda processamento pela tesouraria.');
+    expect(c.evento()).toBeNull();
+    http.expectOne('/api/Eventos/e1').flush({ ...evento, devolucoes: [devolucao()], versao: 'mais-atual' });
+    http.expectOne(r => r.url === '/api/Eventos').flush({ items: [evento] });
+    expect(c.evento()?.versao).toBe('mais-atual'); expect(c.evento()?.devolucoes).toHaveLength(1);
+    expect(c.evento()?.valorPorMembro).toBe(5);
+  });
+  it.each([400, 401, 403, 404, 409, 500, 0])('estorno trata %s sem sucesso nem repetição automática', status => {
+    const c = detalhes(); pago(c); c.pedirEstorno('m1'); c.motivo = 'Cancelamento'; c.confirmaEstorno = true; c.estornar();
+    const req = http.expectOne('/api/Eventos/e1/Participantes/m1/Estorno');
+    if (status === 0) req.error(new ProgressEvent('error'));
+    else req.flush({ detail: status === 409 ? 'O valor já está em devolução.' : 'Operação rejeitada.' }, { status, statusText: 'Erro' });
+    expect(c.erro()).not.toBe(''); expect(c.ocupado()).toBe(false);
+    expect(TestBed.inject(ToastService).success).not.toHaveBeenCalled();
+    expect(c.evento()?.devolucoes).toEqual([]);
+    c.estornar(); http.expectNone(r => r.method === 'POST');
+    if ([0, 500, 409].includes(status)) {
+      c.confirmaEstorno = true; c.estornar(); http.expectNone(r => r.method === 'POST');
+      c.carregar(); http.expectOne('/api/Eventos/e1').flush({ ...evento, versao: 'atual' });
+      http.expectOne(r => r.url === '/api/Eventos').flush({ items: [evento] });
+      expect(c.incerto()).toBe(false); expect(c.conflito()).toBe(false);
+    }
+    if (status === 409) expect(c.erro()).not.toContain('Versão');
+  });
+  it('nega estorno sem permissão, sem contrato #209 e após troca de grupo/versão', () => {
+    const c = detalhes(); pago(c);
+    acesso.tem.mockReturnValue(false); c.pedirEstorno('m1'); expect(c.alvoEstorno).toBeNull();
+    acesso.tem.mockReturnValue(true); c.pedirEstorno('m1'); c.motivo = 'Cancelamento'; c.confirmaEstorno = true;
+    c.evento.set({ ...c.evento()!, id: 'outro-grupo' }); c.estornar(); http.expectNone(r => r.method === 'POST');
+    pago(c); c.evento.set({ ...c.evento()!, versao: 'alterada' }); c.estornar(); http.expectNone(r => r.method === 'POST');
+    c.evento.set({ ...c.evento()!, devolucoes: undefined }); expect(c.podeEstornar('m1')).toBe(false);
+  });
+  it('inclui participante removido com pagamento no histórico e permite estorno avulso', () => {
+    const c = detalhes(); pago(c); c.evento.set({ ...c.evento()!, membros: [] });
+    expect(c.participantesComHistorico()).toEqual(['m1']); expect(c.podeEstornar('m1')).toBe(true);
+  });
+  it('exclusão bloqueada com devolução pendente; concluída submete à validação final do servidor', () => {
+    const c = detalhes(); pago(c); c.evento.set({ ...c.evento()!, devolucoes: [devolucao()] });
+    c.pedirExclusao(); expect(c.modo).toBe('detalhes');
+    c.evento.set({ ...c.evento()!, devolucoes: [devolucao('Pago')] });
+    c.pedirExclusao(); expect(c.modo).toBe('excluir');
+    expect(c.liquidacaoConfirmavel(c.evento()!)).toBeNull();
+    c.motivo = 'Cancelamento'; c.confirmaExclusao = true; c.excluir();
+    http.expectOne('/api/Eventos/e1').flush({ detail: 'Ainda há valor retido.' }, { status: 409, statusText: 'Conflict' });
+    expect(c.erro()).toBe('Ainda há valor retido.');
+  });
+  it('exclusão com resposta incerta impede reenvio e consulta falha não libera ação', () => {
+    const c = detalhes(), atualizado = vi.fn(); c.atualizado.subscribe(atualizado);
+    c.pedirExclusao(); c.motivo = 'Cancelado'; c.confirmaExclusao = true; c.excluir();
+    http.expectOne('/api/Eventos/e1').error(new ProgressEvent('error'));
+    c.confirmaExclusao = true; c.excluir(); http.expectNone(r => r.method === 'DELETE');
+    c.carregar(); http.expectOne('/api/Eventos/e1').flush({}, { status: 503, statusText: 'Unavailable' });
+    expect(c.incerto()).toBe(true); expect(c.evento()).toBeNull();
+    expect(atualizado).not.toHaveBeenCalled();
+    expect(TestBed.inject(ToastService).success).not.toHaveBeenCalled();
+  });
+
+  it('depois da baixa, exclusão usa versão atual e só fecha após 204 do servidor', () => {
+    const c = detalhes(); pago(c);
+    c.evento.set({ ...c.evento()!, versao: 'apos-baixa', devolucoes: [devolucao('Pago')] });
+    const fechar = vi.fn(); c.fechar.subscribe(fechar);
+    c.pedirExclusao(); c.motivo = 'Encerrado'; c.confirmaExclusao = true; c.excluir();
+    const req = http.expectOne('/api/Eventos/e1'); expect(fechar).not.toHaveBeenCalled();
+    expect(req.request.body).toEqual({ motivo: 'Encerrado', versao: 'apos-baixa' });
+    req.flush(null, { status: 204, statusText: 'No Content' }); expect(fechar).toHaveBeenCalledOnce();
+  });
+  it('reconciliação da edição atualiza listagens e detalhes por consulta', () => {
+    const c = detalhes(), atualizado = vi.fn(); c.atualizado.subscribe(atualizado);
+    c.falhaEdicao('incerta'); c.carregar(); c.carregar(); c.carregar('e2');
+    expect(atualizado).not.toHaveBeenCalled();
+    http.expectNone('/api/Eventos/e2');
+    http.expectOne('/api/Eventos/e1').flush({ ...evento, versao: 'apos-resposta-incerta' });
+    expect(atualizado).toHaveBeenCalledOnce();
+    expect(c.incerto()).toBe(false);
+    expect(TestBed.inject(ToastService).success).not.toHaveBeenCalled();
+    http.expectOne(r => r.url === '/api/Eventos').flush({ items: [evento] });
+    expect(c.evento()?.versao).toBe('apos-resposta-incerta');
+  });
+
+  it('DELETE com resposta perdida e GET 404 mantém exclusão sem confirmação', () => {
+    const c = detalhes(), atualizado = vi.fn(), fechar = vi.fn();
+    c.atualizado.subscribe(atualizado); c.fechar.subscribe(fechar);
+    c.pedirExclusao(); c.motivo = 'Cancelado'; c.confirmaExclusao = true; c.excluir();
+    http.expectOne('/api/Eventos/e1').error(new ProgressEvent('error'));
+    c.carregar();
+    http.expectOne('/api/Eventos/e1').flush({ title: 'Evento não encontrado.' }, { status: 404, statusText: 'Not Found' });
+    expect(c.incerto()).toBe(true); expect(c.evento()).toBeNull();
+    expect(c.erro()).toContain('pode ter concluído a exclusão');
+    expect(atualizado).not.toHaveBeenCalled();
+    expect(fechar).not.toHaveBeenCalled();
+    expect(TestBed.inject(ToastService).success).not.toHaveBeenCalled();
+    c.pedirExclusao(); c.excluir();
+    http.expectNone(r => r.method === 'DELETE');
+  });
+
 });

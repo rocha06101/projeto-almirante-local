@@ -67,6 +67,15 @@
             <div><dt>Valor</dt><dd>{{ formatCurrency(item.valor) }}</dd></div>
             <div><dt>Vencimento</dt><dd>{{ formatDate(item.vencimento) }}</dd></div>
             <div><dt>Status</dt><dd><app-status-badge [status]="item.status"></app-status-badge></dd></div>
+            @if (item.lancamentoOrigemId) {
+              <div><dt>Operação</dt><dd>Devolução de evento · {{ item.status === 'Pago' ? 'Concluída' : 'Pendente de processamento pela tesouraria' }}</dd></div>
+              <div><dt>Cobrança de origem</dt><dd>{{ item.lancamentoOrigemId }}</dd></div>
+              <div><dt>Valor esperado da devolução</dt><dd>{{ formatCurrency(item.valor) }}</dd></div>
+              @if (item.valorPago != null) { <div><dt>Valor devolvido</dt><dd>{{ formatCurrency(item.valorPago!) }}</dd></div> }
+              @if (item.dataPagamento) { <div><dt>Data da devolução</dt><dd>{{ formatDate(item.dataPagamento) }}</dd></div> }
+              @if (item.devolucaoMotivo) { <div><dt>Motivo</dt><dd>{{ item.devolucaoMotivo }}</dd></div> }
+              @if (item.devolucaoJustificativa) { <div><dt>Justificativa da baixa</dt><dd>{{ item.devolucaoJustificativa }}</dd></div> }
+            }
           </dl>
           <div class="modal-actions">
             <button type="button" class="secondary-button" (click)="closeModal()">Fechar</button>

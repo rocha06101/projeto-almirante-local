@@ -1,6 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { throwError, TimeoutError } from 'rxjs';
 import { EventoDto } from '../../../core/models/evento.model';
 import { MembroResumo } from '../../../core/models/user.model';
 import { EventosService } from '../../../core/services/eventos';
@@ -216,4 +217,135 @@ describe('Formulário de eventos: efeitos financeiros e confirmação', () => {
     expect(req.request.body).toMatchObject({ seguroObrigatorio: 0, motivo: 'Seguro dispensado', membros: ['m1', 'm2'] });
     req.flush(evento);
   });
+  function pagar(c: EventoFormulario) {
+    c.evento!.lancamentos = [{ id: 'l1', membroId: 'm1', valor: 5, status: 'Pago' }];
+    c.evento!.devolucoes = [];
+  }
+  it.each([3, 0])('aceita redução para %s com motivo e preserva o pagamento original', valor => {
+    const { c } = formulario(true); pagar(c);
+    const original = structuredClone(c.evento!.lancamentos);
+    c.modelo.seguroObrigatorio = valor;
+    c.revisar(); expect(c.confirmando).toBe(false); expect(c.erro()).toContain('motivo');
+    c.motivo = ' Patrocínio '; c.revisar(); expect(c.confirmando).toBe(true);
+    c.confirmado = true; c.salvar(); c.salvar();
+    const req = http.expectOne('/api/Eventos/e1');
+    expect(req.request.body).toMatchObject({ seguroObrigatorio: valor, motivo: 'Patrocínio', versao: evento.versao });
+    expect(req.request.body).not.toHaveProperty('lancamentos');
+    expect(req.request.body).not.toHaveProperty('devolucoes');
+    const salvo = vi.fn(); c.salvo.subscribe(salvo);
+    const resposta = { ...c.evento!, seguroObrigatorio: valor, valorPorMembro: valor, versao: 'nova' };
+    req.flush(resposta);
+    expect(salvo).toHaveBeenCalledWith(resposta); expect(c.evento!.lancamentos).toEqual(original);
+  });
+  it('aceita aumentar um componente quando o total diminui, mas rejeita aumento ou composição com mesmo total', () => {
+    const { c } = formulario(true); pagar(c);
+    c.modelo.seguroObrigatorio = 6; c.revisar(); expect(c.confirmando).toBe(false);
+    expect(c.erro()).toContain('precisa diminuir');
+    c.modelo.seguroObrigatorio = 3; c.modelo.transporte = { ehGratis: false, valor: 2 };
+    c.revisar(); expect(c.confirmando).toBe(false); expect(c.erro()).toContain('mesmo total');
+    c.modelo.transporte.valor = 1; c.motivo = 'Patrocínio'; c.revisar(); expect(c.confirmando).toBe(true);
+  });
+  it('Atrasado permite edição de custos e data; somente Pago restringe', () => {
+    const { c } = formulario(true);
+    c.evento!.lancamentos = [{ id: 'l1', membroId: 'm1', valor: 5, status: 'Atrasado' }];
+    c.modelo.seguroObrigatorio = 6; c.modelo.dataEvento = '2026-11-20'; c.revisar();
+    expect(c.confirmando).toBe(true); c.confirmado = true; c.salvar();
+    http.expectOne('/api/Eventos/e1').flush(evento);
+  });
+  it('bloqueia adição e data com Pago mesmo por alteração programática', () => {
+    const { c } = formulario(true); pagar(c);
+    c.selecionarMembro('m3', true); expect(c.modelo.membros).not.toContain('m3');
+    c.modelo.membros.push('m3'); c.revisar(); expect(c.confirmando).toBe(false);
+    c.modelo.membros = ['m1', 'm2']; c.modelo.dataEvento = '2026-12-01';
+    c.revisar(); expect(c.confirmando).toBe(false); expect(c.erro()).toContain('data');
+  });
+  it('não bloqueia remoção de outro membro sem pagamento e exige motivo', () => {
+    const { c } = formulario(true); pagar(c);
+    c.evento!.dataEvento = c.modelo.dataEvento = '2099-01-01';
+    c.selecionarMembro('m1', false); expect(c.modelo.membros).toContain('m1');
+    c.selecionarMembro('m2', false); expect(c.modelo.membros).toEqual(['m1']);
+    c.motivo = 'Cancelamento'; c.revisar(); expect(c.confirmando).toBe(true);
+  });
+  it.each(['', '   ', 'x'.repeat(256), 'Motivo 😀', 'Duas\nlinhas', 'Uma\ttabulação'])('valida motivo na revisão: %j', motivo => {
+    const { c } = formulario(true); pagar(c);
+    c.modelo.seguroObrigatorio = 0; c.motivo = motivo; c.revisar(); expect(c.confirmando).toBe(false);
+  });
+  it.each(['valor', 'membros', 'motivo', 'versao'])('invalida revisão se %s mudar antes de salvar', campo => {
+    const { c } = formulario(true); c.revisar(); c.confirmado = true;
+    if (campo === 'valor') c.modelo.seguroObrigatorio = 2;
+    if (campo === 'membros') c.modelo.membros = ['m1'];
+    if (campo === 'motivo') c.motivo = 'Alterado';
+    if (campo === 'versao') c.evento!.versao = 'outra';
+    c.salvar(); http.expectNone(r => r.method === 'PUT');
+    expect(c.confirmando).toBe(false); expect(c.erro()).toContain('Revise novamente');
+  });
+  it.each([0, 500, 503])('edição com resposta incerta %s exige consulta antes de repetir', status => {
+    const { c } = formulario(true); c.revisar(); c.confirmado = true; c.salvar();
+    const req = http.expectOne('/api/Eventos/e1');
+    if (status === 0) req.error(new ProgressEvent('error')); else req.flush({}, { status, statusText: 'Erro' });
+    expect(c.incerto()).toBe(true); expect(toast.success).not.toHaveBeenCalled();
+    c.salvar(); c.revisar(); http.expectNone(r => r.method === 'PUT');
+  });
+  it('redução sucessiva usa valor e versão obtidos do servidor sem acumular devoluções locais', () => {
+    const { c } = formulario(true); pagar(c);
+    c.evento!.valorPorMembro = 3; c.evento!.seguroObrigatorio = 3; c.evento!.versao = 'apos-primeira-reducao';
+    c.modelo.seguroObrigatorio = 0; c.motivo = 'Novo patrocínio'; c.revisar(); c.confirmado = true; c.salvar();
+    const req = http.expectOne('/api/Eventos/e1');
+    expect(req.request.body.versao).toBe('apos-primeira-reducao');
+    expect(req.request.body).not.toHaveProperty('devolucoes'); req.flush(c.evento);
+  });
+
+  it.each([NaN, Infinity, -Infinity, -0.01, 0.001])('rejeita custo inválido %s antes da confirmação', valor => {
+    const { c } = formulario(true); c.modelo.seguroObrigatorio = valor;
+    c.revisar(); expect(c.confirmando).toBe(false); expect(c.erro()).toContain('custos válidos');
+  });
+  it('timeout na edição bloqueia reenvio e oferece reconciliação', () => {
+    const { c } = formulario(true);
+    const editar = vi.spyOn(c.api, 'editar').mockReturnValue(throwError(() => new TimeoutError()));
+    c.revisar(); c.confirmado = true; c.salvar(); c.salvar();
+    expect(editar).toHaveBeenCalledOnce(); expect(c.incerto()).toBe(true);
+    expect(c.erro()).toContain('Consulte os dados atuais'); expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('conta apenas mudanças coletivas bloqueadas, mantém grupo misto e permite reseleção de membro original', () => {
+    const { c } = formulario(true);
+    pagar(c);
+    c.evento!.dataEvento = c.modelo.dataEvento = '2099-01-01';
+    const caixa = document.createElement('input');
+    caixa.type = 'checkbox';
+    caixa.checked = true;
+    c.mudarSelecaoGrupo('todos', caixa);
+    expect(c.feedbackSelecao()).toContain('3 participantes não foram incluídos');
+    expect(c.modelo.membros).toEqual(['m1', 'm2']);
+    expect(caixa.indeterminate).toBe(true);
+    expect(caixa.checked).toBe(true);
+    caixa.checked = false;
+    c.mudarSelecaoGrupo('todos', caixa);
+    expect(c.feedbackSelecao()).toContain('1 participante não foi removido');
+    expect(c.modelo.membros).toEqual(['m1']);
+    expect(c.membrosVisiveis().map(m => m.id)).toContain('m2');
+    c.selecionarMembro('m2', true);
+    c.selecionarGrupo('todos', true); c.selecionarGrupo('todos', true);
+    expect(c.modelo.membros).toEqual(['m1', 'm2']);
+    c.selecionarMembro('m1', false);
+    expect(c.modelo.membros).toEqual(['m1', 'm2']);
+  });
+
+  it.each([
+    ['2099-01-01', 'Pendente', false],
+    ['2099-01-01', 'Pago', true],
+    ['2000-01-01', 'Pendente', true],
+  ] as const)('remoção em %s com devolução %s permitida: %s', (data, status, permitida) => {
+    const { c } = formulario(true);
+    pagar(c);
+    c.evento!.dataEvento = c.modelo.dataEvento = data;
+    c.evento!.devolucoes = [{ id: 'd1', membroId: 'm1', lancamentoOrigemId: 'l1', valor: 2,
+      vencimento: data, status, valorDevolvido: status === 'Pago' ? 2 : null, dataDevolucao: null,
+      motivo: 'Devolução', justificativa: null }];
+    c.selecionarGrupo('desbravadores', false);
+    expect(c.modelo.membros.includes('m1')).toBe(!permitida);
+    expect(c.modelo.membros).toContain('m2');
+    expect(!!c.motivoBloqueioMembro('m1', false)).toBe(!permitida);
+  });
+
 });

@@ -49,11 +49,33 @@ export function mapearEventos(eventos: EventoDto[]): EventInput[] {
     extendedProps: { participantes: evento.quantidadeMembros, grupo: grupoEvento(evento, eventos) },
   }));
 }
-export function custosBloqueados(evento: EventoDto | null): boolean {
-  return !!evento?.lancamentos.some(l => l.status !== 'Pendente');
+export function temPagamentos(evento: EventoDto | null): boolean {
+  return !!evento?.lancamentos.some(l => l.status === 'Pago');
+}
+export function motivoValido(motivo: string): boolean {
+  const texto = motivo.trim();
+  return texto.length >= 1 && texto.length <= 255 && /^[\x20-\x7E\xA0-\xFF€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]+$/u.test(texto);
+}
+export function respostaIncerta(erro: unknown): boolean {
+  return erro instanceof HttpErrorResponse ? erro.status === 0 || erro.status >= 500 : true;
+}
+/** O DTO não expõe ValorPago: devoluções baixadas não provam ausência de valor retido.
+ * false = bloqueio conhecido; null = somente o servidor pode decidir; true = sem pagamento.
+ * A soma de valores esperados nunca é comparada com o valor da cobrança (pode haver pagamento parcial).
+ */
+export function liquidacaoConfirmavel(evento: EventoDto, membroId?: string): boolean | null {
+  const devolucoes = (evento.devolucoes ?? []).filter(d => !membroId || d.membroId === membroId);
+  if (devolucoes.some(d => d.status !== 'Pago')) return false;
+  const pagos = evento.lancamentos.filter(l => l.status === 'Pago' && (!membroId || l.membroId === membroId));
+  if (!pagos.length) return true;
+  if (pagos.some(p => !devolucoes.some(d => d.lancamentoOrigemId === p.id))) return false;
+  return null;
+}
+export function podeRemoverMembro(evento: EventoDto, membroId: string, hoje = dataCivil(new Date())): boolean {
+  return evento.dataEvento <= hoje || liquidacaoConfirmavel(evento, membroId) !== false;
 }
 export function erroEvento(erro: unknown): string {
-  if (erro instanceof Error && erro.name === 'TimeoutError') return 'O servidor demorou para responder. A operação não foi confirmada; tente novamente.';
+  if (erro instanceof Error && erro.name === 'TimeoutError') return 'O servidor demorou para responder. A operação não foi confirmada. Consulte os dados atuais antes de repetir.';
   if (!(erro instanceof HttpErrorResponse)) return 'Não foi possível concluir a operação. Tente novamente.';
   if (erro.status === 401) return 'Sua sessão expirou. Entre novamente para continuar.';
   if (erro.status === 403) return 'Você não tem permissão para esta operação.';
@@ -66,6 +88,6 @@ export function erroEvento(erro: unknown): string {
   if (erro.status === 404) return titulo || 'Evento não encontrado ou já excluído.';
   if (erro.status === 409) return titulo || 'O evento foi alterado ou a operação está bloqueada. Recarregue os dados antes de continuar.';
   if (erro.status === 400) return titulo || 'Confira os dados informados.';
-  if (erro.status === 0) return 'Não foi possível confirmar a operação. Verifique sua conexão e tente novamente.';
+  if (erro.status === 0 || erro.status >= 500) return 'Não foi possível confirmar a operação. Verifique sua conexão e consulte os dados atuais antes de repetir.';
   return 'Não foi possível concluir a operação. Tente novamente.';
 }

@@ -14,6 +14,7 @@ const novo = (id: number, dataEvento: string, local: string): EventoDto => ({
   membros: [m1, m2], quantidadeMembros: 2,
   transporte: { ehGratis: false, valor: 12.5 }, alimentacao: { individual: false, valor: 10 },
   seguroObrigatorio: 2.5, valorPorMembro: 25, total: 50, versao: 'AAAAAAAABAA=', ativo: true,
+  devolucoes: [],
   lancamentos: [m1, m2].map((membroId, i) => ({ id: `${id}-l${i}`, membroId, valor: 25, status: 'Pendente' })),
 });
 
@@ -35,7 +36,8 @@ async function preparar(page: Page, permissoesAtuais = permissoes) {
   const estado = {
     eventos: [novo(1, hoje, 'Igreja'), novo(2, '2026-11-18', 'Acampamento da Serra'), novo(3, '2026-11-22', 'Parque Municipal'), novo(4, '2026-12-08', 'Sede do clube'), novo(5, '2026-11-05', 'Praça Central')],
     chamadas: [] as { method: string; url: URL; body: any; key?: string }[],
-    erroLista: 0, erroDetalhe: 0, erroPost: 0, erroPut: 0, erroDelete: 0, atraso: 0,
+    erroLista: 0, erroDetalhe: 0, erroPost: 0, erroPut: 0, erroDelete: 0, erroEstorno: 0, atraso: 0,
+    respostaEstorno: null as EventoDto | null, respostaPut: null as EventoDto | null,
   };
   await page.route('**/api/Eventos**', async r => {
     const req = r.request(), url = new URL(req.url()), method = req.method();
@@ -48,6 +50,12 @@ async function preparar(page: Page, permissoesAtuais = permissoes) {
       return r.fulfill({ json: { items: estado.eventos.filter(e => e.dataEvento >= dataInicial && e.dataEvento <= dataFinal), dataInicial, dataFinal, dataMinimaCadastro: '2026-11-01' } });
     }
     if (method === 'GET') return estado.erroDetalhe ? r.fulfill({ status: estado.erroDetalhe, json: { title: 'Evento não encontrado.' } }) : r.fulfill({ json: estado.eventos.find(e => e.id === id) });
+    if (method === 'POST' && url.pathname.endsWith('/Estorno')) {
+      if (estado.erroEstorno) return r.fulfill({ status: estado.erroEstorno, json: { detail: 'O membro não tem valor retido; tudo já foi devolvido ou está em devolução.' } });
+      if (!estado.respostaEstorno) return r.fulfill({ status: 500, json: { detail: 'Fixture de resposta não configurada.' } });
+      estado.eventos[estado.eventos.findIndex(e => e.id === id)] = estado.respostaEstorno;
+      return r.fulfill({ json: estado.respostaEstorno });
+    }
     if (method === 'POST') {
       if (estado.erroPost) { const status = estado.erroPost; estado.erroPost = 0; return r.fulfill({ status, json: { detail: 'Resposta não confirmada.' } }); }
       const body = req.postDataJSON();
@@ -58,7 +66,7 @@ async function preparar(page: Page, permissoesAtuais = permissoes) {
     if (method === 'PUT') {
       if (estado.erroPut) return r.fulfill({ status: estado.erroPut, json: { detail: 'Versão obsoleta. Recarregue os dados.' } });
       const i = estado.eventos.findIndex(e => e.id === id);
-      estado.eventos[i] = { ...estado.eventos[i], ...req.postDataJSON(), versao: 'AAAAAAAABAE=' };
+      estado.eventos[i] = estado.respostaPut ?? { ...estado.eventos[i], ...req.postDataJSON(), versao: 'AAAAAAAABAE=' };
       return r.fulfill({ json: estado.eventos[i] });
     }
     if (estado.erroDelete) return r.fulfill({ status: estado.erroDelete, json: { detail: 'Exclusão bloqueada.' } });
@@ -254,7 +262,8 @@ test('bloqueios financeiros e grupos preservam cadastros individuais', async ({ 
   await expect(page.getByText('Cadastros do mesmo passeio', { exact: true })).toBeVisible();
   await expect(page.locator('.total')).toContainText('50,00');
   await page.getByRole('button', { name: 'Editar evento' }).click();
-  for (const label of ['Data', 'Local', 'Seguro', 'Seguro (R$)']) await expect(page.getByLabel(label, { exact: true })).toBeDisabled();
+  for (const label of ['Data', 'Local']) await expect(page.getByLabel(label, { exact: true })).toBeDisabled();
+  for (const label of ['Seguro', 'Seguro (R$)']) await expect(page.getByLabel(label, { exact: true })).toBeEnabled();
 });
 
 test('seleção em massa, exceções manuais e custos independentes no cadastro', async ({ page }) => {
@@ -527,4 +536,130 @@ test('dias com vários eventos continuam consultáveis pelo popover do calendár
   await expect(page.locator('.upcoming-card[aria-pressed="true"]')).toContainText('Passeio B');
   await card.click();
   await expect(page.getByRole('dialog').getByRole('heading', { name: 'Evento — Passeio B' })).toBeVisible();
+});
+
+// Fixtures da resposta documentada no Swagger local e na develop da #209; nenhum cálculo financeiro no mock.
+const devolucaoConfirmada = {
+  id: '40000000-0000-4000-8000-000000000001', membroId: m1, lancamentoOrigemId: '1-l0',
+  valor: 25, vencimento: hoje, status: 'Pendente' as const, valorDevolvido: null, dataDevolucao: null,
+  motivo: 'Patrocínio', justificativa: null,
+};
+for (const width of [390, 1280]) {
+  test(`estorno individual acessível e sem overflow em ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const estado = await preparar(page); estado.eventos[0].lancamentos[0].status = 'Pago';
+    estado.respostaEstorno = { ...structuredClone(estado.eventos[0]), versao: 'AAAAAAAABAE=', devolucoes: [devolucaoConfirmada] };
+    await abrir(page); await detalhes(page);
+    const acao = page.getByRole('button', { name: 'Solicitar estorno de Ana Silva' });
+    await acao.focus(); await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog')).toContainText('Ana Silva');
+    await expect(page.getByRole('dialog')).toContainText('Evento — Igreja');
+    await expect(page.getByRole('button', { name: 'Confirmar estorno' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Voltar aos detalhes' }).click(); await expect(acao).toBeFocused();
+    await acao.click(); await page.getByLabel('Motivo do estorno').fill('Cancelamento');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('heading', { name: 'Descartar alterações?' })).toBeVisible();
+    await page.getByRole('button', { name: 'Continuar editando' }).click();
+    await page.getByLabel('Confirmo a solicitação de estorno somente deste participante.').check();
+    expect((await measureOverflow(page)).documentOverflow).toBeLessThanOrEqual(1);
+    await page.getByRole('button', { name: 'Confirmar estorno' }).click();
+    await expect(page.getByRole('dialog')).toContainText('Devolução · Pendente de processamento');
+    const posts = estado.chamadas.filter(c => c.method === 'POST'); expect(posts).toHaveLength(1);
+    expect(posts[0].url.pathname).toBe(`/api/Eventos/${estado.eventos[0].id}/Participantes/${m1}/Estorno`);
+    expect(posts[0].body).toEqual({ motivo: 'Cancelamento', versao: 'AAAAAAAABAA=' });
+    expect(estado.eventos[0].valorPorMembro).toBe(25); expect(estado.eventos[0].membros).toEqual([m1, m2]);
+    await expect(page.getByText('Solicitação de estorno registrada. A devolução aguarda processamento pela tesouraria.')).toBeVisible();
+  });
+}
+test('zeragem com pagamento exige motivo, revisa efeitos e exibe a resposta confirmada', async ({ page }) => {
+  const estado = await preparar(page); estado.eventos[0].lancamentos[0].status = 'Pago';
+  const original = structuredClone(estado.eventos[0].lancamentos[0]);
+  estado.respostaPut = { ...structuredClone(estado.eventos[0]), transporte: { ehGratis: true, valor: 0 },
+    alimentacao: { individual: true, valor: 0 }, seguroObrigatorio: 0, valorPorMembro: 0, total: 0,
+    versao: 'AAAAAAAABAE=', lancamentos: [original], devolucoes: [devolucaoConfirmada] };
+  await abrir(page); await detalhes(page); await page.getByRole('button', { name: 'Editar evento' }).click();
+  await page.getByLabel('Transporte', { exact: true }).uncheck();
+  await page.getByLabel('Alimentação', { exact: true }).uncheck();
+  await page.getByLabel('Seguro', { exact: true }).uncheck();
+  await expect(page.getByRole('button', { name: 'Revisar evento' })).toBeDisabled();
+  await page.getByLabel('Motivo da redução ou zeragem').fill('Patrocínio');
+  await page.getByRole('button', { name: 'Revisar evento' }).click();
+  await expect(page.getByRole('region', { name: 'Confirmação financeira' })).toContainText('Valor por participante anterior → novo');
+  await expect(page.getByRole('region', { name: 'Confirmação financeira' })).toContainText('geradas pendentes');
+  await page.getByLabel('Confirmo a operação e seus efeitos nas cobranças.').check();
+  await page.getByRole('button', { name: 'Confirmar e salvar' }).click();
+  await expect(page.getByRole('dialog')).toContainText('Devolução · Pendente de processamento');
+  await expect(page.locator('.total')).toContainText('0,00');
+  const put = estado.chamadas.find(c => c.method === 'PUT')!;
+  expect(put.body).toMatchObject({ motivo: 'Patrocínio', seguroObrigatorio: 0, versao: 'AAAAAAAABAA=' });
+  expect(put.body).not.toHaveProperty('lancamentos'); expect(estado.eventos[0].lancamentos).toEqual([original]);
+  await page.keyboard.press('Escape');
+  const aposPut = estado.chamadas.slice(estado.chamadas.indexOf(put) + 1);
+  expect(aposPut.filter(c => c.method === 'GET' && c.url.pathname === '/api/Eventos').length).toBeGreaterThanOrEqual(2);
+  await expect(page.locator('.upcoming-card').first()).toContainText('2 participantes');
+});
+test('409 de estorno informa ausência de valor retido e impede reenvio', async ({ page }) => {
+  const estado = await preparar(page); estado.eventos[0].lancamentos[0].status = 'Pago'; estado.erroEstorno = 409;
+  await abrir(page); await detalhes(page); await page.getByRole('button', { name: 'Solicitar estorno de Ana Silva' }).click();
+  await page.getByLabel('Motivo do estorno').fill('Cancelamento');
+  await page.getByLabel('Confirmo a solicitação de estorno somente deste participante.').check();
+  await page.getByRole('button', { name: 'Confirmar estorno' }).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('não tem valor retido');
+  await expect(page.getByRole('button', { name: 'Confirmar estorno' })).toBeDisabled();
+  expect(estado.chamadas.filter(c => c.method === 'POST')).toHaveLength(1);
+});
+
+test('seleção parcial preserva pagante e anuncia as alterações bloqueadas no celular', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const estado = await preparar(page);
+  estado.eventos[0].dataEvento = '2026-11-18';
+  estado.eventos[0].lancamentos[0].status = 'Pago';
+  await abrir(page); await detalhes(page);
+  await page.getByRole('button', { name: 'Editar evento' }).click();
+  const grupo = page.getByLabel('Todos', { exact: true });
+  const ana = page.getByLabel('Ana Silva', { exact: true });
+  const bruno = page.getByLabel('Bruno Santos', { exact: true });
+  await expect(grupo).toHaveJSProperty('indeterminate', true);
+  await expect(ana).toBeDisabled();
+  await expect(ana).toHaveAccessibleDescription('A remoção antes do evento exige que a tesouraria conclua o estorno.');
+  await grupo.focus();
+  await page.keyboard.press('Space');
+  await expect(grupo).toHaveJSProperty('indeterminate', true);
+  await expect(ana).toBeChecked();
+  await expect(bruno).not.toBeChecked();
+  const status = page.getByRole('status').filter({ hasText: '1 participante não foi removido' });
+  await expect(status).toHaveAttribute('aria-live', 'polite');
+  await bruno.check();
+  await expect(status).toHaveCount(0);
+  await expect(bruno).toBeChecked();
+  expect((await measureOverflow(page)).documentOverflow).toBeLessThanOrEqual(1);
+});
+
+test('reconciliação de PUT não recarrega listas com GET falho e só atualiza após ler o recurso', async ({ page }) => {
+  const estado = await preparar(page);
+  await abrir(page); await detalhes(page);
+  await page.getByRole('button', { name: 'Editar evento' }).click();
+  await page.getByLabel('Título', { exact: true }).fill('Título persistido');
+  await page.getByRole('button', { name: 'Revisar evento' }).click();
+  await page.getByLabel('Confirmo a operação e seus efeitos nas cobranças.').check();
+  estado.erroPut = 500;
+  await page.getByRole('button', { name: 'Confirmar e salvar' }).click();
+  await expect(page.getByText('O resultado da edição não foi confirmado.')).toBeVisible();
+  const consultasLista = () => estado.chamadas.filter(c => c.method === 'GET' && c.url.pathname === '/api/Eventos').length;
+  const antes = consultasLista();
+  estado.erroDetalhe = 503;
+  await page.getByRole('button', { name: 'Recarregar dados atuais' }).click();
+  await expect(page.getByText('O resultado da operação permanece sem confirmação.')).toBeVisible();
+  expect(consultasLista()).toBe(antes);
+  await expect(page.getByRole('button', { name: 'Editar evento' })).toHaveCount(0);
+  estado.erroDetalhe = 0;
+  estado.eventos[0].titulo = 'Título persistido';
+  estado.eventos[0].versao = 'AAAAAAAABAE=';
+  await page.getByRole('button', { name: 'Recarregar dados atuais' }).click();
+  await expect(page.getByRole('dialog').getByRole('heading', { name: 'Título persistido' })).toBeVisible();
+  expect(estado.chamadas.filter(c => c.method === 'PUT')).toHaveLength(1);
+  await expect(page.getByText('Evento atualizado.', { exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.upcoming-card').filter({ hasText: 'Título persistido' })).toBeVisible();
+  await expect(page.locator('.fc-daygrid-event').filter({ hasText: 'Título persistido' })).toBeVisible();
 });

@@ -1,4 +1,6 @@
 :host { display: block; }
+.review-costs { display: grid; gap: 8px; font-size: 13px; }
+.review-costs dd { margin: 0; overflow-wrap: anywhere; }
 fieldset { border: 0; padding: 0; margin: 0 0 16px; min-width: 0; }
 legend, h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
 legend span { display: block; color: #74718b; font-size: 12px; font-weight: 400; }
@@ -11,6 +13,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .check input { width: 18px; min-height: 18px; height: 18px; flex-shrink: 0; accent-color: #5005a1; }
 .participants, .costs { padding-top: 18px; }
 .participant-groups { display: flex; flex-wrap: wrap; column-gap: 16px; }
+.feedback-selecao { margin: 4px 0 8px; font-weight: 600; }
+.feedback-membro { display: block; margin: 0 0 8px 28px; color: inherit; overflow-wrap: anywhere; }
 .description { min-height: 90px; resize: vertical; }
 .member-list { max-height: 190px; overflow-y: auto; border: 1px solid #e4e2ed; border-radius: 6px; padding: 8px 12px; }
 .search-label { margin-bottom: 8px; }

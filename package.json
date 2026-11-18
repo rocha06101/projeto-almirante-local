@@ -11,6 +11,7 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
+    "seed:eventos": "node scripts/cadastrar-eventos-gratuitos.mjs",
     "serve:dist": "node scripts/serve-dist.mjs",
     "test:e2e": "playwright test",
     "test:e2e:pwa": "playwright test --project=pwa"

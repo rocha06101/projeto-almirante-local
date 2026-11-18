@@ -1,0 +1,76 @@
+<div class="backdrop" (click)="cliqueBackdrop($event)">
+  <section class="event-dialog" role="dialog" aria-modal="true" aria-labelledby="evento-dialog-title" cdkTrapFocus [cdkTrapFocusAutoCapture]="true" [attr.aria-busy]="carregando() || ocupado()">
+    <header><h2 id="evento-dialog-title">{{ modo === 'criar' ? 'Novo evento' : modo === 'editar' ? 'Editar evento' : modo === 'excluir' ? 'Excluir evento' : 'Detalhes do evento' }}</h2>
+      <button type="button" class="close-button" aria-label="Fechar detalhes" cdkFocusInitial [disabled]="ocupado()" (click)="sair()">×</button>
+    </header>
+    <div class="dialog-body" #dialogBody>
+      @if (descarte) {
+        <section role="region" aria-labelledby="descarte-titulo">
+          <h3 id="descarte-titulo">Descartar alterações?</h3>
+          <p>Há alterações não salvas neste formulário.</p>
+          @if (api.cadastroPendente()) { <p>A operação pendente será preservada para consultar o resultado com segurança ao reabrir.</p> }
+          <footer>
+            <button #continuarEdicao type="button" (click)="continuarEditando()">Continuar editando</button>
+            <button type="button" class="danger" (click)="descartar()">Descartar alterações</button>
+          </footer>
+        </section>
+      }
+      <div [hidden]="!!descarte">
+      @if (carregando()) { <p role="status">Carregando detalhes…</p> }
+      @else if (modo === 'criar' || modo === 'editar') {
+        <app-evento-formulario [evento]="modo === 'editar' ? evento() : null" [data]="data" [dataMinima]="dataMinima"
+          [grupoCompartilhado]="relacionados().length > 1" (salvo)="salvo($event)" (ocupacao)="ocupado.set($event)"
+          (cancelar)="sair(modo === 'criar' ? 'fechar' : 'voltar')" (recarregar)="carregar()" />
+      } @else {
+        @if (erro()) {
+          <p class="feedback" role="alert">{{ erro() }}</p>
+          <button type="button" [disabled]="ocupado()" (click)="carregar()">Recarregar dados atuais</button>
+        }
+        @if (evento(); as e) {
+          @if (modo === 'excluir') {
+            <form (ngSubmit)="excluir()">
+              <p>Excluir <strong>{{ nomeEvento(e) }}</strong> em {{ formatarData(e.dataEvento) }}?</p>
+              <p>Os lançamentos pendentes deste grupo serão desativados. Outros grupos do passeio permanecem.</p>
+              <label>Motivo da exclusão<textarea name="motivo" maxlength="255" required [(ngModel)]="motivo" [disabled]="ocupado() || conflito()"></textarea></label>
+              <label class="check"><input type="checkbox" name="confirmacao" [(ngModel)]="confirmaExclusao" [disabled]="ocupado() || conflito()">Confirmo a exclusão e a desativação das cobranças pendentes.</label>
+              <footer><button type="button" [disabled]="ocupado()" (click)="carregar()">Cancelar</button><button type="submit" class="danger" [disabled]="ocupado() || conflito() || !motivo.trim() || !confirmaExclusao">{{ ocupado() ? 'Excluindo…' : 'Confirmar exclusão' }}</button></footer>
+            </form>
+          } @else {
+            <h3>{{ nomeEvento(e) }}</h3>
+            <p class="date">{{ formatarData(e.dataEvento) }}</p>
+            @if (e.descricao?.trim()) { <p class="event-description">{{ e.descricao }}</p> }
+            <dl class="facts"><div><dt>Local</dt><dd>{{ e.local }}</dd></div><div><dt>Participantes</dt><dd>{{ e.quantidadeMembros }}</dd></div>
+              <div><dt>Transporte por participante</dt><dd>{{ e.transporte.ehGratis ? 'Gratuito' : (e.transporte.valor | currency:'BRL':'symbol':'1.2-2':'pt-BR') }}</dd></div>
+              <div><dt>Alimentação por participante</dt><dd>{{ e.alimentacao.individual ? 'Por conta do participante' : (e.alimentacao.valor | currency:'BRL':'symbol':'1.2-2':'pt-BR') }}</dd></div>
+              <div><dt>Seguro por participante</dt><dd>{{ e.seguroObrigatorio > 0 ? (e.seguroObrigatorio | currency:'BRL':'symbol':'1.2-2':'pt-BR') : 'Sem custo de seguro' }}</dd></div>
+              <div><dt>Custo por participante</dt><dd>{{ e.valorPorMembro | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</dd></div>
+            </dl>
+            <p class="total">Total deste cadastro <strong>{{ e.total | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</strong></p>
+            <h4>Participantes e lançamentos</h4>
+            <ul class="participants">
+              @for (membro of e.membros; track membro) {
+                <li><strong>{{ nomeMembro(membro) }}</strong>
+                  @for (l of e.lancamentos; track l.id) { @if (l.membroId === membro) { <span>{{ l.valor | currency:'BRL':'symbol':'1.2-2':'pt-BR' }} · {{ l.status }}</span><small>Lançamento {{ l.id }}</small> } }
+                </li>
+              }
+            </ul>
+            @if (relacionados().length > 1) {
+              <h4>Cadastros do mesmo passeio</h4><p>Cada cadastro tem participantes e cobranças próprios.</p>
+              <div class="related">@for (outro of relacionados(); track outro.id) {
+                <button type="button" [disabled]="outro.id === e.id" (click)="carregar(outro.id)">{{ outro.quantidadeMembros }} participantes · {{ outro.valorPorMembro | currency:'BRL':'symbol':'1.2-2':'pt-BR' }} por pessoa · {{ outro.id.slice(0, 8) }}</button>
+              }</div>
+            }
+            @if (e.eventoReferenciaId) { <small>Cadastro de referência: {{ e.eventoReferenciaId }}</small> }
+            @if (erroGrupo()) { <p role="alert">Não foi possível consultar os outros grupos: {{ erroGrupo() }}</p><button type="button" (click)="carregar()">Recarregar grupos</button> }
+            @if (custosBloqueados(e)) { <p class="notice">Lançamentos pagos ou atrasados bloqueiam exclusão e alterações de data, participantes e custos.</p> }
+            <footer>
+              @if (acesso.tem('eventos.excluir')) { <button type="button" class="danger-outline" [disabled]="custosBloqueados(e)" (click)="pedirExclusao()">Excluir evento</button> }
+              @if (acesso.tem('eventos.editar')) { <button type="button" class="primary" [disabled]="!!erroGrupo()" (click)="editar()">Editar evento</button> }
+            </footer>
+          }
+        }
+      }
+      </div>
+    </div>
+  </section>
+</div>

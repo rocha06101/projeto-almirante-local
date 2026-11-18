@@ -1,0 +1,23 @@
+:host { display: block; min-width: 0; }
+.events-page { color: #222134; }
+.page-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
+h1 { color: #09090b; font-size: 30px; font-weight: 700; margin: 0; line-height: 1.2; }
+button { min-height: 44px; border-radius: 6px; border: 1px solid #dddbe5; padding: 8px 14px; font-size: 13px; color: #5005a1; background: white; }
+button:focus-visible { outline: 3px solid #9773d6; outline-offset: 2px; }button:disabled { opacity: .5; cursor: default; }
+.events-grid { display: grid; grid-template-columns: minmax(0, 69fr) minmax(0, 31fr); gap: 20px 28px; align-items: stretch; }
+.calendar-column { min-width: 0; }
+app-proximos-eventos { min-height: 0; }
+.status { margin-top: 12px; padding: 12px 16px; font-size: 13px; background: white; border-radius: 8px; color: #746c84; }
+.status button { display: block; margin-top: 10px; }.error { color: #8a2440; background: #fff0f1; }
+@media (max-width: 1100px) { .events-grid { gap: 20px; grid-template-columns: minmax(0, 65fr) minmax(0, 35fr); } }
+@media (max-width: 991px) { .events-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 575px) { .page-header { gap: 12px; margin-bottom: 20px; } h1 { font-size: 26px; } }
+
+@media (min-width: 992px) {
+  .events-page { height: max(540px, calc(100dvh - var(--topbar-height) - var(--safe-top) - 2 * var(--content-gutter))); display: flex; flex-direction: column; }
+  .page-header { flex-shrink: 0; margin-bottom: 20px; }
+  .events-grid { flex: 1; min-height: 0; }
+  .calendar-column { display: flex; flex-direction: column; min-height: 0; }
+  app-eventos-calendario { flex: 1; min-height: 0; }
+  .status { flex-shrink: 0; margin-bottom: 0; }
+}

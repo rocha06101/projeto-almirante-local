@@ -1,0 +1,98 @@
+<form #form="ngForm" (ngSubmit)="confirmando ? salvar() : revisar()">
+  @if (erro()) { <p class="feedback" role="alert">{{ erro() }}</p> }
+  @if (eventoExistenteId()) { <button type="button" class="secondary" [disabled]="salvando()" (click)="consultarExistente()">Consultar evento já cadastrado</button> }
+  @if (rejeitado()) { <button type="button" class="secondary" [disabled]="salvando()" (click)="corrigirRejeitado()">Corrigir cadastro rejeitado</button> }
+  @if (conflito()) {
+    <p>Recarregue os dados atuais antes de editar novamente. As alterações deste formulário serão descartadas.</p>
+    <button type="button" class="secondary" (click)="recarregar.emit()">Recarregar dados atuais</button>
+  }
+  @if (!confirmando) {
+    @if (bloqueado()) { <p class="notice">Há lançamentos pagos ou atrasados. Data, participantes e custos ficam bloqueados.</p> }
+    @if (grupoCompartilhado) { <p class="notice">Este passeio tem outros grupos. A data e o local são compartilhados e não podem ser alterados.</p> }
+    <fieldset [disabled]="salvando() || conflito()">
+      <label>Título
+        <input type="text" name="titulo" required [maxlength]="tituloMaximo" [(ngModel)]="modelo.titulo">
+      </label>
+      <label>Descrição
+        <textarea class="description" name="descricao" rows="3" [maxlength]="descricaoMaxima" [(ngModel)]="modelo.descricao"
+          placeholder="Descreva as atividades e informações do evento..."></textarea>
+      </label>
+      <div class="fields">
+        <label>Data<input type="date" name="data" required [(ngModel)]="modelo.dataEvento" [min]="evento ? '' : dataMinima" [disabled]="bloqueado() || grupoCompartilhado" (ngModelChange)="mudarData()"></label>
+        <label>Local<input type="text" name="local" maxlength="200" required [(ngModel)]="modelo.local" [disabled]="grupoCompartilhado" (ngModelChange)="modelo.eventoReferenciaId = null"></label>
+      </div>
+      @if (!evento) {
+        <label>Outro cadastro do mesmo passeio (opcional)
+          <select name="referencia" [(ngModel)]="modelo.eventoReferenciaId" [disabled]="carregandoReferencias()">
+            <option [ngValue]="null">Novo passeio</option>
+            @for (ref of referenciasCompativeis(); track ref.id) { <option [value]="ref.id">{{ nomeEvento(ref) }} · {{ ref.valorPorMembro | currency:'BRL':'symbol':'1.2-2':'pt-BR' }} por participante · {{ ref.id.slice(0, 8) }}</option> }
+          </select>
+        </label>
+        <small>A referência precisa ter a mesma data e local. Os grupos mantêm cobranças individuais.</small>
+        @if (erroReferencias()) { <p role="alert">{{ erroReferencias() }} Altere a data para consultar as referências novamente.</p> }
+      }
+      <fieldset class="participants" [disabled]="!podeSelecionarMembros()">
+        <legend>Participantes <span>{{ modelo.membros.length }} selecionados</span></legend>
+        <div class="participant-groups">
+          @for (grupo of grupos; track grupo.id) {
+            @let estado = estadoGrupo(grupo.id);
+            <label class="check">
+              <input type="checkbox" [checked]="estado === 'completo'" [indeterminate]="estado === 'parcial'"
+                [disabled]="idsPorGrupo()[grupo.id].length === 0"
+                (change)="selecionarGrupo(grupo.id, $any($event.target).checked)">
+              {{ grupo.nome }}
+            </label>
+          }
+        </div>
+        @let visiveis = membrosVisiveis();
+        @if (visiveis.length || busca) {
+          <label class="search-label">Buscar participante<input type="search" name="busca" [(ngModel)]="busca" placeholder="Nome do participante"></label>
+          <div class="member-list">
+            @for (m of visiveis; track m.id) {
+              <label class="check"><input type="checkbox" [checked]="modelo.membros.includes(m.id)" (change)="selecionarMembro(m.id, $any($event.target).checked)">{{ m.nome }}</label>
+            } @empty { <p>Nenhum participante encontrado.</p> }
+          </div>
+        } @else if (!carregandoMembros() && !erroMembros()) {
+          <p>{{ idsPorGrupo().todos.length ? 'Selecione um grupo para ver seus participantes.' : 'Nenhum participante elegível disponível.' }}</p>
+        }
+      </fieldset>
+      @if (carregandoMembros()) { <p role="status">Carregando participantes…</p> }
+      @if (erroMembros()) { <p role="alert">{{ erroMembros() }}</p> @if (acesso.tem('membros.consultar')) { <button type="button" class="secondary" (click)="carregarMembros()">Recarregar participantes</button> } }
+      <fieldset [disabled]="bloqueado()" class="costs">
+        <legend>Custos por participante</legend>
+        <label class="check"><input type="checkbox" name="cobrarTransporte" [ngModel]="!modelo.transporte.ehGratis"
+          (ngModelChange)="modelo.transporte.ehGratis = !$event">Transporte</label>
+        <label>Transporte (R$)<input type="number" name="transporte" min="0" step="0.01"
+          [required]="!modelo.transporte.ehGratis" [(ngModel)]="modelo.transporte.valor" [disabled]="modelo.transporte.ehGratis"></label>
+        <label class="check"><input type="checkbox" name="cobrarAlimentacao" [ngModel]="!modelo.alimentacao.individual"
+          (ngModelChange)="modelo.alimentacao.individual = !$event">Alimentação</label>
+        <label>Alimentação (R$)<input type="number" name="alimentacao" min="0" step="0.01"
+          [required]="!modelo.alimentacao.individual" [(ngModel)]="modelo.alimentacao.valor" [disabled]="modelo.alimentacao.individual"></label>
+        <label class="check"><input type="checkbox" name="incluirSeguro" [(ngModel)]="seguroAtivo">Seguro</label>
+        <label>Seguro (R$)<input type="number" name="seguro" min="0" step="0.01" [required]="seguroAtivo"
+          [(ngModel)]="modelo.seguroObrigatorio" [disabled]="!seguroAtivo"></label>
+      </fieldset>
+      @if (removeMembros()) { <label>Motivo da remoção de participantes<textarea name="motivo" required maxlength="255" [(ngModel)]="motivo"></textarea></label> }
+      @else if (cancelaCobrancas()) { <label>Motivo do cancelamento das cobranças<textarea name="motivo" required maxlength="255" [(ngModel)]="motivo"></textarea></label> }
+    </fieldset>
+  } @else {
+    <section class="confirmation" aria-label="Confirmação financeira">
+      <h3>Confirme {{ evento ? 'a atualização' : 'o cadastro' }}</h3>
+      <p><strong>{{ modelo.titulo }}</strong> · {{ modelo.dataEvento.split('-').reverse().join('/') }} · {{ modelo.membros.length }} participantes</p>
+      @if (cancelaCobrancas()) { <p>Como o custo passou a zero, os lançamentos em aberto serão cancelados.</p> }
+      @else if (evento) { <p>A atualização sincroniza os lançamentos financeiros deste grupo, incluindo participantes removidos.</p> }
+      @else if (porMembro() > 0) { <p>Será gerada uma cobrança por participante, junto com o cadastro do evento.</p> }
+      @else { <p>O cadastro tem custo estimado de R$ 0,00.</p> }
+      <label class="check"><input type="checkbox" name="confirmado" [(ngModel)]="confirmado" [disabled]="salvando()">Confirmo a operação e seus efeitos nas cobranças.</label>
+    </section>
+  }
+  <div class="estimate" aria-live="polite"><span>Estimativa por participante<strong>{{ porMembro() | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</strong></span><span>Total estimado<strong>{{ total() | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</strong></span></div>
+  <small>Os valores definitivos serão confirmados pelo servidor.</small>
+  <footer>
+    <button type="button" class="secondary" [disabled]="salvando()" (click)="cancelar.emit()">Cancelar</button>
+    @if (confirmando && !api.cadastroPendente() && !conflito()) { <button type="button" class="secondary" [disabled]="salvando()" (click)="confirmando = false">Voltar ao formulário</button> }
+    <button type="submit" class="primary" [disabled]="salvando() || conflito() || !!eventoExistenteId() || !podeSalvar() || (confirmando ? !confirmado : form.invalid || !modelo.membros.length || carregandoMembros())">
+      {{ salvando() ? 'Salvando…' : confirmando ? 'Confirmar e salvar' : 'Revisar evento' }}
+    </button>
+  </footer>
+</form>

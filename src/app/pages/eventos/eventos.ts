@@ -1,76 +1,97 @@
-import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { finalize } from 'rxjs';
-import { ApiService } from '../../core/services/api';
-
-interface Evento {
-  id: string;
-  local: string;
-  dataEvento: string;
-  quantidadeMembros: number;
-}
+import { Subject, catchError, finalize, of, map, startWith, switchMap } from 'rxjs';
+import { EventoDto, PeriodoEventos } from '../../core/models/evento.model';
+import { EventosService } from '../../core/services/eventos';
+import { PermissoesService } from '../../core/services/permissoes';
+import { EventosCalendario } from './calendario/eventos-calendario';
+import { ProximosEventos } from './proximos/proximos-eventos';
+import { EventoDetalhes } from './detalhes/evento-detalhes';
+import { dataCivil, erroEvento, somarDias } from './eventos.utils';
 
 @Component({
-  imports: [DatePipe],
-  template: `
-    <section class="container-fluid py-4">
-      <header class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
-        <h1 class="mb-0">Eventos</h1>
-        <button type="button" class="btn btn-outline-primary" [disabled]="carregando()" (click)="carregar()">
-          Atualizar eventos
-        </button>
-      </header>
-      @if (carregando()) {
-        <p role="status">Carregando eventos…</p>
-      } @else if (erro()) {
-        <p role="alert">{{ erro() }}</p>
-      } @else {
-        <div class="table-responsive">
-          <table class="table">
-            <thead><tr><th scope="col">Data</th><th scope="col">Local</th><th scope="col">Participantes</th></tr></thead>
-            <tbody>
-              @for (evento of eventos(); track evento.id) {
-                <tr>
-                  <td>{{ evento.dataEvento | date:'dd/MM/yyyy':'UTC' }}</td>
-                  <td>{{ evento.local }}</td>
-                  <td>{{ evento.quantidadeMembros }}</td>
-                </tr>
-              } @empty {
-                <tr><td colspan="3">Nenhum evento encontrado.</td></tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      }
-    </section>
-  `,
+  selector: 'app-eventos', imports: [EventosCalendario, ProximosEventos, EventoDetalhes],
+  providers: [EventosService],
+  templateUrl: './eventos.html', styleUrl: './eventos.scss',
 })
 export class Eventos implements OnInit {
-  private readonly api = inject(ApiService);
+  private readonly api = inject(EventosService);
+  readonly acesso = inject(PermissoesService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly periodos = new Subject<PeriodoEventos>();
+  private readonly atualizarProximos = new Subject<void>();
+  private periodoAtual: PeriodoEventos | null = null;
+  readonly hoje = dataCivil(new Date());
+  readonly selecionada = signal(this.hoje);
+  readonly eventos = signal<EventoDto[]>([]);
+  readonly proximos = signal<EventoDto[]>([]);
   readonly carregando = signal(false);
+  readonly carregandoProximos = signal(false);
   readonly erro = signal('');
-  readonly eventos = signal<Evento[]>([]);
+  readonly erroProximos = signal('');
+  readonly dataMinima = signal('');
+  readonly modal = signal<{ id: string | null; data: string } | null>(null);
+  readonly selectedEventId = signal<string | null>(null);
+  private dataEventoSelecionado = '';
 
   ngOnInit(): void {
-    this.carregar();
-  }
-
-  carregar(): void {
-    this.carregando.set(true);
-    this.erro.set('');
-    this.api.get<{ items: Evento[] }>('/Eventos').pipe(
-      takeUntilDestroyed(this.destroyRef),
-      finalize(() => this.carregando.set(false)),
-    ).subscribe({
-      next: resposta => this.eventos.set(resposta.items ?? []),
-      error: erro => {
-        this.eventos.set([]);
-        this.erro.set(erro.error?.detail ?? (erro.status === 403
-          ? 'Você não tem permissão para consultar eventos.'
-          : 'Não foi possível consultar os eventos.'));
-      },
+    this.periodos.pipe(switchMap(periodo => {
+      this.carregando.set(true); this.erro.set('');
+      return this.api.listar(periodo).pipe(catchError(e => { this.erro.set(erroEvento(e)); return of(null); }), finalize(() => this.carregando.set(false)), map(resposta => ({ resposta, periodo })));
+    }), takeUntilDestroyed(this.destroyRef)).subscribe(({ resposta: r, periodo }) => {
+      if (r) { this.validarSelecao(r.items, periodo); this.eventos.set(r.items); this.dataMinima.set(r.dataMinimaCadastro); }
     });
+    this.atualizarProximos.pipe(startWith(undefined), switchMap(() => {
+      if (!this.acesso.tem('eventos.consultar')) return of(null);
+      this.carregandoProximos.set(true); this.erroProximos.set('');
+      return this.api.listar({ dataInicial: this.hoje, dataFinal: somarDias(this.hoje, 365) }).pipe(
+        catchError(e => { this.erroProximos.set(erroEvento(e)); return of(null); }), finalize(() => this.carregandoProximos.set(false)),
+      );
+    }), takeUntilDestroyed(this.destroyRef)).subscribe(r => {
+      if (r) {
+        this.validarSelecao(r.items, { dataInicial: this.hoje, dataFinal: somarDias(this.hoje, 365) });
+        this.proximos.set(r.items.filter(e => e.dataEvento >= this.hoje).sort((a, b) => a.dataEvento.localeCompare(b.dataEvento) || a.id.localeCompare(b.id)));
+        this.dataMinima.set(r.dataMinimaCadastro);
+      }
+    });
+  }
+  mudarPeriodo(periodo: PeriodoEventos): void {
+    if (!this.acesso.tem('eventos.consultar') || (this.periodoAtual?.dataInicial === periodo.dataInicial && this.periodoAtual?.dataFinal === periodo.dataFinal)) return;
+    this.periodoAtual = periodo;
+    if (this.dataEventoSelecionado < periodo.dataInicial || this.dataEventoSelecionado > periodo.dataFinal) this.limparSelecao();
+    if (this.selecionada() < periodo.dataInicial || this.selecionada() > periodo.dataFinal) this.selecionada.set('');
+    this.periodos.next(periodo);
+  }
+  recarregar(): void {
+    if (!this.acesso.tem('eventos.consultar')) return;
+    if (this.periodoAtual) this.periodos.next(this.periodoAtual);
+    this.atualizarProximos.next();
+  }
+  recarregarProximos(): void { if (this.acesso.tem('eventos.consultar')) this.atualizarProximos.next(); }
+  selecionarEvento(id: string): void {
+    if (!this.acesso.tem('eventos.consultar') || this.modal()) return;
+    const evento = this.eventos().find(e => e.id === id) ?? this.proximos().find(e => e.id === id);
+    if (!evento) return;
+    if (this.selectedEventId() === id) this.modal.set({ id, data: '' });
+    else {
+      this.selectedEventId.set(id);
+      this.dataEventoSelecionado = evento.dataEvento;
+    }
+  }
+  private limparSelecao(): void { this.selectedEventId.set(null); this.dataEventoSelecionado = ''; }
+  private validarSelecao(items: EventoDto[], periodo: PeriodoEventos): void {
+    // Só a resposta do intervalo que contém o evento pode invalidar sua seleção.
+    const selecionado = items.find(e => e.id === this.selectedEventId());
+    if (selecionado) this.dataEventoSelecionado = selecionado.dataEvento;
+    else if (this.selectedEventId() && this.dataEventoSelecionado >= periodo.dataInicial &&
+        this.dataEventoSelecionado <= periodo.dataFinal) this.limparSelecao();
+  }
+  voltarHoje(data: string): void { this.limparSelecao(); this.selecionada.set(data); }
+  selecionarDia(data: string): void {
+    this.limparSelecao();
+    this.selecionada.set(data);
+    if (this.acesso.tem('eventos.consultar') && this.acesso.tem('eventos.criar')) {
+      this.modal.set({ id: null, data });
+    }
   }
 }

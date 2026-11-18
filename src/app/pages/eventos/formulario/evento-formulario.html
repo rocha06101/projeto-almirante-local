@@ -3,8 +3,9 @@
   @if (eventoExistenteId()) { <button type="button" class="secondary" [disabled]="salvando()" (click)="consultarExistente()">Consultar evento já cadastrado</button> }
   @if (rejeitado()) { <button type="button" class="secondary" [disabled]="salvando()" (click)="corrigirRejeitado()">Corrigir cadastro rejeitado</button> }
   @if (conflito() || incerto()) {
+    @if (incerto()) { <p>O resultado da edição não foi confirmado.</p> }
     <p>Recarregue os dados atuais antes de editar novamente. As alterações deste formulário serão descartadas.</p>
-    <button type="button" class="secondary" (click)="recarregar.emit()">Recarregar dados atuais</button>
+    <button type="button" class="secondary" [disabled]="salvando()" (click)="recarregar.emit()">Recarregar dados atuais</button>
   }
   @if (!confirmando) {
     @if (temPagamentos()) { <p class="notice">Há pagamentos registrados. É possível reduzir ou zerar o custo por participante. Aumento, troca de composição com o mesmo total, alteração de data e inclusão de participantes não são permitidos. Antes da data do evento, remover quem pagou exige estorno concluído; a partir da data, a remoção preserva o pagamento sem gerar devolução.</p> }
@@ -37,19 +38,29 @@
           @for (grupo of grupos; track grupo.id) {
             @let estado = estadoGrupo(grupo.id);
             <label class="check">
-              <input type="checkbox" [checked]="estado === 'completo'" [indeterminate]="estado === 'parcial'"
+              <input #caixaGrupo type="checkbox" [checked]="grupoMarcado(grupo.id, estado)" [indeterminate]="estado === 'parcial'"
                 [disabled]="idsPorGrupo()[grupo.id].length === 0"
-                (change)="selecionarGrupo(grupo.id, $any($event.target).checked)">
+                (change)="mudarSelecaoGrupo(grupo.id, caixaGrupo)">
               {{ grupo.nome }}
             </label>
           }
+        </div>
+        <div role="status" aria-live="polite" aria-atomic="true">
+          @if (feedbackSelecao()) { <p class="feedback-selecao">{{ feedbackSelecao() }}</p> }
         </div>
         @let visiveis = membrosVisiveis();
         @if (visiveis.length || busca) {
           <label class="search-label">Buscar participante<input type="search" name="busca" [(ngModel)]="busca" placeholder="Nome do participante"></label>
           <div class="member-list">
             @for (m of visiveis; track m.id) {
-              <label class="check"><input type="checkbox" [checked]="modelo.membros.includes(m.id)" [disabled]="!podeAlterarMembro(m.id, !modelo.membros.includes(m.id))" (change)="selecionarMembro(m.id, $any($event.target).checked)">{{ m.nome }}</label>
+              @let selecionado = modelo.membros.includes(m.id);
+              @let bloqueio = motivoBloqueioMembro(m.id, !selecionado);
+              <div class="member-option">
+                <label class="check"><input #caixaMembro type="checkbox" [checked]="selecionado" [disabled]="!!bloqueio"
+                  [attr.aria-describedby]="bloqueio ? 'participante-bloqueio-' + m.id : null"
+                  (change)="mudarSelecaoMembro(m.id, caixaMembro)">{{ m.nome }}</label>
+                @if (bloqueio) { <small class="feedback-membro" [id]="'participante-bloqueio-' + m.id">{{ bloqueio }}</small> }
+              </div>
             } @empty { <p>Nenhum participante encontrado.</p> }
           </div>
         } @else if (!carregandoMembros() && !erroMembros()) {

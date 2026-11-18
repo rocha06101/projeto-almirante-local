@@ -29,6 +29,7 @@ export class EventoFormulario implements OnInit {
   readonly salvo = output<EventoDto>();
   readonly cancelar = output<void>();
   readonly recarregar = output<void>();
+  readonly falhaEdicao = output<'incerta' | 'conflito'>();
   readonly ocupacao = output<boolean>();
   readonly api = inject(EventosService);
   readonly acesso = inject(PermissoesService);
@@ -55,6 +56,7 @@ export class EventoFormulario implements OnInit {
   private readonly membrosExibidos = new Set<string>();
   readonly carregandoMembros = signal(false);
   readonly erroMembros = signal('');
+  readonly feedbackSelecao = signal('');
   readonly referencias = signal<EventoDto[]>([]);
   readonly carregandoReferencias = signal(false);
   readonly erroReferencias = signal('');
@@ -140,35 +142,75 @@ export class EventoFormulario implements OnInit {
     if (quantidade === 0) return 'vazio';
     return quantidade === ids.length ? 'completo' : 'parcial';
   }
+  grupoMarcado(grupo: GrupoParticipantes, estado = this.estadoGrupo(grupo)): boolean {
+    if (estado !== 'parcial') return estado === 'completo';
+    const selecionados = new Set(this.modelo.membros);
+    // Um grupo misto que não pode receber mais participantes ainda pode ser desmarcado.
+    return !this.idsPorGrupo()[grupo].some(id => !selecionados.has(id) && this.podeAlterarMembro(id, true));
+  }
+  mudarSelecaoGrupo(grupo: GrupoParticipantes, caixa: HTMLInputElement): void {
+    this.selecionarGrupo(grupo, caixa.checked);
+    const estado = this.estadoGrupo(grupo);
+    caixa.checked = this.grupoMarcado(grupo, estado);
+    caixa.indeterminate = estado === 'parcial';
+  }
   selecionarGrupo(grupo: GrupoParticipantes, marcado: boolean): void {
     if (!this.podeSelecionarMembros()) return;
     const selecionados = new Set(this.modelo.membros);
+    let bloqueados = 0;
     for (const id of this.idsPorGrupo()[grupo]) {
-      if (!this.podeAlterarMembro(id, marcado)) continue;
+      if (selecionados.has(id) !== marcado && !this.podeAlterarMembro(id, marcado)) {
+        bloqueados++;
+        continue;
+      }
       if (marcado) {
         this.membrosExibidos.add(id);
         selecionados.add(id);
       } else {
-        this.membrosExibidos.delete(id);
+        if (!this.evento?.membros.includes(id)) this.membrosExibidos.delete(id);
         selecionados.delete(id);
       }
     }
     this.modelo.membros = [...selecionados];
+    this.feedbackSelecao.set(this.mensagemSelecao(bloqueados, marcado));
+  }
+  private mensagemSelecao(bloqueados: number, marcado: boolean): string {
+    if (!bloqueados) return '';
+    const pessoas = bloqueados === 1 ? '1 participante' : `${bloqueados} participantes`;
+    const verbo = bloqueados === 1 ? 'não foi' : 'não foram';
+    if (marcado) return `${pessoas} ${verbo} incluído${bloqueados === 1 ? '' : 's'} porque o evento já tem pagamentos registrados.`;
+    return `${pessoas} ${verbo} removido${bloqueados === 1 ? '' : 's'} porque há pagamentos que exigem estorno concluído.`;
+  }
+  mudarSelecaoMembro(id: string, caixa: HTMLInputElement): void {
+    this.selecionarMembro(id, caixa.checked);
+    caixa.checked = this.modelo.membros.includes(id);
   }
   selecionarMembro(id: string, marcado: boolean): void {
-    if (!this.podeSelecionarMembros() || !this.podeAlterarMembro(id, marcado)) return;
+    if (!this.podeSelecionarMembros()) return;
+    if (!this.podeAlterarMembro(id, marcado)) {
+      this.feedbackSelecao.set(this.mensagemSelecao(1, marcado));
+      return;
+    }
+    this.feedbackSelecao.set('');
     this.membrosExibidos.add(id);
     this.modelo.membros = marcado ? [...new Set([...this.modelo.membros, id])] : this.modelo.membros.filter(m => m !== id);
   }
   podeSelecionarMembros(): boolean {
-    return this.podeSalvar() && this.acesso.tem('membros.consultar') &&
+    return !this.salvando() && !this.confirmando && !this.incerto() && !this.conflito() &&
+      this.podeSalvar() && this.acesso.tem('membros.consultar') &&
       !this.carregandoMembros() && !this.erroMembros();
   }
   temPagamentos(): boolean { return temPagamentos(this.evento); }
   podeAlterarMembro(id: string, marcado: boolean): boolean {
-    if (!this.evento) return true;
-    if (marcado) return !this.temPagamentos() || this.evento.membros.includes(id);
-    return podeRemoverMembro(this.evento, id);
+    return !this.motivoBloqueioMembro(id, marcado);
+  }
+  motivoBloqueioMembro(id: string, marcado: boolean): string {
+    if (!this.evento) return '';
+    if (marcado && this.temPagamentos() && !this.evento.membros.includes(id))
+      return 'Inclusão bloqueada porque o evento já tem pagamentos registrados.';
+    if (!marcado && !podeRemoverMembro(this.evento, id))
+      return 'A remoção antes do evento exige que a tesouraria conclua o estorno.';
+    return '';
   }
   exigeMotivo(): boolean { return this.removeMembros() || this.cancelaCobrancas() || this.reducaoComPagamento(); }
   reducaoComPagamento(): boolean {
@@ -290,6 +332,8 @@ export class EventoFormulario implements OnInit {
         this.incerto.set(!!this.evento && respostaIncerta(e));
         const mensagem = erroEvento(e); this.erro.set(mensagem); this.toast.error(mensagem);
         this.conflito.set(!!this.evento && status === 409);
+        if (this.incerto()) this.falhaEdicao.emit('incerta');
+        if (this.conflito()) this.falhaEdicao.emit('conflito');
         if (!this.evento && status === 409) {
           if (problema?.codigo === 'EVENTO_IDEMPOTENCIA_SEM_RESPOSTA_ORIGINAL' && typeof problema?.eventoId === 'string') {
             this.eventoExistenteId.set(problema.eventoId);

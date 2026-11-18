@@ -1,7 +1,7 @@
 import { A11yModule, CdkTrapFocus } from '@angular/cdk/a11y';
 import { CurrencyPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, ElementRef, HostListener, Injector, Input, OnInit, ViewChild, afterNextRender, inject, output, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, HostListener, Injector, Input, OnInit, ViewChild, afterNextRender, computed, inject, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Subject, catchError, finalize, of, switchMap } from 'rxjs';
@@ -14,6 +14,7 @@ import { EventoFormulario } from '../formulario/evento-formulario';
 import { erroEvento, formatarData, liquidacaoConfirmavel, motivoValido, nomeEvento, respostaIncerta } from '../eventos.utils';
 
 type DestinoSaida = 'fechar' | 'voltar' | 'estorno';
+type OperacaoFinanceira = 'edicao' | 'estorno' | 'exclusao';
 
 @Component({
   selector: 'app-evento-detalhes', imports: [A11yModule, FormsModule, CurrencyPipe, EventoFormulario],
@@ -44,7 +45,8 @@ export class EventoDetalhes implements OnInit {
   readonly erro = signal('');
   readonly erroGrupo = signal('');
   readonly conflito = signal(false);
-  readonly incerto = signal(false);
+  private readonly operacaoIncerta = signal<OperacaoFinanceira | null>(null);
+  readonly incerto = computed(() => this.operacaoIncerta() !== null);
   readonly motivoValido = motivoValido;
   readonly liquidacaoConfirmavel = liquidacaoConfirmavel;
   readonly nomeEvento = nomeEvento;
@@ -60,15 +62,26 @@ export class EventoDetalhes implements OnInit {
 
   ngOnInit(): void {
     this.consulta.pipe(switchMap(id => {
+      const reconciliando = this.incerto() || this.conflito();
       this.carregando.set(true); this.evento.set(null); this.relacionados.set([]);
       this.erro.set(''); this.erroGrupo.set(''); this.modo = 'detalhes';
       this.alvoEstorno = null; this.motivo = ''; this.confirmaExclusao = false; this.confirmaEstorno = false;
       return this.api.obter(id).pipe(switchMap(evento => {
-        this.evento.set(evento); this.conflito.set(false); this.incerto.set(false);
+        this.evento.set(evento);
+        this.conflito.set(false);
+        this.operacaoIncerta.set(null);
+        if (reconciliando) this.atualizado.emit();
         return this.api.listar({ dataInicial: evento.dataEvento, dataFinal: evento.dataEvento }).pipe(
           catchError(e => { this.erroGrupo.set(erroEvento(e)); return of(null); }),
         );
-      }), catchError(e => { this.erro.set(erroEvento(e)); return of(null); }), finalize(() => this.carregando.set(false)));
+      }), catchError(e => {
+        if (this.operacaoIncerta() === 'exclusao' && e instanceof HttpErrorResponse && e.status === 404) {
+          this.erro.set('O evento não está disponível para consulta. O servidor pode ter concluído a exclusão, mas o resultado permanece sem confirmação.');
+        } else {
+          this.erro.set(erroEvento(e));
+        }
+        return of(null);
+      }), finalize(() => this.carregando.set(false)));
     }), takeUntilDestroyed(this.destroyRef)).subscribe(r => {
       if (r) {
         this.dataMinima = r.dataMinimaCadastro;
@@ -82,12 +95,18 @@ export class EventoDetalhes implements OnInit {
       error: () => {},
     });
   }
-  carregar(id = this.id): void { if (id && !this.ocupado()) { this.id = id; if (this.incerto()) this.atualizado.emit(); this.consulta.next(id); this.focarInicio(); } }
+  carregar(id = this.id): void {
+    if (!id || this.ocupado()) return;
+    if ((this.incerto() || this.conflito()) && (id !== this.id || this.carregando())) return;
+    this.id = id;
+    this.consulta.next(id);
+    this.focarInicio();
+  }
   editar(): void {
     if (this.acesso.tem('eventos.editar') && this.evento() && !this.ocupado() && !this.incerto() && !this.conflito() && !this.carregando() && !this.erroGrupo()) { this.modo = 'editar'; this.focarInicio(); }
   }
   pedirExclusao(): void {
-    if (!this.evento() || !this.acesso.tem('eventos.excluir') || this.ocupado() || this.incerto() || this.conflito() || this.exclusaoBloqueada()) return;
+    if (!this.evento() || !this.acesso.tem('eventos.excluir') || this.ocupado() || this.carregando() || this.incerto() || this.conflito() || this.exclusaoBloqueada()) return;
     this.erro.set(''); this.motivo = ''; this.confirmaExclusao = false; this.modo = 'excluir';
     this.focarInicio();
   }
@@ -98,7 +117,7 @@ export class EventoDetalhes implements OnInit {
     this.ocupado.set(true); this.erro.set('');
     this.api.excluir(e.id, e.versao, this.motivo.trim()).pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.ocupado.set(false))).subscribe({
       next: () => { this.toast.success('Evento excluído. Cobranças em aberto desativadas; histórico de pagamentos preservado.'); this.atualizado.emit(); this.fechar.emit(); },
-      error: err => this.falhaFinanceira(err),
+      error: err => this.falhaFinanceira(err, 'exclusao'),
     });
   }
   exclusaoBloqueada(): boolean {
@@ -142,14 +161,14 @@ export class EventoDetalhes implements OnInit {
           this.toast.success('Solicitação de estorno registrada. A devolução aguarda processamento pela tesouraria.');
           this.ocupado.set(false); this.atualizado.emit(); this.carregar(alvo.eventoId);
         },
-        error: err => this.falhaFinanceira(err),
+        error: err => this.falhaFinanceira(err, 'estorno'),
       });
   }
-  private falhaFinanceira(err: unknown): void {
+  private falhaFinanceira(err: unknown, operacao: OperacaoFinanceira): void {
     const mensagem = erroEvento(err);
     this.erro.set(mensagem); this.toast.error(mensagem);
     this.conflito.set(err instanceof HttpErrorResponse && err.status === 409);
-    this.incerto.set(respostaIncerta(err));
+    this.operacaoIncerta.set(respostaIncerta(err) ? operacao : null);
     this.confirmaEstorno = false; this.confirmaExclusao = false;
   }
   salvo(evento: EventoDto): void {
@@ -158,9 +177,9 @@ export class EventoDetalhes implements OnInit {
     if (this.modo === 'criar') this.fechar.emit();
     else this.carregar(evento.id);
   }
-  reconciliar(): void {
-    if (this.ocupado()) return;
-    this.atualizado.emit(); this.carregar();
+  falhaEdicao(tipo: 'incerta' | 'conflito'): void {
+    this.operacaoIncerta.set(tipo === 'incerta' ? 'edicao' : null);
+    this.conflito.set(tipo === 'conflito');
   }
   nomeMembro(id: string): string { return this.nomes()[id] || `Participante ${id}`; }
   private focarInicio(): void {

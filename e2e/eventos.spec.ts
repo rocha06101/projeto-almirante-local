@@ -608,3 +608,58 @@ test('409 de estorno informa ausência de valor retido e impede reenvio', async 
   await expect(page.getByRole('button', { name: 'Confirmar estorno' })).toBeDisabled();
   expect(estado.chamadas.filter(c => c.method === 'POST')).toHaveLength(1);
 });
+
+test('seleção parcial preserva pagante e anuncia as alterações bloqueadas no celular', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const estado = await preparar(page);
+  estado.eventos[0].dataEvento = '2026-11-18';
+  estado.eventos[0].lancamentos[0].status = 'Pago';
+  await abrir(page); await detalhes(page);
+  await page.getByRole('button', { name: 'Editar evento' }).click();
+  const grupo = page.getByLabel('Todos', { exact: true });
+  const ana = page.getByLabel('Ana Silva', { exact: true });
+  const bruno = page.getByLabel('Bruno Santos', { exact: true });
+  await expect(grupo).toHaveJSProperty('indeterminate', true);
+  await expect(ana).toBeDisabled();
+  await expect(ana).toHaveAccessibleDescription('A remoção antes do evento exige que a tesouraria conclua o estorno.');
+  await grupo.focus();
+  await page.keyboard.press('Space');
+  await expect(grupo).toHaveJSProperty('indeterminate', true);
+  await expect(ana).toBeChecked();
+  await expect(bruno).not.toBeChecked();
+  const status = page.getByRole('status').filter({ hasText: '1 participante não foi removido' });
+  await expect(status).toHaveAttribute('aria-live', 'polite');
+  await bruno.check();
+  await expect(status).toHaveCount(0);
+  await expect(bruno).toBeChecked();
+  expect((await measureOverflow(page)).documentOverflow).toBeLessThanOrEqual(1);
+});
+
+test('reconciliação de PUT não recarrega listas com GET falho e só atualiza após ler o recurso', async ({ page }) => {
+  const estado = await preparar(page);
+  await abrir(page); await detalhes(page);
+  await page.getByRole('button', { name: 'Editar evento' }).click();
+  await page.getByLabel('Título', { exact: true }).fill('Título persistido');
+  await page.getByRole('button', { name: 'Revisar evento' }).click();
+  await page.getByLabel('Confirmo a operação e seus efeitos nas cobranças.').check();
+  estado.erroPut = 500;
+  await page.getByRole('button', { name: 'Confirmar e salvar' }).click();
+  await expect(page.getByText('O resultado da edição não foi confirmado.')).toBeVisible();
+  const consultasLista = () => estado.chamadas.filter(c => c.method === 'GET' && c.url.pathname === '/api/Eventos').length;
+  const antes = consultasLista();
+  estado.erroDetalhe = 503;
+  await page.getByRole('button', { name: 'Recarregar dados atuais' }).click();
+  await expect(page.getByText('O resultado da operação permanece sem confirmação.')).toBeVisible();
+  expect(consultasLista()).toBe(antes);
+  await expect(page.getByRole('button', { name: 'Editar evento' })).toHaveCount(0);
+  estado.erroDetalhe = 0;
+  estado.eventos[0].titulo = 'Título persistido';
+  estado.eventos[0].versao = 'AAAAAAAABAE=';
+  await page.getByRole('button', { name: 'Recarregar dados atuais' }).click();
+  await expect(page.getByRole('dialog').getByRole('heading', { name: 'Título persistido' })).toBeVisible();
+  expect(estado.chamadas.filter(c => c.method === 'PUT')).toHaveLength(1);
+  await expect(page.getByText('Evento atualizado.', { exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.upcoming-card').filter({ hasText: 'Título persistido' })).toBeVisible();
+  await expect(page.locator('.fc-daygrid-event').filter({ hasText: 'Título persistido' })).toBeVisible();
+});

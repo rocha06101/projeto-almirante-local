@@ -160,11 +160,14 @@ describe('Detalhes: exclusão e carregamento atual', () => {
     expect(c.erro()).toBe('Ainda há valor retido.');
   });
   it('exclusão com resposta incerta impede reenvio e consulta falha não libera ação', () => {
-    const c = detalhes(); c.pedirExclusao(); c.motivo = 'Cancelado'; c.confirmaExclusao = true; c.excluir();
+    const c = detalhes(), atualizado = vi.fn(); c.atualizado.subscribe(atualizado);
+    c.pedirExclusao(); c.motivo = 'Cancelado'; c.confirmaExclusao = true; c.excluir();
     http.expectOne('/api/Eventos/e1').error(new ProgressEvent('error'));
     c.confirmaExclusao = true; c.excluir(); http.expectNone(r => r.method === 'DELETE');
     c.carregar(); http.expectOne('/api/Eventos/e1').flush({}, { status: 503, statusText: 'Unavailable' });
     expect(c.incerto()).toBe(true); expect(c.evento()).toBeNull();
+    expect(atualizado).not.toHaveBeenCalled();
+    expect(TestBed.inject(ToastService).success).not.toHaveBeenCalled();
   });
 
   it('depois da baixa, exclusão usa versão atual e só fecha após 204 do servidor', () => {
@@ -178,10 +181,31 @@ describe('Detalhes: exclusão e carregamento atual', () => {
   });
   it('reconciliação da edição atualiza listagens e detalhes por consulta', () => {
     const c = detalhes(), atualizado = vi.fn(); c.atualizado.subscribe(atualizado);
-    c.reconciliar(); expect(atualizado).toHaveBeenCalledOnce();
+    c.falhaEdicao('incerta'); c.carregar(); c.carregar(); c.carregar('e2');
+    expect(atualizado).not.toHaveBeenCalled();
+    http.expectNone('/api/Eventos/e2');
     http.expectOne('/api/Eventos/e1').flush({ ...evento, versao: 'apos-resposta-incerta' });
+    expect(atualizado).toHaveBeenCalledOnce();
+    expect(c.incerto()).toBe(false);
+    expect(TestBed.inject(ToastService).success).not.toHaveBeenCalled();
     http.expectOne(r => r.url === '/api/Eventos').flush({ items: [evento] });
     expect(c.evento()?.versao).toBe('apos-resposta-incerta');
+  });
+
+  it('DELETE com resposta perdida e GET 404 mantém exclusão sem confirmação', () => {
+    const c = detalhes(), atualizado = vi.fn(), fechar = vi.fn();
+    c.atualizado.subscribe(atualizado); c.fechar.subscribe(fechar);
+    c.pedirExclusao(); c.motivo = 'Cancelado'; c.confirmaExclusao = true; c.excluir();
+    http.expectOne('/api/Eventos/e1').error(new ProgressEvent('error'));
+    c.carregar();
+    http.expectOne('/api/Eventos/e1').flush({ title: 'Evento não encontrado.' }, { status: 404, statusText: 'Not Found' });
+    expect(c.incerto()).toBe(true); expect(c.evento()).toBeNull();
+    expect(c.erro()).toContain('pode ter concluído a exclusão');
+    expect(atualizado).not.toHaveBeenCalled();
+    expect(fechar).not.toHaveBeenCalled();
+    expect(TestBed.inject(ToastService).success).not.toHaveBeenCalled();
+    c.pedirExclusao(); c.excluir();
+    http.expectNone(r => r.method === 'DELETE');
   });
 
 });

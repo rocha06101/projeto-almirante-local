@@ -307,4 +307,45 @@ describe('Formulário de eventos: efeitos financeiros e confirmação', () => {
     expect(c.erro()).toContain('Consulte os dados atuais'); expect(toast.success).not.toHaveBeenCalled();
   });
 
+  it('conta apenas mudanças coletivas bloqueadas, mantém grupo misto e permite reseleção de membro original', () => {
+    const { c } = formulario(true);
+    pagar(c);
+    c.evento!.dataEvento = c.modelo.dataEvento = '2099-01-01';
+    const caixa = document.createElement('input');
+    caixa.type = 'checkbox';
+    caixa.checked = true;
+    c.mudarSelecaoGrupo('todos', caixa);
+    expect(c.feedbackSelecao()).toContain('3 participantes não foram incluídos');
+    expect(c.modelo.membros).toEqual(['m1', 'm2']);
+    expect(caixa.indeterminate).toBe(true);
+    expect(caixa.checked).toBe(true);
+    caixa.checked = false;
+    c.mudarSelecaoGrupo('todos', caixa);
+    expect(c.feedbackSelecao()).toContain('1 participante não foi removido');
+    expect(c.modelo.membros).toEqual(['m1']);
+    expect(c.membrosVisiveis().map(m => m.id)).toContain('m2');
+    c.selecionarMembro('m2', true);
+    c.selecionarGrupo('todos', true); c.selecionarGrupo('todos', true);
+    expect(c.modelo.membros).toEqual(['m1', 'm2']);
+    c.selecionarMembro('m1', false);
+    expect(c.modelo.membros).toEqual(['m1', 'm2']);
+  });
+
+  it.each([
+    ['2099-01-01', 'Pendente', false],
+    ['2099-01-01', 'Pago', true],
+    ['2000-01-01', 'Pendente', true],
+  ] as const)('remoção em %s com devolução %s permitida: %s', (data, status, permitida) => {
+    const { c } = formulario(true);
+    pagar(c);
+    c.evento!.dataEvento = c.modelo.dataEvento = data;
+    c.evento!.devolucoes = [{ id: 'd1', membroId: 'm1', lancamentoOrigemId: 'l1', valor: 2,
+      vencimento: data, status, valorDevolvido: status === 'Pago' ? 2 : null, dataDevolucao: null,
+      motivo: 'Devolução', justificativa: null }];
+    c.selecionarGrupo('desbravadores', false);
+    expect(c.modelo.membros.includes('m1')).toBe(!permitida);
+    expect(c.modelo.membros).toContain('m2');
+    expect(!!c.motivoBloqueioMembro('m1', false)).toBe(!permitida);
+  });
+
 });

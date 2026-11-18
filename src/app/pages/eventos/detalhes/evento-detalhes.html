@@ -20,11 +20,12 @@
       @else if (modo === 'criar' || modo === 'editar') {
         <app-evento-formulario [evento]="modo === 'editar' ? evento() : null" [data]="data" [dataMinima]="dataMinima"
           [grupoCompartilhado]="relacionados().length > 1" (salvo)="salvo($event)" (ocupacao)="ocupado.set($event)"
-          (cancelar)="sair(modo === 'criar' ? 'fechar' : 'voltar')" (recarregar)="reconciliar()" />
+          (cancelar)="sair(modo === 'criar' ? 'fechar' : 'voltar')" (recarregar)="carregar()" (falhaEdicao)="falhaEdicao($event)" />
       } @else {
         @if (erro()) {
           <p class="feedback" role="alert">{{ erro() }}</p>
-          @if (incerto()) { <p>A resposta não confirmou o resultado da operação. Consulte os dados atuais antes de tentar novamente.</p> }
+          @if (incerto()) { <p>O resultado da operação permanece sem confirmação. Consulte os dados atuais antes de tentar novamente.</p> }
+          @else if (conflito()) { <p>Recarregue os dados atuais antes de tentar novamente.</p> }
           <button type="button" [disabled]="ocupado()" (click)="carregar()">Recarregar dados atuais</button>
         }
         @if (evento(); as e) {
@@ -81,7 +82,7 @@
             @if (relacionados().length > 1) {
               <h4>Cadastros do mesmo passeio</h4><p>Cada cadastro tem participantes e cobranças próprios.</p>
               <div class="related">@for (outro of relacionados(); track outro.id) {
-                <button type="button" [disabled]="outro.id === e.id" (click)="carregar(outro.id)">{{ outro.quantidadeMembros }} participantes · {{ outro.valorPorMembro | currency:'BRL':'symbol':'1.2-2':'pt-BR' }} por pessoa · {{ outro.id.slice(0, 8) }}</button>
+                <button type="button" [disabled]="outro.id === e.id || incerto() || conflito()" (click)="carregar(outro.id)">{{ outro.quantidadeMembros }} participantes · {{ outro.valorPorMembro | currency:'BRL':'symbol':'1.2-2':'pt-BR' }} por pessoa · {{ outro.id.slice(0, 8) }}</button>
               }</div>
             }
             @if (e.eventoReferenciaId) { <small>Cadastro de referência: {{ e.eventoReferenciaId }}</small> }

@@ -22,3 +22,5 @@ label { display: flex; flex-direction: column; gap: 8px; font-size: 13px; margin
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.participants .notice { display: flex; flex-direction: column; gap: 4px; }
+.participants button { align-self: flex-start; margin-top: 8px; }

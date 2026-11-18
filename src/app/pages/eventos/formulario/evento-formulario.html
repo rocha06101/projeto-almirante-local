@@ -2,14 +2,14 @@
   @if (erro()) { <p class="feedback" role="alert">{{ erro() }}</p> }
   @if (eventoExistenteId()) { <button type="button" class="secondary" [disabled]="salvando()" (click)="consultarExistente()">Consultar evento já cadastrado</button> }
   @if (rejeitado()) { <button type="button" class="secondary" [disabled]="salvando()" (click)="corrigirRejeitado()">Corrigir cadastro rejeitado</button> }
-  @if (conflito()) {
+  @if (conflito() || incerto()) {
     <p>Recarregue os dados atuais antes de editar novamente. As alterações deste formulário serão descartadas.</p>
     <button type="button" class="secondary" (click)="recarregar.emit()">Recarregar dados atuais</button>
   }
   @if (!confirmando) {
-    @if (bloqueado()) { <p class="notice">Há lançamentos pagos ou atrasados. Data, participantes e custos ficam bloqueados.</p> }
+    @if (temPagamentos()) { <p class="notice">Há pagamentos registrados. É possível reduzir ou zerar o custo por participante. Aumento, troca de composição com o mesmo total, alteração de data e inclusão de participantes não são permitidos. Antes da data do evento, remover quem pagou exige estorno concluído; a partir da data, a remoção preserva o pagamento sem gerar devolução.</p> }
     @if (grupoCompartilhado) { <p class="notice">Este passeio tem outros grupos. A data e o local são compartilhados e não podem ser alterados.</p> }
-    <fieldset [disabled]="salvando() || conflito()">
+    <fieldset [disabled]="salvando() || conflito() || incerto()">
       <label>Título
         <input type="text" name="titulo" required [maxlength]="tituloMaximo" [(ngModel)]="modelo.titulo">
       </label>
@@ -18,7 +18,7 @@
           placeholder="Descreva as atividades e informações do evento..."></textarea>
       </label>
       <div class="fields">
-        <label>Data<input type="date" name="data" required [(ngModel)]="modelo.dataEvento" [min]="evento ? '' : dataMinima" [disabled]="bloqueado() || grupoCompartilhado" (ngModelChange)="mudarData()"></label>
+        <label>Data<input type="date" name="data" required [(ngModel)]="modelo.dataEvento" [min]="evento ? '' : dataMinima" [disabled]="temPagamentos() || grupoCompartilhado" (ngModelChange)="mudarData()"></label>
         <label>Local<input type="text" name="local" maxlength="200" required [(ngModel)]="modelo.local" [disabled]="grupoCompartilhado" (ngModelChange)="modelo.eventoReferenciaId = null"></label>
       </div>
       @if (!evento) {
@@ -49,7 +49,7 @@
           <label class="search-label">Buscar participante<input type="search" name="busca" [(ngModel)]="busca" placeholder="Nome do participante"></label>
           <div class="member-list">
             @for (m of visiveis; track m.id) {
-              <label class="check"><input type="checkbox" [checked]="modelo.membros.includes(m.id)" (change)="selecionarMembro(m.id, $any($event.target).checked)">{{ m.nome }}</label>
+              <label class="check"><input type="checkbox" [checked]="modelo.membros.includes(m.id)" [disabled]="!podeAlterarMembro(m.id, !modelo.membros.includes(m.id))" (change)="selecionarMembro(m.id, $any($event.target).checked)">{{ m.nome }}</label>
             } @empty { <p>Nenhum participante encontrado.</p> }
           </div>
         } @else if (!carregandoMembros() && !erroMembros()) {
@@ -58,7 +58,7 @@
       </fieldset>
       @if (carregandoMembros()) { <p role="status">Carregando participantes…</p> }
       @if (erroMembros()) { <p role="alert">{{ erroMembros() }}</p> @if (acesso.tem('membros.consultar')) { <button type="button" class="secondary" (click)="carregarMembros()">Recarregar participantes</button> } }
-      <fieldset [disabled]="bloqueado()" class="costs">
+      <fieldset class="costs">
         <legend>Custos por participante</legend>
         <label class="check"><input type="checkbox" name="cobrarTransporte" [ngModel]="!modelo.transporte.ehGratis"
           (ngModelChange)="modelo.transporte.ehGratis = !$event">Transporte</label>
@@ -72,13 +72,27 @@
         <label>Seguro (R$)<input type="number" name="seguro" min="0" step="0.01" [required]="seguroAtivo"
           [(ngModel)]="modelo.seguroObrigatorio" [disabled]="!seguroAtivo"></label>
       </fieldset>
-      @if (removeMembros()) { <label>Motivo da remoção de participantes<textarea name="motivo" required maxlength="255" [(ngModel)]="motivo"></textarea></label> }
+      @if (reducaoComPagamento()) { <label>Motivo da redução ou zeragem<textarea name="motivo" required maxlength="255" [(ngModel)]="motivo"></textarea></label> }
+      @else if (removeMembros()) { <label>Motivo da remoção de participantes<textarea name="motivo" required maxlength="255" [(ngModel)]="motivo"></textarea></label> }
       @else if (cancelaCobrancas()) { <label>Motivo do cancelamento das cobranças<textarea name="motivo" required maxlength="255" [(ngModel)]="motivo"></textarea></label> }
     </fieldset>
   } @else {
     <section class="confirmation" aria-label="Confirmação financeira">
       <h3>Confirme {{ evento ? 'a atualização' : 'o cadastro' }}</h3>
       <p><strong>{{ modelo.titulo }}</strong> · {{ modelo.dataEvento.split('-').reverse().join('/') }} · {{ modelo.membros.length }} participantes</p>
+      @if (evento) {
+        <dl class="review-costs">
+          @for (c of componentes(); track c.nome) {
+            <div><dt>{{ c.nome }}</dt><dd>{{ c.antes | currency:'BRL':'symbol':'1.2-2':'pt-BR' }} → {{ c.depois | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</dd></div>
+          }
+          <div><dt>Valor por participante anterior → novo</dt><dd>{{ evento.valorPorMembro | currency:'BRL':'symbol':'1.2-2':'pt-BR' }} → {{ porMembro() | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</dd></div>
+          <div><dt>Diferença estimada por participante</dt><dd>{{ (porMembro() - evento.valorPorMembro) | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</dd></div>
+        </dl>
+        <p>Participantes: {{ evento.quantidadeMembros }} → {{ modelo.membros.length }}.</p>
+        @if (exigeMotivo()) { <p>Motivo: {{ motivo.trim() }}</p> }
+        @if (removeMembros() && temPagamentos()) { <p>A remoção será validada pelo servidor: antes da data do evento, pagamentos do participante exigem estorno concluído e nenhum valor retido. A partir da data, a remoção preserva o pagamento sem gerar devolução.</p> }
+      }
+      @if (reducaoComPagamento()) { <p class="notice">As devoluções aplicáveis serão geradas pendentes, aguardando processamento da tesouraria. Os pagamentos originais permanecem preservados. A diferença estimada de custo não é o valor a devolver: o servidor considera o pagamento efetivo e as devoluções já existentes.</p> }
       @if (cancelaCobrancas()) { <p>Como o custo passou a zero, os lançamentos em aberto serão cancelados.</p> }
       @else if (evento) { <p>A atualização sincroniza os lançamentos financeiros deste grupo, incluindo participantes removidos.</p> }
       @else if (porMembro() > 0) { <p>Será gerada uma cobrança por participante, junto com o cadastro do evento.</p> }
@@ -90,8 +104,8 @@
   <small>Os valores definitivos serão confirmados pelo servidor.</small>
   <footer>
     <button type="button" class="secondary" [disabled]="salvando()" (click)="cancelar.emit()">Cancelar</button>
-    @if (confirmando && !api.cadastroPendente() && !conflito()) { <button type="button" class="secondary" [disabled]="salvando()" (click)="confirmando = false">Voltar ao formulário</button> }
-    <button type="submit" class="primary" [disabled]="salvando() || conflito() || !!eventoExistenteId() || !podeSalvar() || (confirmando ? !confirmado : form.invalid || !modelo.membros.length || carregandoMembros())">
+    @if (confirmando && !api.cadastroPendente() && !conflito() && !incerto()) { <button type="button" class="secondary" [disabled]="salvando()" (click)="confirmando = false">Voltar ao formulário</button> }
+    <button type="submit" class="primary" [disabled]="salvando() || conflito() || incerto() || !!eventoExistenteId() || !podeSalvar() || (confirmando ? !confirmado : form.invalid || !modelo.membros.length || carregandoMembros())">
       {{ salvando() ? 'Salvando…' : confirmando ? 'Confirmar e salvar' : 'Revisar evento' }}
     </button>
   </footer>

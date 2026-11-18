@@ -10,7 +10,7 @@ import { EventosService } from '../../../core/services/eventos';
 import { PermissoesService } from '../../../core/services/permissoes';
 import { ToastService } from '../../../core/services/toast.service';
 import { User } from '../../../core/services/user';
-import { custosBloqueados, erroEvento, nomeEvento } from '../eventos.utils';
+import { temPagamentos, erroEvento, motivoValido, nomeEvento, podeRemoverMembro, respostaIncerta } from '../eventos.utils';
 
 type GrupoParticipantes = 'desbravadores' | 'diretoria' | 'todos';
 const ROLE_DESBRAVADOR = 'DS';
@@ -61,6 +61,7 @@ export class EventoFormulario implements OnInit {
   readonly erro = signal('');
   readonly salvando = signal(false);
   readonly conflito = signal(false);
+  readonly incerto = signal(false);
   readonly eventoExistenteId = signal('');
   readonly rejeitado = signal(false);
   readonly nomeEvento = nomeEvento;
@@ -77,6 +78,7 @@ export class EventoFormulario implements OnInit {
   confirmando = false;
   confirmado = false;
   private estadoInicial = '';
+  private estadoRevisado = '';
 
   ngOnInit(): void {
     const e = this.evento;
@@ -88,6 +90,7 @@ export class EventoFormulario implements OnInit {
     } : { ...this.modelo, dataEvento: this.data };
     this.seguroAtivo = this.modelo.seguroObrigatorio > 0;
     this.estadoInicial = this.estadoEditavel();
+    if (pendente) this.estadoRevisado = this.estadoEditavel();
     for (const id of this.modelo.membros) this.membrosExibidos.add(id);
     if (pendente) { this.confirmando = true; this.erro.set('Um cadastro aguarda confirmação. Reenvie a mesma operação para consultar o resultado com segurança.'); }
     this.carregarMembros();
@@ -104,7 +107,7 @@ export class EventoFormulario implements OnInit {
   }
   private estadoEditavel(): string {
     return JSON.stringify({ ...this.modelo, descricao: this.modelo.descricao || null,
-      membros: [...this.modelo.membros].sort(), seguroAtivo: this.seguroAtivo, motivo: this.motivo });
+      eventoId: this.evento?.id, versao: this.evento?.versao, membros: [...this.modelo.membros].sort(), seguroAtivo: this.seguroAtivo, motivo: this.motivo });
   }
   temAlteracoes(): boolean { return this.estadoEditavel() !== this.estadoInicial; }
   carregarMembros(): void {
@@ -141,6 +144,7 @@ export class EventoFormulario implements OnInit {
     if (!this.podeSelecionarMembros()) return;
     const selecionados = new Set(this.modelo.membros);
     for (const id of this.idsPorGrupo()[grupo]) {
+      if (!this.podeAlterarMembro(id, marcado)) continue;
       if (marcado) {
         this.membrosExibidos.add(id);
         selecionados.add(id);
@@ -152,18 +156,51 @@ export class EventoFormulario implements OnInit {
     this.modelo.membros = [...selecionados];
   }
   selecionarMembro(id: string, marcado: boolean): void {
-    if (!this.podeSelecionarMembros()) return;
+    if (!this.podeSelecionarMembros() || !this.podeAlterarMembro(id, marcado)) return;
     this.membrosExibidos.add(id);
     this.modelo.membros = marcado ? [...new Set([...this.modelo.membros, id])] : this.modelo.membros.filter(m => m !== id);
   }
   podeSelecionarMembros(): boolean {
-    return this.podeSalvar() && this.acesso.tem('membros.consultar') && !this.bloqueado() &&
+    return this.podeSalvar() && this.acesso.tem('membros.consultar') &&
       !this.carregandoMembros() && !this.erroMembros();
   }
-  bloqueado(): boolean { return custosBloqueados(this.evento); }
+  temPagamentos(): boolean { return temPagamentos(this.evento); }
+  podeAlterarMembro(id: string, marcado: boolean): boolean {
+    if (!this.evento) return true;
+    if (marcado) return !this.temPagamentos() || this.evento.membros.includes(id);
+    return podeRemoverMembro(this.evento, id);
+  }
+  exigeMotivo(): boolean { return this.removeMembros() || this.cancelaCobrancas() || this.reducaoComPagamento(); }
+  reducaoComPagamento(): boolean {
+    return this.temPagamentos() && Math.round(this.porMembro() * 100) < Math.round(this.evento!.valorPorMembro * 100);
+  }
+  componentes(): { nome: string; antes: number; depois: number }[] {
+    const e = this.evento;
+    return [
+      { nome: 'Transporte', antes: e?.transporte.ehGratis ? 0 : e?.transporte.valor ?? 0, depois: this.modelo.transporte.ehGratis ? 0 : this.modelo.transporte.valor },
+      { nome: 'Alimentação', antes: e?.alimentacao.individual ? 0 : e?.alimentacao.valor ?? 0, depois: this.modelo.alimentacao.individual ? 0 : this.modelo.alimentacao.valor },
+      { nome: 'Seguro', antes: e?.seguroObrigatorio ?? 0, depois: this.valorSeguro() },
+    ];
+  }
+  private erroRegrasEdicao(): string {
+    const e = this.evento;
+    if (!e) return '';
+    if (this.grupoCompartilhado && (this.modelo.dataEvento !== e.dataEvento || this.modelo.local.trim() !== e.local))
+      return 'Data e local são compartilhados com outros grupos e não podem ser alterados.';
+    if (!this.temPagamentos()) return '';
+    if (this.modelo.dataEvento !== e.dataEvento || this.modelo.membros.some(id => !e.membros.includes(id)))
+      return 'Com pagamento registrado, não é possível alterar a data nem adicionar participantes.';
+    const custoMudou = this.componentes().some(c => Math.round(c.antes * 100) !== Math.round(c.depois * 100)) ||
+      this.modelo.transporte.ehGratis !== e.transporte.ehGratis || this.modelo.alimentacao.individual !== e.alimentacao.individual;
+    if (custoMudou && !this.reducaoComPagamento())
+      return 'Com pagamento registrado, o custo por participante precisa diminuir. Aumento ou troca de componentes mantendo o mesmo total não são permitidos.';
+    if (e.membros.some(id => !this.modelo.membros.includes(id) && !podeRemoverMembro(e, id)))
+      return 'Antes da data do evento, o participante pago só pode ser removido após o estorno concluído. Solicite o estorno nos detalhes e aguarde a baixa pela tesouraria.';
+    return '';
+  }
   removeMembros(): boolean { return !!this.evento?.membros.some(id => !this.modelo.membros.includes(id)); }
   cancelaCobrancas(): boolean {
-    return !!this.evento?.lancamentos.length && this.evento.valorPorMembro > 0 && this.porMembro() === 0;
+    return !!this.evento?.lancamentos.some(l => l.status !== 'Pago') && this.evento.valorPorMembro > 0 && this.porMembro() === 0;
   }
   private valorSeguro(): number {
     return this.seguroAtivo ? this.modelo.seguroObrigatorio : 0;
@@ -181,7 +218,8 @@ export class EventoFormulario implements OnInit {
     };
   }
   revisar(): void {
-    if (!this.podeSalvar() || this.salvando()) return;
+    if (!this.podeSalvar() || this.salvando() || this.incerto() || this.conflito()) return;
+    this.confirmando = false; this.confirmado = false; this.estadoRevisado = '';
     this.erro.set('');
     const { titulo, descricao } = this.normalizarTextos();
     if (!titulo || titulo.length > this.tituloMaximo) {
@@ -202,18 +240,25 @@ export class EventoFormulario implements OnInit {
     if (!this.evento && (!this.dataMinima || this.modelo.dataEvento < this.dataMinima)) {
       this.erro.set('Selecione uma data a partir da data mínima de cadastro informada pelo servidor.'); return;
     }
-    if ((this.removeMembros() || this.cancelaCobrancas()) && !this.motivo.trim()) {
-      this.erro.set('Informe o motivo da remoção de participantes ou do cancelamento das cobranças.'); return;
+    if (this.exigeMotivo() && !motivoValido(this.motivo)) {
+      this.erro.set('Informe o motivo com 1 a 255 caracteres, sem emojis, tabulações ou quebras de linha.'); return;
     }
     const valores = [this.valorSeguro(), this.modelo.transporte.ehGratis ? 0 : this.modelo.transporte.valor,
       this.modelo.alimentacao.individual ? 0 : this.modelo.alimentacao.valor];
     if (valores.some(v => v == null || !Number.isFinite(v) || v < 0 || Math.abs(v * 100 - Math.round(v * 100)) > 0.00001) || !Number.isSafeInteger(Math.round(this.total() * 100))) {
       this.erro.set('Informe custos válidos, positivos ou zero, com até duas casas decimais.'); return;
     }
+    const regra = this.erroRegrasEdicao();
+    if (regra) { this.erro.set(regra); return; }
+    this.estadoRevisado = this.estadoEditavel();
     this.confirmando = true; this.confirmado = false;
   }
   salvar(): void {
-    if (!this.confirmando || !this.confirmado || this.salvando() || this.conflito() || this.eventoExistenteId() || !this.podeSalvar()) return;
+    if (!this.confirmando || !this.confirmado || this.salvando() || this.conflito() || this.incerto() || this.eventoExistenteId() || !this.podeSalvar()) return;
+    if (this.estadoRevisado !== this.estadoEditavel() || this.erroRegrasEdicao()) {
+      this.confirmando = false; this.confirmado = false;
+      this.erro.set('Os dados mudaram após a revisão. Revise novamente antes de confirmar.'); return;
+    }
     this.erro.set(''); this.salvando.set(true); this.ocupacao.emit(true);
     const { eventoReferenciaId, ...base } = this.modelo;
     const conteudo = { ...structuredClone(base), ...this.normalizarTextos(), local: base.local.trim(), membros: [...new Set(base.membros)].sort(),
@@ -222,7 +267,7 @@ export class EventoFormulario implements OnInit {
       alimentacao: { ...base.alimentacao, valor: base.alimentacao.individual ? 0 : base.alimentacao.valor } };
     let requisicao;
     if (this.evento) {
-      const informarMotivo = this.removeMembros() || this.cancelaCobrancas();
+      const informarMotivo = this.exigeMotivo();
       const payload: EditarEvento = { ...conteudo, versao: this.evento.versao, ...(informarMotivo ? { motivo: this.motivo.trim() } : {}) };
       requisicao = this.api.editar(this.evento.id, payload);
     } else {
@@ -239,18 +284,21 @@ export class EventoFormulario implements OnInit {
           this.toast.warning('Evento salvo, mas a API não confirmou o título. Verifique a versão do backend.');
         }
         this.salvo.emit(e);
-      }, error: (e: HttpErrorResponse) => {
+      }, error: (e: unknown) => {
+        const status = e instanceof HttpErrorResponse ? e.status : 0;
+        const problema = e instanceof HttpErrorResponse ? e.error : null;
+        this.incerto.set(!!this.evento && respostaIncerta(e));
         const mensagem = erroEvento(e); this.erro.set(mensagem); this.toast.error(mensagem);
-        this.conflito.set(!!this.evento && e.status === 409);
-        if (!this.evento && e.status === 409) {
-          if (e.error?.codigo === 'EVENTO_IDEMPOTENCIA_SEM_RESPOSTA_ORIGINAL' && typeof e.error?.eventoId === 'string') {
-            this.eventoExistenteId.set(e.error.eventoId);
+        this.conflito.set(!!this.evento && status === 409);
+        if (!this.evento && status === 409) {
+          if (problema?.codigo === 'EVENTO_IDEMPOTENCIA_SEM_RESPOSTA_ORIGINAL' && typeof problema?.eventoId === 'string') {
+            this.eventoExistenteId.set(problema.eventoId);
           } else {
             this.rejeitado.set(true);
           }
         }
         // Rejeições explícitas permitem corrigir o formulário; rede/5xx/409 preservam a operação.
-        if (!this.evento && [400, 401, 403, 404].includes(e.status)) { this.api.cadastroPendente.set(null); this.confirmando = false; this.confirmado = false; }
+        if (!this.evento && [400, 401, 403, 404].includes(status)) { this.api.cadastroPendente.set(null); this.confirmando = false; this.confirmado = false; }
       } });
   }
   corrigirRejeitado(): void {

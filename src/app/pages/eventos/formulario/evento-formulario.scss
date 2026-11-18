@@ -1,4 +1,6 @@
 :host { display: block; }
+.review-costs { display: grid; gap: 8px; font-size: 13px; }
+.review-costs dd { margin: 0; overflow-wrap: anywhere; }
 fieldset { border: 0; padding: 0; margin: 0 0 16px; min-width: 0; }
 legend, h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
 legend span { display: block; color: #74718b; font-size: 12px; font-weight: 400; }

@@ -20,6 +20,12 @@ export interface Lancamento {
   status: LancamentoStatus;
   /** Presente quando o lançamento foi gerado por um evento (edição só por /api/Eventos). */
   eventoId?: string | null;
+  dataPagamento?: string | null;
+  valorPago?: number | null;
+  valorRestante?: number | null;
+  lancamentoOrigemId?: string | null;
+  devolucaoMotivo?: string | null;
+  devolucaoJustificativa?: string | null;
 }
 
 export interface LancamentosFilters {

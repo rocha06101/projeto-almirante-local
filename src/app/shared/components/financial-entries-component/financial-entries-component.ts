@@ -204,6 +204,7 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
   }
 
   openEditEntry(item: Lancamento): void {
+    if (this.isFromEvento(item)) return;
     this.modalLancamentoTipo.set('unico');
     this.lancamentoAtual = {
       membroId: item.membroId ?? '',
@@ -228,6 +229,7 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
   }
 
   openDelete(item: Lancamento): void {
+    if (this.isFromEvento(item)) return;
     this.motivoExclusao = '';
     this.openModal('delete', item);
   }
@@ -243,6 +245,8 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
     if (this.saving()) {
       return;
     }
+    const selecionado = this.selected();
+    if (selecionado && this.isFromEvento(selecionado) && ['edit', 'delete'].includes(this.modalMode() ?? '')) return;
 
     switch (this.modalMode()) {
       case 'new':
@@ -403,7 +407,7 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
 
   /** Lançamentos gerados por eventos só podem ser alterados em /api/Eventos. */
   isFromEvento(item: Lancamento): boolean {
-    return !!item.eventoId;
+    return !!item.eventoId || !!item.lancamentoOrigemId;
   }
 
   fluxoLabel(fluxo: LancamentoTipoFluxo): string {

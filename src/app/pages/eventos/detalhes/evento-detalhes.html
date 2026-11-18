@@ -1,6 +1,6 @@
 <div class="backdrop" (click)="cliqueBackdrop($event)">
   <section class="event-dialog" role="dialog" aria-modal="true" aria-labelledby="evento-dialog-title" cdkTrapFocus [cdkTrapFocusAutoCapture]="true" [attr.aria-busy]="carregando() || ocupado()">
-    <header><h2 id="evento-dialog-title">{{ modo === 'criar' ? 'Novo evento' : modo === 'editar' ? 'Editar evento' : modo === 'excluir' ? 'Excluir evento' : 'Detalhes do evento' }}</h2>
+    <header><h2 id="evento-dialog-title">{{ modo === 'criar' ? 'Novo evento' : modo === 'editar' ? 'Editar evento' : modo === 'excluir' ? 'Excluir evento' : modo === 'estornar' ? 'Estorno de participante' : 'Detalhes do evento' }}</h2>
       <button type="button" class="close-button" aria-label="Fechar detalhes" cdkFocusInitial [disabled]="ocupado()" (click)="sair()">×</button>
     </header>
     <div class="dialog-body" #dialogBody>
@@ -20,20 +20,33 @@
       @else if (modo === 'criar' || modo === 'editar') {
         <app-evento-formulario [evento]="modo === 'editar' ? evento() : null" [data]="data" [dataMinima]="dataMinima"
           [grupoCompartilhado]="relacionados().length > 1" (salvo)="salvo($event)" (ocupacao)="ocupado.set($event)"
-          (cancelar)="sair(modo === 'criar' ? 'fechar' : 'voltar')" (recarregar)="carregar()" />
+          (cancelar)="sair(modo === 'criar' ? 'fechar' : 'voltar')" (recarregar)="reconciliar()" />
       } @else {
         @if (erro()) {
           <p class="feedback" role="alert">{{ erro() }}</p>
+          @if (incerto()) { <p>A resposta não confirmou o resultado da operação. Consulte os dados atuais antes de tentar novamente.</p> }
           <button type="button" [disabled]="ocupado()" (click)="carregar()">Recarregar dados atuais</button>
         }
         @if (evento(); as e) {
-          @if (modo === 'excluir') {
+          @if (modo === 'estornar' && alvoEstorno; as alvo) {
+            <form (ngSubmit)="estornar()">
+              <p>Solicitar estorno para <strong>{{ nomeMembro(alvo.membroId) }}</strong> no evento <strong>{{ nomeEvento(e) }}</strong> em {{ formatarData(e.dataEvento) }}?</p>
+              <small>Participante: {{ alvo.membroId }} · Cadastro: {{ alvo.eventoId }}</small>
+              <p>O servidor apurará o valor ainda retido deste participante. A devolução será registrada como pendente e aguardará processamento pela tesouraria. O custo do evento, os demais participantes e os pagamentos originais serão preservados.</p>
+              <label for="motivo-estorno">Motivo do estorno</label>
+              <textarea id="motivo-estorno" name="motivo" required maxlength="255" [(ngModel)]="motivo" (ngModelChange)="confirmaEstorno = false" [disabled]="ocupado() || conflito() || incerto()"></textarea>
+              <small>Informe de 1 a 255 caracteres, sem emojis, tabulações ou quebras de linha.</small>
+              <label class="check"><input type="checkbox" name="confirmacaoEstorno" [(ngModel)]="confirmaEstorno" [disabled]="ocupado() || conflito() || incerto()">Confirmo a solicitação de estorno somente deste participante.</label>
+              <footer><button type="button" [disabled]="ocupado()" (click)="sair('estorno')">Voltar aos detalhes</button><button type="submit" class="primary" [disabled]="ocupado() || conflito() || incerto() || !motivoValido(motivo) || !confirmaEstorno">{{ ocupado() ? 'Solicitando…' : 'Confirmar estorno' }}</button></footer>
+            </form>
+          } @else if (modo === 'excluir') {
             <form (ngSubmit)="excluir()">
               <p>Excluir <strong>{{ nomeEvento(e) }}</strong> em {{ formatarData(e.dataEvento) }}?</p>
-              <p>Os lançamentos pendentes deste grupo serão desativados. Outros grupos do passeio permanecem.</p>
-              <label>Motivo da exclusão<textarea name="motivo" maxlength="255" required [(ngModel)]="motivo" [disabled]="ocupado() || conflito()"></textarea></label>
-              <label class="check"><input type="checkbox" name="confirmacao" [(ngModel)]="confirmaExclusao" [disabled]="ocupado() || conflito()">Confirmo a exclusão e a desativação das cobranças pendentes.</label>
-              <footer><button type="button" [disabled]="ocupado()" (click)="carregar()">Cancelar</button><button type="submit" class="danger" [disabled]="ocupado() || conflito() || !motivo.trim() || !confirmaExclusao">{{ ocupado() ? 'Excluindo…' : 'Confirmar exclusão' }}</button></footer>
+              <p>As cobranças em aberto deste grupo serão desativadas. Pagamentos e devoluções concluídas permanecem no histórico. Outros grupos do passeio permanecem.</p>
+              <p>A exclusão depende de não haver valor retido nem devolução pendente. O servidor fará a validação final.</p>
+              <label>Motivo da exclusão<textarea name="motivo" maxlength="255" required [(ngModel)]="motivo" [disabled]="ocupado() || conflito() || incerto()"></textarea></label>
+              <label class="check"><input type="checkbox" name="confirmacao" [(ngModel)]="confirmaExclusao" [disabled]="ocupado() || conflito() || incerto()">Confirmo a exclusão e a desativação das cobranças pendentes.</label>
+              <footer><button type="button" [disabled]="ocupado()" (click)="carregar()">Cancelar</button><button type="submit" class="danger" [disabled]="ocupado() || conflito() || incerto() || !motivoValido(motivo) || !confirmaExclusao">{{ ocupado() ? 'Excluindo…' : 'Confirmar exclusão' }}</button></footer>
             </form>
           } @else {
             <h3>{{ nomeEvento(e) }}</h3>
@@ -48,9 +61,20 @@
             <p class="total">Total deste cadastro <strong>{{ e.total | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</strong></p>
             <h4>Participantes e lançamentos</h4>
             <ul class="participants">
-              @for (membro of e.membros; track membro) {
-                <li><strong>{{ nomeMembro(membro) }}</strong>
-                  @for (l of e.lancamentos; track l.id) { @if (l.membroId === membro) { <span>{{ l.valor | currency:'BRL':'symbol':'1.2-2':'pt-BR' }} · {{ l.status }}</span><small>Lançamento {{ l.id }}</small> } }
+              @for (membro of participantesComHistorico(); track membro) {
+                <li><strong>{{ nomeMembro(membro) }}</strong><small>Participante: {{ membro }}{{ e.membros.includes(membro) ? '' : ' · Removido do evento (histórico)' }}</small>
+                  @for (l of e.lancamentos; track l.id) { @if (l.membroId === membro) { <span>Valor original da cobrança: {{ l.valor | currency:'BRL':'symbol':'1.2-2':'pt-BR' }} · {{ l.status }}</span><small>Lançamento {{ l.id }}</small> } }
+                  @for (d of e.devolucoes ?? []; track d.id) { @if (d.membroId === membro) {
+                    <div class="notice"><strong>Devolução · {{ d.status === 'Pago' ? 'Concluída' : 'Pendente de processamento' }}</strong>
+                      <span>Valor esperado: {{ d.valor | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</span>
+                      @if (d.valorDevolvido !== null) { <span>Valor devolvido: {{ d.valorDevolvido | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</span> }
+                      @if (d.dataDevolucao) { <span>Data da devolução: {{ formatarData(d.dataDevolucao) }}</span> }
+                      @if (d.motivo) { <span>Motivo: {{ d.motivo }}</span> }
+                      @if (d.justificativa) { <span>Justificativa da baixa: {{ d.justificativa }}</span> }
+                      <small>Devolução {{ d.id }} · Cobrança de origem {{ d.lancamentoOrigemId }}</small>
+                    </div>
+                  } }
+                  @if (podeEstornar(membro)) { <button type="button" [attr.data-estorno]="membro" [disabled]="ocupado() || conflito() || incerto()" (click)="pedirEstorno(membro)">Solicitar estorno de {{ nomeMembro(membro) }}</button> }
                 </li>
               }
             </ul>
@@ -62,10 +86,12 @@
             }
             @if (e.eventoReferenciaId) { <small>Cadastro de referência: {{ e.eventoReferenciaId }}</small> }
             @if (erroGrupo()) { <p role="alert">Não foi possível consultar os outros grupos: {{ erroGrupo() }}</p><button type="button" (click)="carregar()">Recarregar grupos</button> }
-            @if (custosBloqueados(e)) { <p class="notice">Lançamentos pagos ou atrasados bloqueiam exclusão e alterações de data, participantes e custos.</p> }
+            <p>O valor original da cobrança não informa quanto foi efetivamente pago, inclusive em pagamentos parciais. As devoluções são saídas separadas e não alteram o pagamento original.</p>
+            @if (exclusaoBloqueada()) { <p class="notice">A exclusão exige a conclusão dos estornos: há pagamento sem devolução ou devolução ainda pendente.</p> }
+            @else if (liquidacaoConfirmavel(e) === null) { <p class="notice">As devoluções exibidas foram baixadas. O servidor ainda precisa verificar se existe valor retido antes de permitir a exclusão.</p> }
             <footer>
-              @if (acesso.tem('eventos.excluir')) { <button type="button" class="danger-outline" [disabled]="custosBloqueados(e)" (click)="pedirExclusao()">Excluir evento</button> }
-              @if (acesso.tem('eventos.editar')) { <button type="button" class="primary" [disabled]="!!erroGrupo()" (click)="editar()">Editar evento</button> }
+              @if (acesso.tem('eventos.excluir')) { <button type="button" class="danger-outline" [disabled]="exclusaoBloqueada() || ocupado() || conflito() || incerto()" (click)="pedirExclusao()">Excluir evento</button> }
+              @if (acesso.tem('eventos.editar')) { <button type="button" class="primary" [disabled]="!!erroGrupo() || ocupado() || conflito() || incerto()" (click)="editar()">Editar evento</button> }
             </footer>
           }
         }

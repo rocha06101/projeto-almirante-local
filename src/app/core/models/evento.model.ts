@@ -28,6 +28,22 @@ export interface EventoLancamento {
   status: 'Pendente' | 'Pago' | 'Atrasado';
 }
 
+/** EventoDevolucaoDto: Saída separada da cobrança original, nunca editada pelo evento. */
+export interface EventoDevolucao {
+  id: string;
+  membroId: string;
+  lancamentoOrigemId: string;
+  valor: number;
+  vencimento: string;
+  status: 'Pendente' | 'Pago' | 'Atrasado';
+  valorDevolvido: number | null;
+  dataDevolucao: string | null;
+  motivo: string | null;
+  justificativa: string | null;
+}
+
+export interface EstornarParticipante { motivo: string; versao: string }
+
 export interface EventoDto extends EventoConteudo {
   // Versões anteriores da API não devolvem estes campos.
   titulo?: string;
@@ -41,6 +57,8 @@ export interface EventoDto extends EventoConteudo {
   ativo: boolean;
   versao: string;
   lancamentos: EventoLancamento[];
+  /** Ausente em APIs anteriores à #209; não significa uma lista vazia confirmada. */
+  devolucoes?: EventoDevolucao[];
 }
 
 export interface PeriodoEventos { dataInicial: string; dataFinal: string }

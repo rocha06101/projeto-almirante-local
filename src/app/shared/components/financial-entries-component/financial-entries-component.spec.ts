@@ -316,4 +316,16 @@ describe('FinancialEntriesComponent', () => {
     expect(buttons[1].disabled).toBe(true);
     expect(buttons[2].disabled).toBe(true);
   });
+  it('devolução permanece Saída e exibe baixa real, sem permitir edição/exclusão avulsa', async () => {
+    const item = lancamento({ eventoId: 'ev1', lancamentoOrigemId: 'original', tipoFluxo: 'Saida',
+      valor: 20, valorPago: 15, dataPagamento: '2026-11-18', status: 'Pago', devolucaoJustificativa: 'Valor acordado' });
+    await create(page([item]));
+    component.openEditEntry(item); expect(component.modalMode()).toBeNull();
+    component.openDelete(item); expect(component.modalMode()).toBeNull();
+    expect(service.update).not.toHaveBeenCalled(); expect(service.remove).not.toHaveBeenCalled();
+    component.viewEntry(item); fixture.detectChanges();
+    expect(host.textContent).toContain('Saída'); expect(host.textContent).toContain('Valor devolvido');
+    expect(host.textContent).toContain('Valor acordado'); expect(host.textContent).toContain('18/11/2026');
+  });
+
 });

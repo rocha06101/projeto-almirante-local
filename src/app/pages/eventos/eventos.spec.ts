@@ -5,7 +5,7 @@ import { EventoDto } from '../../core/models/evento.model';
 import { EventosService } from '../../core/services/eventos';
 import { PermissoesService } from '../../core/services/permissoes';
 import { Eventos } from './eventos';
-import { custosBloqueados, dataCivil, erroEvento, formatarData, grupoEvento, mapearEventos, periodoInclusivo, somarDias } from './eventos.utils';
+import { temPagamentos, dataCivil, erroEvento, formatarData, grupoEvento, mapearEventos, periodoInclusivo, somarDias } from './eventos.utils';
 
 const evento: EventoDto = {
   id: 'e1', eventoGrupoId: 'g1', eventoReferenciaId: null, dataEvento: '2026-11-17', local: 'Igreja',
@@ -38,12 +38,12 @@ describe('Eventos: datas civis, mapeamento e erros', () => {
     expect(visuais[0].classNames).toEqual(visuais[1].classNames);
     expect(evento.total).toBe(5);
   });
-  it('bloqueia custos se houver pagamento ou atraso', () => {
-    expect(custosBloqueados(evento)).toBe(false);
-    expect(custosBloqueados({ ...evento, lancamentos: [{ ...evento.lancamentos[0], status: 'Pago' }] })).toBe(true);
-    expect(custosBloqueados({ ...evento, lancamentos: [{ ...evento.lancamentos[0], status: 'Atrasado' }] })).toBe(true);
+  it('distingue pagamento de cobrança atrasada', () => {
+    expect(temPagamentos(evento)).toBe(false);
+    expect(temPagamentos({ ...evento, lancamentos: [{ ...evento.lancamentos[0], status: 'Pago' }] })).toBe(true);
+    expect(temPagamentos({ ...evento, lancamentos: [{ ...evento.lancamentos[0], status: 'Atrasado' }] })).toBe(false);
   });
-  it.each([[400, 'Confira'], [401, 'sessão expirou'], [403, 'permissão'], [404, 'não encontrado'], [409, 'alterado'], [500, 'Tente novamente'], [0, 'conexão']])('HTTP %s tem feedback específico', (status, mensagem) => {
+  it.each([[400, 'Confira'], [401, 'sessão expirou'], [403, 'permissão'], [404, 'não encontrado'], [409, 'alterado'], [500, 'consulte os dados atuais'], [0, 'conexão']])('HTTP %s tem feedback específico', (status, mensagem) => {
     expect(erroEvento(new HttpErrorResponse({ status: Number(status) }))).toContain(mensagem);
   });
   it('preserva ProblemDetails e erros de validação do servidor', () => {
@@ -138,4 +138,15 @@ describe('Eventos: HTTP, consultas e concorrência de navegação', () => {
     api.excluir(id, versao, 'Cancelado').subscribe();
     const del = http.expectOne('/api/Eventos/e1'); expect(del.request.method).toBe('DELETE'); expect(del.request.body).toEqual({ versao, motivo: 'Cancelado' }); del.flush(null);
   });
+  it('serviço de estorno codifica os dois IDs e envia somente o contrato confirmado sem retry', () => {
+    const api = TestBed.inject(EventosService), erro = vi.fn();
+    api.estornarParticipante('evento/grupo', 'membro/alvo', { versao: 'opaca', motivo: 'Cancelamento' }).subscribe({ error: erro });
+    const req = http.expectOne('/api/Eventos/evento%2Fgrupo/Participantes/membro%2Falvo/Estorno');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ versao: 'opaca', motivo: 'Cancelamento' });
+    expect(req.request.headers.has('Idempotency-Key')).toBe(false);
+    req.error(new ProgressEvent('error')); expect(erro).toHaveBeenCalledOnce();
+    http.expectNone(r => r.method === 'POST');
+  });
+
 });

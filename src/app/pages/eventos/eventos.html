@@ -1,0 +1,18 @@
+<section class="events-page" aria-labelledby="eventos-titulo">
+  <header class="page-header"><h1 id="eventos-titulo">Eventos</h1></header>
+  @if (!acesso.tem('eventos.consultar')) { <p class="status error" role="alert">Você não tem permissão para consultar eventos.</p> }
+  @else {
+    <div class="events-grid">
+      <div class="calendar-column">
+        <app-eventos-calendario [eventos]="eventos()" [selecionada]="selecionada()" [selectedEventId]="selectedEventId()" (periodo)="mudarPeriodo($event)" (selecionarDia)="selecionarDia($event)" (voltarHoje)="voltarHoje($event)" (selecionarEvento)="selecionarEvento($event)" />
+        @if (carregando()) { <p class="status" role="status">Carregando eventos do período…</p> }
+        @else if (erro()) { <div class="status error" role="alert">{{ erro() }} <button type="button" (click)="recarregar()">Tentar novamente</button></div> }
+        @else if (!eventos().length) { <p class="status" role="status">Nenhum evento neste período.</p> }
+      </div>
+      <app-proximos-eventos [eventos]="proximos()" [hoje]="hoje" [selectedEventId]="selectedEventId()" [carregando]="carregandoProximos()" [erro]="erroProximos()" (selecionarEvento)="selecionarEvento($event)" (recarregar)="recarregarProximos()" />
+    </div>
+  }
+</section>
+@if (modal(); as atual) {
+  <app-evento-detalhes [id]="atual.id" [data]="atual.data" [dataMinima]="dataMinima()" (fechar)="modal.set(null)" (atualizado)="recarregar()" />
+}

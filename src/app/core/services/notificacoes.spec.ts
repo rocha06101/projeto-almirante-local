@@ -331,11 +331,15 @@ describe('NotificacoesService realtime', () => {
     const read = signalrMocks.connection.handlers.get('NotificacaoLida');
     response = { ...response, items: [{ id: 'new' }], naoLidas: 1 };
     api.get.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 0 })));
-    read?.({ notificacaoId: 'second', naoLidas: 0 });
-    read?.({ notificacaoId: 'first', naoLidas: 7 });
+    const lidaEmUtc = '2026-11-18T13:00:00.1234567Z';
+    const secondRead = { notificacaoId: 'second', lidaEmUtc, naoLidas: 0 };
+    read?.(secondRead);
+    expect(service.notifications()).toEqual([{ id: 'first' }]);
+    read?.({ notificacaoId: 'first', lidaEmUtc, naoLidas: 7 });
+    expect(service.notifications()).toEqual([]);
     await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
     const requests = api.get.mock.calls.length;
-    read?.({ notificacaoId: 'second', naoLidas: 0 });
+    read?.(secondRead);
 
     expect(api.get).toHaveBeenCalledTimes(requests);
     expect(service.notifications()).toEqual(response.items);
@@ -418,6 +422,7 @@ describe('NotificacoesService realtime', () => {
     api.get.mockReturnValueOnce(oldList);
     const oldReconnected = signalrMocks.connection.onreconnected.mock.calls[0][0] as () => void;
     const oldCreated = signalrMocks.connection.handlers.get('NotificacaoCriada');
+    const oldRead = signalrMocks.connection.handlers.get('NotificacaoLida');
     oldReconnected();
 
     const batch = new Subject<MarcarTodasLeiturasResponse>();
@@ -439,6 +444,7 @@ describe('NotificacoesService realtime', () => {
     await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
 
     oldCreated?.({ notificacao: { id: 'old-event' }, naoLidas: 50 });
+    oldRead?.({ notificacaoId: 'other-user', lidaEmUtc: '2026-11-18T13:00:00Z', naoLidas: 0 });
     oldList.next({ ...response, items: [{ id: 'old-rest' }], naoLidas: 99 });
     batch.next({ marcadas: 2, naoLidas: 0, limiteUtc: '2026-11-18T13:00:00Z' });
     batch.complete();

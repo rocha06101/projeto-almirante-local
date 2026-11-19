@@ -3,6 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { LancamentosService } from './lancamentos.service';
+import { Lancamento } from '../models/lancamento.model';
 
 /** Verifica o contrato de /api/Lancamentos (Swagger do backend). */
 describe('LancamentosService', () => {
@@ -71,6 +72,36 @@ describe('LancamentosService', () => {
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual({ status: 'Pago' });
     req.flush({});
+  });
+
+  const devolucao: Lancamento = {
+    id: 'devolucao', membroId: 'm1', membroNome: 'Guilherme', finalidade: null, descricao: null,
+    categoria: 'Evento', tipoFluxo: 'Saida', valor: 252, vencimento: '2026-11-17',
+    status: 'Pago', eventoId: 'ev1', lancamentoOrigemId: 'pagamento-original',
+    valorPago: 200, dataPagamento: '2026-11-18', devolucaoJustificativa: 'Valor acordado',
+  };
+
+  it.each([
+    ['POST', 'registrarDevolucao'],
+    ['PUT', 'corrigirDevolucao'],
+  ] as const)('envia %s ao endpoint dedicado e retorna o LancamentoDto', (verb, operacao) => {
+    const payload = { dataPagamento: '2026-11-18', valorPago: 200, justificativa: 'Valor acordado' };
+    const resposta = vi.fn();
+    service[operacao](devolucao.id, payload).subscribe(resposta);
+
+    const req = http.expectOne({ method: verb, url: '/api/Lancamentos/devolucao/Devolucao' });
+    expect(req.request.body).toEqual(payload);
+    expect(req.request.headers.has('Idempotency-Key')).toBe(false);
+    http.expectNone('/api/Lancamentos/pagamento-original');
+    req.flush(devolucao);
+    expect(resposta).toHaveBeenCalledExactlyOnceWith(devolucao);
+  });
+
+  it('consulta a devolução por ID para reconciliar o estado persistido', () => {
+    const resposta = vi.fn();
+    service.getById(devolucao.id).subscribe(resposta);
+    http.expectOne({ method: 'GET', url: '/api/Lancamentos/devolucao' }).flush(devolucao);
+    expect(resposta).toHaveBeenCalledExactlyOnceWith(devolucao);
   });
 
   it('exclui em DELETE /Lancamentos/{id} com o motivo no corpo', () => {

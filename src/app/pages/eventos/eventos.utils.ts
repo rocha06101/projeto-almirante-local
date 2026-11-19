@@ -3,6 +3,7 @@ import { registerLocaleData } from '@angular/common';
 import pt from '@angular/common/locales/pt';
 import { EventInput } from '@fullcalendar/core';
 import { EventoDto, PeriodoEventos } from '../../core/models/evento.model';
+import { cabeEmWindows1252 } from '../../shared/validators/texto-varchar';
 
 registerLocaleData(pt, 'pt-BR');
 
@@ -54,7 +55,7 @@ export function temPagamentos(evento: EventoDto | null): boolean {
 }
 export function motivoValido(motivo: string): boolean {
   const texto = motivo.trim();
-  return texto.length >= 1 && texto.length <= 255 && /^[\x20-\x7E\xA0-\xFF€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]+$/u.test(texto);
+  return texto.length <= 255 && cabeEmWindows1252(texto);
 }
 export function respostaIncerta(erro: unknown): boolean {
   return erro instanceof HttpErrorResponse ? erro.status === 0 || erro.status >= 500 : true;

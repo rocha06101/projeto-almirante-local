@@ -1,11 +1,14 @@
 import { A11yModule } from '@angular/cdk/a11y';
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Injector, OnDestroy, OnInit, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
 
 import { StatusBadgeComponent } from '../../../features/lancamentos/components/status-badge/status-badge';
 import {
+  DevolucaoLancamentoInput,
   Lancamento,
   LancamentoCategoria,
   LancamentoStatus,
@@ -15,10 +18,14 @@ import {
 import { LancamentosService } from '../../../features/lancamentos/services/lancamentos.service';
 import { MembroResumo } from '../../../core/models/user.model';
 import { PermissoesService } from '../../../core/services/permissoes';
+import { ToastService } from '../../../core/services/toast.service';
 import { User as UsuarioService } from '../../../core/services/user';
+import { cabeEmWindows1252 } from '../../validators/texto-varchar';
 
-type ModalMode = 'new' | 'edit' | 'view' | 'delete';
+type ModalDevolucaoMode = 'registrarDevolucao' | 'corrigirDevolucao';
+type ModalMode = 'new' | 'edit' | 'view' | 'delete' | ModalDevolucaoMode;
 type ModalLancamentoTipo = 'unico' | 'geral';
+type ErrosDevolucao = Partial<Record<keyof DevolucaoLancamentoInput, string>>;
 
 interface LancamentoForm {
   /** '' = nenhum; TODOS_OS_MEMBROS = lançamento em lote. */
@@ -34,6 +41,10 @@ interface LancamentoForm {
 
 export const TODOS_OS_MEMBROS = '__todos__';
 const SEARCH_DEBOUNCE_MS = 300;
+const CONSULTAR_LANCAMENTOS = 'financeiro.lancamentos.consultar';
+const REGISTRAR_PAGAMENTOS = 'financeiro.pagamentos.registrar';
+// Mesmo fuso de Clube:FusoHorario na configuração do backend do Almirante.
+const DATA_CIVIL_CLUBE = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo' });
 
 /**
  * Máscara de centavos do campo Valor: só os dígitos contam ("R$ 1.250,50" → 1250.5).
@@ -56,9 +67,16 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
   private readonly lancamentosService = inject(LancamentosService);
   readonly permissoes = inject(PermissoesService);
   private readonly usuarioService = inject(UsuarioService);
+  private readonly toast = inject(ToastService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+  private readonly listHeading = viewChild<ElementRef<HTMLElement>>('listHeading');
+  private readonly devolucaoFocus = viewChild<ElementRef<HTMLElement>>('devolucaoFocus');
 
   private searchTimer?: ReturnType<typeof setTimeout>;
+  private listRequest?: Subscription;
   private idempotencyKey = '';
+  private readonly devolucoesAConsultar = new Set<string>();
 
   readonly TODOS = TODOS_OS_MEMBROS;
   /** A API recusa vencimento no passado ao registrar (yyyy-MM-dd, data local). */
@@ -89,6 +107,23 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
   readonly usuariosError = signal('');
   motivoExclusao = '';
   lancamentoAtual: LancamentoForm = this.emptyForm();
+  valorDevolucaoTexto = '';
+  dataDevolucao = '';
+  justificativaDevolucao = '';
+  readonly justificativaDevolucaoMaxima = 255;
+  readonly errosDevolucao = signal<ErrosDevolucao>({});
+  readonly revisaoDevolucao = signal<DevolucaoLancamentoInput | null>(null);
+  readonly consultandoDevolucao = signal(false);
+  readonly precisaConsultarDevolucao = signal(false);
+  readonly devolucaoDesatualizada = signal(false);
+
+  readonly modalDevolucao = computed(() => {
+    const mode = this.modalMode();
+    return mode === 'registrarDevolucao' || mode === 'corrigirDevolucao' ? mode : null;
+  });
+  readonly modalDevolucaoOcupado = computed(
+    () => !!this.modalDevolucao() && (this.saving() || this.consultandoDevolucao()),
+  );
 
   readonly statusOptions: Array<'Todos' | LancamentoStatus> = ['Todos', 'Pendente', 'Pago', 'Atrasado'];
   readonly finalidadeOptions = ['Mensalidade', 'Campori', 'Acampamento', 'Uniflash', 'Doação', 'Evento', 'Outros'];
@@ -124,9 +159,13 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
       case 'edit':
         return 'Editar lançamento';
       case 'view':
-        return 'Detalhes do lançamento';
+        return this.selected()?.lancamentoOrigemId ? 'Detalhes da devolução' : 'Detalhes do lançamento';
       case 'delete':
         return 'Excluir lançamento';
+      case 'registrarDevolucao':
+        return 'Registrar devolução';
+      case 'corrigirDevolucao':
+        return 'Corrigir devolução';
       default:
         return 'Novo lançamento';
     }
@@ -138,15 +177,25 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     clearTimeout(this.searchTimer);
+    this.listRequest?.unsubscribe();
   }
 
   // ---- Lista -------------------------------------------------------------------------------
 
   load(): void {
+    this.listRequest?.unsubscribe();
+    if (!this.permissoes.tem(CONSULTAR_LANCAMENTOS)) {
+      this.items.set([]);
+      this.total.set(0);
+      this.totalPages.set(1);
+      this.loading.set(false);
+      this.listError.set('Você não tem permissão para consultar os lançamentos.');
+      return;
+    }
     this.loading.set(true);
     this.listError.set('');
 
-    this.lancamentosService
+    this.listRequest = this.lancamentosService
       .list({
         page: this.page(),
         pageSize: this.pageSize(),
@@ -235,10 +284,239 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
   }
 
   closeModal(): void {
+    if (this.modalDevolucaoOcupado()) return;
+    const fechandoDevolucao = !!this.modalDevolucao();
     this.modalMode.set(null);
     this.selected.set(null);
     this.formError.set('');
     this.saving.set(false);
+    if (fechandoDevolucao) this.restaurarFocoListagem();
+  }
+
+  podeRegistrarDevolucao(item: Lancamento): boolean {
+    return this.podeAlterarDevolucao(item) && item.status === 'Pendente' && !item.dataPagamento;
+  }
+
+  podeCorrigirDevolucao(item: Lancamento): boolean {
+    return this.podeAlterarDevolucao(item) && item.status === 'Pago' && !!item.dataPagamento;
+  }
+
+  private podeAlterarDevolucao(item: Lancamento): boolean {
+    return !!item.lancamentoOrigemId &&
+      this.permissoes.tem(CONSULTAR_LANCAMENTOS) &&
+      this.permissoes.tem(REGISTRAR_PAGAMENTOS);
+  }
+
+  private podeExecutarDevolucao(item: Lancamento, mode: ModalDevolucaoMode): boolean {
+    return mode === 'registrarDevolucao'
+      ? this.podeRegistrarDevolucao(item)
+      : this.podeCorrigirDevolucao(item);
+  }
+
+  openDevolucao(item: Lancamento, mode: ModalDevolucaoMode): void {
+    if (this.modalMode() || !this.podeExecutarDevolucao(item, mode)) return;
+
+    const correcao = mode === 'corrigirDevolucao';
+    this.valorDevolucaoTexto = this.formatCurrencyInput(correcao ? item.valorPago ?? null : item.valor);
+    this.dataDevolucao = correcao ? item.dataPagamento ?? '' : '';
+    this.justificativaDevolucao = correcao ? item.devolucaoJustificativa ?? '' : '';
+    this.errosDevolucao.set({});
+    this.revisaoDevolucao.set(null);
+    this.devolucaoDesatualizada.set(false);
+    this.precisaConsultarDevolucao.set(this.devolucoesAConsultar.has(item.id));
+    this.openModal(mode, item);
+    if (this.precisaConsultarDevolucao()) this.consultarDevolucao();
+  }
+
+  onValorDevolucaoInput(input: HTMLInputElement, event: Event): void {
+    const texto = input.value.trim();
+    const digitandoNaMascara = (event as InputEvent).inputType === 'insertText' &&
+      /^R\$\s*\d{1,3}(?:\.\d{3})*,\d+$/.test(texto);
+
+    let centavos = digitandoNaMascara || /^\d+$/.test(texto) ? texto : '';
+    if (!digitandoNaMascara && /^(?:R\$\s*)?(?:\d+|\d{1,3}(?:\.\d{3})+),\d{1,2}$/.test(texto)) {
+      centavos = texto.replace(/,\d$/, '$&0');
+    }
+    if (centavos && centavos.replace(/\D/g, '').length <= 15) {
+      input.value = this.formatCurrency(parseCurrencyInput(centavos) ?? 0);
+    }
+    this.valorDevolucaoTexto = input.value;
+  }
+
+  revisarDevolucao(): void {
+    const item = this.alvoDevolucao();
+    if (!item || this.revisaoDevolucao()) return;
+
+    const erros: ErrosDevolucao = {};
+    const texto = this.valorDevolucaoTexto.trim();
+    const formatoValido = /^R\$\s*\d{1,3}(?:\.\d{3})*,\d{2}$/.test(texto) &&
+      texto.replace(/\D/g, '').length <= 15;
+    const valorPago = formatoValido ? parseCurrencyInput(texto) : null;
+    const dataPagamento = this.dataDevolucao;
+    const justificativa = this.justificativaDevolucao.trim();
+    const valorDiferente = valorPago !== null && Math.round(valorPago * 100) !== Math.round(item.valor * 100);
+
+    if (!texto) {
+      erros.valorPago = 'Informe o valor devolvido.';
+    } else if (!formatoValido) {
+      erros.valorPago = 'Informe um valor válido em reais.';
+    } else if (valorPago === null) {
+      erros.valorPago = 'Informe um valor maior que zero.';
+    } else if (Math.round(valorPago * 100) > Math.round(item.valor * 100)) {
+      erros.valorPago = 'O valor devolvido não pode superar o valor esperado.';
+    }
+
+    if (!dataPagamento) {
+      erros.dataPagamento = 'Informe a data da devolução.';
+    } else if (!/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(dataPagamento) ||
+      new Date(`${dataPagamento}T00:00:00Z`).toJSON()?.slice(0, 10) !== dataPagamento) {
+      erros.dataPagamento = 'Informe uma data válida.';
+    } else if (dataPagamento > this.hojeNoClube()) {
+      erros.dataPagamento = 'A data da devolução não pode ser futura.';
+    }
+
+    if (valorDiferente && !justificativa) {
+      erros.justificativa = 'Informe a justificativa para devolver um valor diferente do esperado.';
+    } else if (this.justificativaDevolucao) {
+      if (justificativa.replace(/\s/g, '').length < 3 || justificativa.length > this.justificativaDevolucaoMaxima) {
+        erros.justificativa = 'Use de 3 a 255 caracteres. Espaços não contam para o mínimo.';
+      } else if (!cabeEmWindows1252(justificativa)) {
+        erros.justificativa = 'Use caracteres compatíveis com Windows-1252, sem emojis ou quebras de linha.';
+      }
+    }
+
+    this.errosDevolucao.set(erros);
+    this.formError.set('');
+    if (Object.keys(erros).length || valorPago === null) return;
+    this.revisaoDevolucao.set({ valorPago, dataPagamento, justificativa: justificativa || null });
+    this.focarDevolucao();
+  }
+
+  voltarDevolucao(): void {
+    if (this.modalDevolucaoOcupado()) return;
+    this.revisaoDevolucao.set(null);
+    this.focarDevolucao();
+  }
+
+  confirmarDevolucao(): void {
+    const item = this.alvoDevolucao();
+    const payload = this.revisaoDevolucao();
+    const mode = this.modalDevolucao();
+    if (!item || !payload || !mode) return;
+
+    this.saving.set(true);
+    const registro = mode === 'registrarDevolucao';
+    const operacao = registro
+      ? this.lancamentosService.registrarDevolucao(item.id, payload)
+      : this.lancamentosService.corrigirDevolucao(item.id, payload);
+    operacao.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: atualizado => {
+        this.saving.set(false);
+        this.atualizarItemDevolucao(atualizado);
+        this.closeModal();
+        this.load();
+        this.toast.success(registro ? 'Devolução registrada com sucesso.' : 'Devolução corrigida com sucesso.');
+      },
+      error: (error: unknown) => {
+        this.saving.set(false);
+        this.revisaoDevolucao.set(null);
+        const mensagem = this.erroDevolucao(error);
+        this.formError.set(mensagem);
+        if (!(error instanceof HttpErrorResponse) || error.status !== 401) this.toast.error(mensagem);
+        if (!(error instanceof HttpErrorResponse) || error.status === 0 || error.status === 409 || error.status >= 500) {
+          this.devolucoesAConsultar.add(item.id);
+          this.precisaConsultarDevolucao.set(true);
+          this.consultarDevolucao();
+        } else {
+          this.focarDevolucao();
+        }
+      },
+    });
+  }
+
+  consultarDevolucao(): void {
+    const item = this.selected();
+    const mode = this.modalDevolucao();
+    if (!item || !mode || this.modalDevolucaoOcupado() || !this.precisaConsultarDevolucao() ||
+      !this.permissoes.tem(CONSULTAR_LANCAMENTOS)) return;
+
+    this.consultandoDevolucao.set(true);
+    this.lancamentosService.getById(item.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: atual => {
+        this.consultandoDevolucao.set(false);
+        this.precisaConsultarDevolucao.set(false);
+        this.devolucoesAConsultar.delete(item.id);
+        this.atualizarItemDevolucao(atual);
+        this.selected.set(atual);
+
+        if (!this.podeExecutarDevolucao(atual, mode) || atual.valor !== item.valor ||
+          atual.valorPago !== item.valorPago || atual.dataPagamento !== item.dataPagamento ||
+          atual.devolucaoJustificativa !== item.devolucaoJustificativa ||
+          atual.pagamentoRegistradoEmUtc !== item.pagamentoRegistradoEmUtc) {
+          this.devolucaoDesatualizada.set(true);
+          const estado = atual.status === 'Pago' ? 'A API retornou a devolução como concluída.' : 'A API retornou novos dados da devolução.';
+          this.formError.update(mensagem => [mensagem, estado, 'Feche o formulário para consultar a listagem atualizada.'].filter(Boolean).join(' '));
+          this.load();
+        } else {
+          this.formError.update(mensagem => [mensagem, 'A devolução foi consultada e você pode revisar os dados e tentar novamente.'].filter(Boolean).join(' '));
+        }
+        this.focarDevolucao();
+      },
+      error: (error: unknown) => {
+        this.consultandoDevolucao.set(false);
+        this.formError.set(`Não foi possível verificar o estado atual. ${this.erroDevolucao(error)}`);
+        this.focarDevolucao();
+      },
+    });
+  }
+
+  private alvoDevolucao(): Lancamento | null {
+    const item = this.selected();
+    const mode = this.modalDevolucao();
+    if (!item || !mode || this.modalDevolucaoOcupado() ||
+      this.precisaConsultarDevolucao() || this.devolucaoDesatualizada()) return null;
+    if (!this.podeExecutarDevolucao(item, mode)) {
+      this.formError.set('Esta operação não está disponível para o lançamento ou para suas permissões atuais.');
+      return null;
+    }
+    return item;
+  }
+
+  private atualizarItemDevolucao(atualizado: Lancamento): void {
+    this.items.update(items => items.map(item => item.id === atualizado.id ? atualizado : item));
+  }
+
+  private focarDevolucao(): void {
+    afterNextRender(() => this.devolucaoFocus()?.nativeElement.focus(), { injector: this.injector });
+  }
+
+  private restaurarFocoListagem(): void {
+    afterNextRender(() => {
+      const heading = this.listHeading()?.nativeElement;
+      if (heading?.ownerDocument.activeElement === heading?.ownerDocument.body) heading?.focus();
+    }, { injector: this.injector });
+  }
+
+  private erroDevolucao(error: unknown): string {
+    if (error instanceof HttpErrorResponse) {
+      if (error.status === 401) return 'Sua sessão expirou. Entre novamente para continuar.';
+      if (error.status === 403) return 'Você não tem permissão para esta operação.';
+      if (error.status === 409) {
+        return error.error?.detail ?? error.error?.title ?? 'O estado da devolução foi alterado.';
+      }
+      if (error.status === 400) {
+        const erros: ErrosDevolucao = {};
+        const campos = ['valorPago', 'dataPagamento', 'justificativa'] as const;
+        for (const [chave, mensagens] of Object.entries(error.error?.errors ?? {})) {
+          const campo = campos.find(nome => nome.toLowerCase() === chave.toLowerCase());
+          if (campo && Array.isArray(mensagens) && typeof mensagens[0] === 'string') erros[campo] = mensagens[0];
+        }
+        this.errosDevolucao.set(erros);
+      }
+    } else if (error instanceof Error && error.name === 'TimeoutError') {
+      return 'O servidor demorou para responder. A operação não foi confirmada.';
+    }
+    return this.describe(error, 'Não foi possível concluir a operação.');
   }
 
   submit(): void {
@@ -368,6 +646,7 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
   }
 
   private openModal(mode: ModalMode, item: Lancamento | null): void {
+    if (this.modalDevolucaoOcupado()) return;
     this.formError.set('');
     this.saving.set(false);
     this.selected.set(item);
@@ -408,6 +687,14 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
   /** Lançamentos gerados por eventos só podem ser alterados em /api/Eventos. */
   isFromEvento(item: Lancamento): boolean {
     return !!item.eventoId || !!item.lancamentoOrigemId;
+  }
+
+  descricaoDaDevolucao(item: Lancamento): string | null {
+    return item.descricao?.trim() || (item.eventoId ? 'Evento vinculado' : null);
+  }
+
+  hojeNoClube(): string {
+    return DATA_CIVIL_CLUBE.format(Date.now());
   }
 
   fluxoLabel(fluxo: LancamentoTipoFluxo): string {

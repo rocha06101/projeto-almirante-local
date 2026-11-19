@@ -194,6 +194,28 @@ tbody tr {
   gap: 0.25rem;
 }
 
+.refund-summary {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.refund-reference {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.refund-action {
+  min-height: var(--tap-target);
+  padding: 0.45rem 0.7rem;
+  font-size: 0.875rem;
+}
+
+.modal-actions button:disabled,
+.close-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .icon-button {
   border: none;
   background: transparent;

@@ -1,4 +1,4 @@
-import { Component, ElementRef, Input, OnChanges, QueryList, ViewChild, ViewChildren, afterEveryRender, output } from '@angular/core';
+import { Component, ElementRef, Input, OnChanges, QueryList, SimpleChanges, ViewChildren, afterEveryRender, output } from '@angular/core';
 import { EventoDto } from '../../../core/models/evento.model';
 import { corEvento, dataCivil, grupoEvento, nomeEvento, rotuloData } from '../eventos.utils';
 
@@ -11,7 +11,7 @@ import { corEvento, dataCivil, grupoEvento, nomeEvento, rotuloData } from '../ev
       @else if (erro) {
         <p role="alert">{{ erro }}</p><button class="retry" type="button" (click)="recarregar.emit()">Tentar novamente</button>
       } @else {
-        <div class="upcoming-list" #lista>
+        <div class="upcoming-list">
           @for (evento of visiveis(); track evento.id) {
             <button #card type="button" [class]="'upcoming-card ' + corEvento(evento)"
               [class.selected]="evento.id === selectedEventId" [attr.aria-pressed]="evento.id === selectedEventId"
@@ -26,9 +26,9 @@ import { corEvento, dataCivil, grupoEvento, nomeEvento, rotuloData } from '../ev
         </div>
         @if (eventos.length > tamanho) {
           <nav aria-label="Paginação de próximos eventos">
-            <button type="button" aria-label="Eventos anteriores" [disabled]="pagina === 0" (click)="pagina = pagina - 1">‹</button>
+            <button type="button" aria-label="Eventos anteriores" [disabled]="pagina === 0" (click)="mudarPagina(pagina - 1)">‹</button>
             <span aria-live="polite">{{ pagina + 1 }} de {{ totalPaginas() }}</span>
-            <button type="button" aria-label="Mais eventos" [disabled]="pagina + 1 >= totalPaginas()" (click)="pagina = pagina + 1">›</button>
+            <button type="button" aria-label="Mais eventos" [disabled]="pagina + 1 >= totalPaginas()" (click)="mudarPagina(pagina + 1)">›</button>
           </nav>
         }
       }
@@ -39,7 +39,7 @@ import { corEvento, dataCivil, grupoEvento, nomeEvento, rotuloData } from '../ev
 export class ProximosEventos implements OnChanges {
   @Input() eventos: EventoDto[] = [];
   @Input() selectedEventId: string | null = null;
-  @ViewChild('lista') lista?: ElementRef<HTMLElement>;
+  @Input() pedidoDeRolagem = 0;
   @ViewChildren('card') cards!: QueryList<ElementRef<HTMLButtonElement>>;
   private rolarSelecionado = false;
   @Input() carregando = false;
@@ -47,29 +47,45 @@ export class ProximosEventos implements OnChanges {
   @Input() hoje = dataCivil(new Date());
   readonly selecionarEvento = output<string>();
   readonly recarregar = output<void>();
-  readonly tamanho = 3;
+  readonly tamanho = 5;
   pagina = 0;
   readonly corEvento = corEvento;
   readonly rotuloData = rotuloData;
   readonly nomeEvento = nomeEvento;
   readonly grupoEvento = grupoEvento;
+
   constructor() {
-    afterEveryRender(() => {
-      if (!this.rolarSelecionado || !this.lista) return;
-      const card = this.cards.find(c => c.nativeElement.dataset['eventId'] === this.selectedEventId)?.nativeElement;
-      if (!card) return;
-      this.rolarSelecionado = false;
-      // Rola apenas o contêiner, sem mover a página ou o foco do calendário.
-      const lista = this.lista.nativeElement;
-      const item = card.getBoundingClientRect(), area = lista.getBoundingClientRect();
-      if (item.top < area.top) lista.scrollTop += item.top - area.top;
-      else if (item.bottom > area.bottom) lista.scrollTop += item.bottom - area.bottom;
+    afterEveryRender({
+      write: () => {
+        if (!this.rolarSelecionado || this.carregando) return;
+        this.rolarSelecionado = false;
+        const card = this.cards.find(c => c.nativeElement.dataset['eventId'] === this.selectedEventId);
+        card?.nativeElement.scrollIntoView({
+          behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+          block: 'nearest',
+          inline: 'nearest',
+        });
+      },
     });
   }
-  ngOnChanges(): void {
-    const indice = this.eventos.findIndex(e => e.id === this.selectedEventId);
-    this.pagina = indice >= 0 ? Math.floor(indice / this.tamanho) : Math.min(this.pagina, Math.max(0, this.totalPaginas() - 1));
-    this.rolarSelecionado = indice >= 0;
+
+  ngOnChanges(changes: SimpleChanges): void {
+    this.pagina = Math.min(this.pagina, Math.max(0, this.totalPaginas() - 1));
+    if (changes['pedidoDeRolagem'] && !changes['pedidoDeRolagem'].firstChange) this.rolarSelecionado = true;
+    else if (changes['selectedEventId']) this.rolarSelecionado = false;
+    if (!this.rolarSelecionado || this.carregando) return;
+
+    const indice = this.erro ? -1 : this.eventos.findIndex(e => e.id === this.selectedEventId);
+    if (indice < 0) {
+      this.rolarSelecionado = false;
+      return;
+    }
+    this.pagina = Math.floor(indice / this.tamanho);
+  }
+
+  mudarPagina(pagina: number): void {
+    this.rolarSelecionado = false;
+    this.pagina = pagina;
   }
   visiveis() { return this.eventos.slice(this.pagina * this.tamanho, (this.pagina + 1) * this.tamanho); }
   totalPaginas() { return Math.ceil(this.eventos.length / this.tamanho); }

@@ -158,7 +158,9 @@ for (const width of [320, 768, 1280, 1440]) {
 }
 
 test('navega meses, volta a hoje, seleciona data e pagina eventos futuros', async ({ page }) => {
-  const estado = await preparar(page); await abrir(page);
+  const estado = await preparar(page);
+  estado.eventos.push(novo(6, '2026-11-23', 'Ginásio'), novo(7, '2026-11-24', 'Quadra'));
+  await abrir(page);
   await page.getByRole('button', { name: 'Próximo mês', exact: true }).click();
   await expect(page.locator('.month-navigation h2')).toHaveText(/Dezembro\s+de\s+2026/);
   await expect.poll(() => estado.chamadas.some(c => c.url.search === '?dataInicial=2026-11-30&dataFinal=2027-01-03')).toBe(true);
@@ -175,6 +177,41 @@ test('navega meses, volta a hoje, seleciona data e pagina eventos futuros', asyn
   await page.getByRole('button', { name: 'Mais eventos' }).click();
   await expect(page.locator('.upcoming-card')).toContainText('Sede do clube');
 });
+
+for (const paginas of [[3], [5], [5, 1], [5, 5, 2]]) {
+  const total = paginas.reduce((soma, quantidade) => soma + quantidade, 0);
+  test(`lista ${total} eventos em páginas de ${paginas.join(', ')} cards`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const estado = await preparar(page);
+    const eventos = Array.from({ length: total }, (_, i) => novo(i + 1, `2026-11-${17 + i}`, `Local ${i + 1}`));
+    estado.eventos = [...eventos].reverse();
+    await abrir(page);
+
+    const cards = page.locator('.upcoming-card');
+    const paginacao = page.getByRole('navigation', { name: 'Paginação de próximos eventos' });
+    const proxima = page.getByRole('button', { name: 'Mais eventos' });
+    const anterior = page.getByRole('button', { name: 'Eventos anteriores' });
+    for (const [pagina, quantidade] of paginas.entries()) {
+      await expect(cards).toHaveCount(quantidade);
+      expect(await cards.evaluateAll(botoes => botoes.map(botao => botao.getAttribute('data-event-id'))))
+        .toEqual(eventos.slice(pagina * 5, pagina * 5 + quantidade).map(evento => evento.id));
+      const lista = page.locator('.upcoming-list');
+      expect(await lista.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+      if (paginas.length === 1) {
+        await expect(paginacao).toHaveCount(0);
+      } else {
+        await expect(paginacao).toContainText(`${pagina + 1} de ${paginas.length}`);
+        if (pagina === 0) await expect(anterior).toBeDisabled();
+        if (pagina + 1 < paginas.length) await proxima.click();
+        else await expect(proxima).toBeDisabled();
+      }
+    }
+    if (paginas.length > 1) {
+      await anterior.click();
+      await expect(cards).toHaveCount(5);
+    }
+  });
+}
 
 test('cadastro exige confirmação e preserva idempotência após resposta incerta e reabertura', async ({ page }) => {
   const estado = await preparar(page); estado.erroPost = 503; await abrir(page); await preencher(page);
@@ -240,8 +277,17 @@ test('edição mantém versão, exige motivo ao remover membro e recarrega após
 
 });
 
-test('exclusão confirma motivo e versão, atualiza calendário e próximos', async ({ page }) => {
-  const estado = await preparar(page); await abrir(page); await detalhes(page);
+test('exclusão confirma motivo e versão, atualiza calendário e ajusta a última página', async ({ page }) => {
+  const estado = await preparar(page);
+  estado.eventos = Array.from({ length: 6 }, (_, i) => novo(i + 1, `2026-11-${17 + i}`, `Local ${i + 1}`));
+  await abrir(page);
+  const alvo = estado.eventos[5];
+  const calendario = page.locator(`.fc-day[data-date="${alvo.dataEvento}"] .fc-daygrid-event`);
+  const card = page.locator(`.upcoming-card[data-event-id="${alvo.id}"]`);
+  const paginacao = page.getByRole('navigation', { name: 'Paginação de próximos eventos' });
+  await calendario.click();
+  await expect(paginacao).toContainText('2 de 2');
+  await card.click();
   await page.getByRole('button', { name: 'Excluir evento', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Confirmar exclusão' })).toBeDisabled();
   await page.getByLabel('Motivo da exclusão').fill('Evento cancelado');
@@ -249,8 +295,11 @@ test('exclusão confirma motivo e versão, atualiza calendário e próximos', as
   await page.getByRole('button', { name: 'Confirmar exclusão' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
   expect(estado.chamadas.find(c => c.method === 'DELETE')!.body).toEqual({ motivo: 'Evento cancelado', versao: 'AAAAAAAABAA=' });
-  await expect(page.locator('.fc-daygrid-event').filter({ hasText: 'Igreja' })).toHaveCount(0);
-  await expect(page.locator('.upcoming-card').filter({ hasText: 'Igreja' })).toHaveCount(0);
+  await expect(calendario).toHaveCount(0);
+  await expect(card).toHaveCount(0);
+  await expect(paginacao).toHaveCount(0);
+  await expect(page.locator('.upcoming-card')).toHaveCount(5);
+  await expect(page.locator('.upcoming-card[aria-pressed="true"]')).toHaveCount(0);
 });
 
 test('bloqueios financeiros e grupos preservam cadastros individuais', async ({ page }) => {
@@ -428,7 +477,7 @@ test('evento passado ausente da lista abre normalmente; dia vazio e navegação 
   await passado.click();
   await expect(passado).toHaveClass(/selected-event/);
   await expect(page.locator('.upcoming-card[aria-pressed="true"]')).toHaveCount(0);
-  await expect(page.locator('.upcoming-card')).toHaveCount(3);
+  await expect(page.locator('.upcoming-card')).toHaveCount(4);
   await passado.click();
   await expect(page.getByRole('dialog').getByRole('heading', { name: 'Evento — Praça Central' })).toBeVisible();
   await page.keyboard.press('Escape');
@@ -443,20 +492,101 @@ test('evento passado ausente da lista abre normalmente; dia vazio e navegação 
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('seleção localiza próxima página e rola apenas a lista lateral', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 720 });
-  const estado = await preparar(page);
-  estado.eventos.push(...[6, 7, 8, 9, 10].map(id => novo(id, `2026-11-${19 + id}`, 'Local '.repeat(35))));
-  await abrir(page);
-  const scroll = await page.evaluate(() => scrollY);
-  const evento = page.locator('.fc-day[data-date="2026-11-27"] .fc-daygrid-event');
-  await evento.click();
-  const card = page.locator('.upcoming-card[aria-pressed="true"]');
-  await expect(card).toHaveAttribute('data-event-id', estado.eventos.find(e => e.dataEvento === '2026-11-27')!.id);
-  await expect(card).toBeInViewport();
-  expect(await page.evaluate(() => scrollY)).toBe(scroll);
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-});
+for (const { width, reduzido, alvo } of [
+  { width: 1280, reduzido: false, alvo: 10 },
+  { width: 390, reduzido: true, alvo: 12 },
+]) {
+  test(`calendário revela o card selecionado e preserva a paginação manual em ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 720 });
+    await page.emulateMedia({ reducedMotion: reduzido ? 'reduce' : 'no-preference' });
+    const estado = await preparar(page);
+    estado.eventos = Array.from({ length: 12 }, (_, i) => ({
+      ...novo(i + 1, `2026-11-${17 + i}`, 'Local '.repeat(35)),
+      titulo: `Evento ${i + 1}`,
+    }));
+    await abrir(page);
+    await page.evaluate(() => {
+      const scrollIntoView = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = function (opcoes) {
+        if (this.matches('.upcoming-card') && typeof opcoes === 'object') {
+          this.setAttribute('data-scroll-behavior', opcoes.behavior ?? '');
+        }
+        scrollIntoView.call(this, opcoes);
+      };
+    });
+
+    const paginacao = page.getByRole('navigation', { name: 'Paginação de próximos eventos' });
+    const anterior = page.getByRole('button', { name: 'Eventos anteriores' });
+    const proxima = page.getByRole('button', { name: 'Mais eventos' });
+    const dados = estado.eventos[alvo - 1];
+    const evento = page.locator(`.fc-day[data-date="${dados.dataEvento}"] .fc-daygrid-event`);
+    const card = page.locator(`.upcoming-card[data-event-id="${dados.id}"]`);
+    const numeroPagina = alvo === 10 ? 2 : 3;
+    await expect(paginacao).toContainText('1 de 3');
+    const scroll = await page.evaluate(() => scrollY);
+    await evento.click();
+    await expect(paginacao).toContainText(`${numeroPagina} de 3`);
+    await expect(evento).toHaveClass(/selected-event/);
+    await expect(card).toHaveAttribute('aria-pressed', 'true');
+    await expect(card).toHaveCSS('border-right-color', 'rgb(52, 64, 157)');
+    await expect(card).toHaveAttribute('data-scroll-behavior', reduzido ? 'instant' : 'smooth');
+    await expect(card).toBeInViewport({ ratio: 1 });
+    if (width >= 992) {
+      expect(await page.evaluate(() => scrollY)).toBe(scroll);
+      expect(await page.locator('.upcoming-list').evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+    } else {
+      expect(await page.evaluate(() => scrollY)).toBeGreaterThan(scroll);
+      expect(await page.locator('.upcoming-list').evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+    }
+    expect((await measureOverflow(page)).documentOverflow).toBeLessThanOrEqual(1);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    await anterior.click();
+    await expect(paginacao).toContainText(`${numeroPagina - 1} de 3`);
+    await expect(card).toHaveCount(0);
+    await expect(evento).toHaveClass(/selected-event/);
+    await proxima.click();
+    await expect(card).toHaveAttribute('aria-pressed', 'true');
+    await expect(card).not.toHaveAttribute('data-scroll-behavior');
+
+    await anterior.click();
+    await evento.click();
+    await expect(paginacao).toContainText(`${numeroPagina} de 3`);
+    await expect(page.getByRole('dialog')).toBeVisible();
+  });
+}
+
+for (const constaNaLista of [true, false]) {
+  test(`seleção antes da resposta dos próximos eventos ${constaNaLista ? 'com' : 'sem'} o card correspondente`, async ({ page }) => {
+    const estado = await preparar(page);
+    estado.eventos = Array.from({ length: 7 }, (_, i) => novo(i + 1, `2026-11-${17 + i}`, `Local ${i + 1}`));
+    const alvo = estado.eventos[6];
+    const resposta = Promise.withResolvers<void>();
+    await page.route(url => url.pathname === '/api/Eventos' && url.searchParams.get('dataInicial') === hoje, async rota => {
+      await resposta.promise;
+      await rota.fulfill({ json: {
+        items: constaNaLista ? estado.eventos : estado.eventos.slice(0, -1),
+        dataInicial: hoje, dataFinal: '2027-11-17', dataMinimaCadastro: '2026-11-01',
+      } });
+    });
+    await abrir(page);
+    try {
+      await expect(page.getByText('Carregando próximos eventos…')).toBeVisible();
+      const evento = page.locator(`.fc-day[data-date="${alvo.dataEvento}"] .fc-daygrid-event`);
+      await evento.click();
+      await expect(evento).toHaveClass(/selected-event/);
+    } finally {
+      resposta.resolve();
+    }
+
+    const paginacao = page.getByRole('navigation', { name: 'Paginação de próximos eventos' });
+    const selecionado = page.locator('.upcoming-card[aria-pressed="true"]');
+    await expect(paginacao).toContainText(constaNaLista ? '2 de 2' : '1 de 2');
+    await expect(page.locator('.fc-daygrid-event.selected-event')).toHaveText(alvo.titulo!);
+    if (constaNaLista) await expect(selecionado).toHaveAttribute('data-event-id', alvo.id);
+    else await expect(selecionado).toHaveCount(0);
+  });
+}
 
 for (const edicao of [false, true]) {
   test(`${edicao ? 'edição' : 'criação'} protege alterações no backdrop, Escape e cancelar`, async ({ page }) => {

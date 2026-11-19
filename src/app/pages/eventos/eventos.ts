@@ -32,6 +32,7 @@ export class Eventos implements OnInit {
   readonly dataMinima = signal('');
   readonly modal = signal<{ id: string | null; data: string } | null>(null);
   readonly selectedEventId = signal<string | null>(null);
+  readonly pedidoDeRolagem = signal(0);
   private dataEventoSelecionado = '';
 
   ngOnInit(): void {
@@ -49,7 +50,7 @@ export class Eventos implements OnInit {
       );
     }), takeUntilDestroyed(this.destroyRef)).subscribe(r => {
       if (r) {
-        this.validarSelecao(r.items, { dataInicial: this.hoje, dataFinal: somarDias(this.hoje, 365) });
+        this.validarSelecao(r.items, { dataInicial: this.hoje, dataFinal: somarDias(this.hoje, 365) }, this.eventos());
         this.proximos.set(r.items.filter(e => e.dataEvento >= this.hoje).sort((a, b) => a.dataEvento.localeCompare(b.dataEvento) || a.id.localeCompare(b.id)));
         this.dataMinima.set(r.dataMinimaCadastro);
       }
@@ -68,7 +69,7 @@ export class Eventos implements OnInit {
     this.atualizarProximos.next();
   }
   recarregarProximos(): void { if (this.acesso.tem('eventos.consultar')) this.atualizarProximos.next(); }
-  selecionarEvento(id: string): void {
+  selecionarEvento(id: string, noCalendario = false): void {
     if (!this.acesso.tem('eventos.consultar') || this.modal()) return;
     const evento = this.eventos().find(e => e.id === id) ?? this.proximos().find(e => e.id === id);
     if (!evento) return;
@@ -77,14 +78,16 @@ export class Eventos implements OnInit {
       this.selectedEventId.set(id);
       this.dataEventoSelecionado = evento.dataEvento;
     }
+    if (noCalendario) this.pedidoDeRolagem.update(pedido => pedido + 1);
   }
   private limparSelecao(): void { this.selectedEventId.set(null); this.dataEventoSelecionado = ''; }
-  private validarSelecao(items: EventoDto[], periodo: PeriodoEventos): void {
-    // Só a resposta do intervalo que contém o evento pode invalidar sua seleção.
-    const selecionado = items.find(e => e.id === this.selectedEventId());
+  private validarSelecao(items: EventoDto[], periodo: PeriodoEventos, eventosVisiveis: EventoDto[] = []): void {
+    const id = this.selectedEventId();
+    if (!id) return;
+    const selecionado = items.find(e => e.id === id);
     if (selecionado) this.dataEventoSelecionado = selecionado.dataEvento;
-    else if (this.selectedEventId() && this.dataEventoSelecionado >= periodo.dataInicial &&
-        this.dataEventoSelecionado <= periodo.dataFinal) this.limparSelecao();
+    else if (this.dataEventoSelecionado >= periodo.dataInicial && this.dataEventoSelecionado <= periodo.dataFinal &&
+        !eventosVisiveis.some(e => e.id === id)) this.limparSelecao();
   }
   voltarHoje(data: string): void { this.limparSelecao(); this.selecionada.set(data); }
   selecionarDia(data: string): void {

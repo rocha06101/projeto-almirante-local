@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { DestroyRef, Injectable, effect, inject, signal } from '@angular/core';
 import { HubConnection, HubConnectionBuilder, HubConnectionState } from '@microsoft/signalr';
-import { catchError, defer, EMPTY, filter, firstValueFrom, Observable, tap, throwError } from 'rxjs';
+import { catchError, defer, EMPTY, filter, finalize, firstValueFrom, Observable, of, retry, tap, throwError } from 'rxjs';
 import { resolveApiBaseUrl } from '../config/api-base';
 import {
   MarcarLeituraResponse,
@@ -42,6 +42,7 @@ export class NotificacoesService {
   private readonly liveNotifications = new Map<string, Notificacao>();
   private eventRevision = 0;
   private sessionRevision = 0;
+  private batchPending = false;
 
   readonly notifications = signal<Notificacao[]>([]);
   readonly unreadCount = signal(0);
@@ -54,7 +55,6 @@ export class NotificacoesService {
       const userId = this.auth.user()?.id;
       const loggedIn = this.auth.isLoggedIn();
       const stopped = this.stopRealtime();
-      this.resetState();
       const revision = this.sessionRevision;
       if (loggedIn) {
         void stopped.then(() => {
@@ -85,21 +85,24 @@ export class NotificacoesService {
       const session = this.sessionRevision;
       const userId = this.auth.user()?.id;
       const revision = this.eventRevision;
+      const isCurrent = () => this.isCurrentSession(session, userId);
+      if (!isCurrent()) {
+        return EMPTY;
+      }
+
       return this.api.post<MarcarLeituraResponse>(`/Notificacoes/${encodeURIComponent(id)}/Leitura`, {}).pipe(
+        catchError((error: unknown) => isCurrent() ? throwError(() => error) : EMPTY),
+        filter(isCurrent),
         tap({
           next: response => {
-            if (!this.isCurrentSession(session, userId)) {
-              return;
-            }
-
             const currentCount = revision === this.eventRevision
-              ? response.naoLidas ?? this.unreadCount() - 1
-              : this.unreadCount();
+              ? response.naoLidas
+              : undefined;
             this.confirmarLeitura(id, currentCount);
             void this.syncPendentes(false);
           },
           error: (error: unknown) => {
-            if (this.isCurrentSession(session, userId) && error instanceof HttpErrorResponse && error.status === 404) {
+            if (error instanceof HttpErrorResponse && error.status === 404) {
               this.removerNotificacaoInexistente(id);
               void this.syncPendentes(false);
             }
@@ -113,26 +116,30 @@ export class NotificacoesService {
     return defer(() => {
       const session = this.sessionRevision;
       const userId = this.auth.user()?.id;
-      const revision = this.eventRevision;
+      if (!this.isCurrentSession(session, userId) || this.batchPending) {
+        return EMPTY;
+      }
+
+      this.batchPending = true;
       return this.api.post<MarcarTodasLeiturasResponse>('/Notificacoes/Leitura/Todas', null).pipe(
         catchError((error: unknown) =>
           this.isCurrentSession(session, userId) ? throwError(() => error) : EMPTY,
         ),
         filter(() => this.isCurrentSession(session, userId)),
         tap(response => {
+          const limit = parseUtcTicks(response?.limiteUtc);
           if (
             !response ||
             !Number.isInteger(response.marcadas) || response.marcadas < 0 ||
             !Number.isInteger(response.naoLidas) || response.naoLidas < 0 ||
-            typeof response.limiteUtc !== 'string' || !Number.isFinite(Date.parse(response.limiteUtc))
+            limit === undefined
           ) {
             throw new Error('Resposta inválida ao marcar notificações como lidas.');
           }
 
-          const limit = Date.parse(response.limiteUtc);
           const remaining = this.notifications().filter(notification => {
-            // A API tem precisão submilissegundo. A consulta resolve empates no mesmo milissegundo.
-            if (Date.parse(notification.criadaEmUtc ?? '') < limit) {
+            const createdAt = parseUtcTicks(notification.criadaEmUtc);
+            if (createdAt !== undefined && createdAt <= limit) {
               this.readNotificationIds.add(notification.id);
               this.liveNotifications.delete(notification.id);
               return false;
@@ -142,30 +149,36 @@ export class NotificacoesService {
           });
           this.notifications.set(remaining);
           this.isEmpty.set(remaining.length === 0);
-          if (revision === this.eventRevision) {
-            this.unreadCount.set(response.naoLidas);
-          }
+          this.unreadCount.set(response.naoLidas);
           this.eventRevision++;
-          void this.syncPendentes(false);
+          this.syncAgain = true;
+        }),
+        finalize(() => {
+          if (!this.isCurrentSession(session, userId)) {
+            return;
+          }
+
+          this.batchPending = false;
+          if (this.syncAgain) {
+            void this.syncPendentes(false);
+          }
         }),
       );
     });
   }
 
-  confirmarLeitura(id: string, naoLidas: number): void {
+  confirmarLeitura(id: string, naoLidas?: number): void {
     this.readNotificationIds.add(id);
     this.liveNotifications.delete(id);
     this.eventRevision++;
     this.removePending(id);
-    this.unreadCount.set(Math.max(0, naoLidas));
+    if (naoLidas !== undefined) {
+      this.unreadCount.set(Math.max(0, naoLidas));
+    }
   }
 
   removerNotificacaoInexistente(id: string): void {
-    this.readNotificationIds.add(id);
-    this.liveNotifications.delete(id);
-    this.eventRevision++;
-    this.removePending(id);
-    this.unreadCount.update(count => Math.max(0, count - 1));
+    this.confirmarLeitura(id);
   }
 
   async stopRealtime(): Promise<void> {
@@ -177,6 +190,7 @@ export class NotificacoesService {
     const connection = this.connection;
     this.connection = undefined;
     this.startPromise = undefined;
+    this.resetState();
     if (connection && connection.state !== HubConnectionState.Disconnected) {
       await connection.stop();
     }
@@ -295,6 +309,12 @@ export class NotificacoesService {
   }
 
   private syncPendentes(showLoading = true): Promise<void> {
+    if (this.batchPending) {
+      // A consulta precisa começar após a confirmação do lote para incluir o commit.
+      this.syncAgain = true;
+      return Promise.resolve();
+    }
+
     if (this.pendingSync) {
       this.syncAgain = true;
       return this.pendingSync;
@@ -303,29 +323,53 @@ export class NotificacoesService {
     if (showLoading) {
       this.isLoading.set(true);
     }
+    this.syncAgain = false;
     const revision = this.eventRevision;
     const sessionRevision = this.sessionRevision;
     const userId = this.auth.user()?.id;
-    const syncPromise = firstValueFrom(this.listarPendentes(20))
+    const isCurrent = () => this.isCurrentSession(sessionRevision, userId);
+    const syncPromise = firstValueFrom(defer(() => this.listarPendentes(20)).pipe(
+      retry({
+        count: 1,
+        delay: (error: unknown) =>
+          !showLoading && !this.batchPending && revision === this.eventRevision &&
+          isCurrent() && error instanceof HttpErrorResponse &&
+          (error.status === 0 || error.status >= 500)
+            ? of(null)
+            : throwError(() => error),
+      }),
+    ))
       .then(response => {
-        if (!this.isCurrentSession(sessionRevision, userId)) {
+        if (!isCurrent()) {
           return;
         }
 
-        if (revision !== this.eventRevision) {
+        if (this.batchPending || revision !== this.eventRevision) {
           this.syncAgain = true;
           return;
         }
 
-        const items = (response.items ?? []).filter(item => !this.readNotificationIds.has(item.id));
+        if (!Array.isArray(response?.items) ||
+            !Number.isInteger(response.naoLidas) || response.naoLidas < 0) {
+          throw new Error('Resposta inválida ao consultar notificações pendentes.');
+        }
+
+        const items = response.items.filter(item => !this.readNotificationIds.has(item.id));
         this.liveNotifications.clear();
         this.notifications.set(items);
-        this.unreadCount.set(Math.max(0, response.naoLidas ?? items.length));
+        this.unreadCount.set(response.naoLidas);
         this.isEmpty.set(items.length === 0);
         this.loadError.set(null);
       })
       .catch(() => {
-        if (!showLoading || !this.isCurrentSession(sessionRevision, userId)) {
+        if (!isCurrent()) {
+          return;
+        }
+        if (this.batchPending || revision !== this.eventRevision) {
+          this.syncAgain = true;
+          return;
+        }
+        if (!showLoading) {
           return;
         }
 
@@ -336,8 +380,7 @@ export class NotificacoesService {
         if (this.pendingSync === syncPromise) {
           this.isLoading.set(false);
           this.pendingSync = undefined;
-          if (this.syncAgain && this.isCurrentSession(sessionRevision, userId)) {
-            this.syncAgain = false;
+          if (this.syncAgain && !this.batchPending && isCurrent()) {
             void this.syncPendentes(showLoading);
           }
         }
@@ -376,12 +419,31 @@ export class NotificacoesService {
     this.sessionRevision++;
     this.pendingSync = undefined;
     this.syncAgain = false;
+    this.batchPending = false;
     this.notifications.set([]);
     this.unreadCount.set(0);
     this.isLoading.set(false);
     this.isEmpty.set(true);
     this.loadError.set(null);
   }
+}
+
+function parseUtcTicks(value: string | null | undefined): bigint | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const parts = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,7}))?(Z|[+-]\d{2}:\d{2})?$/.exec(value);
+  if (!parts) {
+    return undefined;
+  }
+
+  // DateTime usa passos de 100 ns. Campos UTC sem sufixo também são tratados como UTC.
+  const [, seconds, fraction = '', offset = 'Z'] = parts;
+  const millis = Date.parse(seconds + offset);
+  return Number.isFinite(millis)
+    ? BigInt(millis) * 10_000n + BigInt(fraction.padEnd(7, '0'))
+    : undefined;
 }
 
 function resolveHubUrl(apiBaseUrl: string): string {

@@ -1,9 +1,9 @@
-import { provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { WritableSignal, signal } from '@angular/core';
 import { HubConnectionState } from '@microsoft/signalr';
-import { firstValueFrom, of, Subject } from 'rxjs';
+import { firstValueFrom, of, Subject, throwError } from 'rxjs';
 import { MarcarTodasLeiturasResponse, NotificacoesPendentesResponse } from '../models/notificacao.model';
 import { ApiService } from './api';
 import { AuthService } from './auth';
@@ -174,7 +174,7 @@ describe('NotificacoesService realtime', () => {
     expect(service.notifications()).toEqual([]);
     expect(service.unreadCount()).toBe(0);
   });
-  it.each([1, 20, 25])('envia um único POST sem corpo para %i pendências', async total => {
+  it.each([0, 1, 20, 25])('aceita a resposta de um único POST sem corpo para %i pendências', async total => {
     response = {
       ...response,
       items: Array.from({ length: Math.min(20, total) }, (_, id) => ({
@@ -182,7 +182,8 @@ describe('NotificacoesService realtime', () => {
       })),
       naoLidas: total,
     };
-    await vi.waitFor(() => expect(service.unreadCount()).toBe(total));
+    await vi.waitFor(() => expect(api.get).toHaveBeenCalledOnce());
+    expect(service.unreadCount()).toBe(total);
 
     const result = { marcadas: total, naoLidas: 0, limiteUtc: '2026-11-18T13:00:00Z' };
     response = { ...response, items: [], naoLidas: 0 };
@@ -222,8 +223,11 @@ describe('NotificacoesService realtime', () => {
     const staleList = new Subject<NotificacoesPendentesResponse>();
     api.post.mockReturnValue(batch);
     api.get.mockReturnValueOnce(staleList);
+    const reconnected = signalrMocks.connection.onreconnected.mock.calls[0][0] as () => void;
+    reconnected();
     const clearing = firstValueFrom(service.marcarTodasComoLidas());
     signalrMocks.connection.handlers.get('NotificacaoCriada')?.({ notificacao: newItem, naoLidas: 2 });
+    expect(api.get).toHaveBeenCalledTimes(2);
 
     batch.next({ marcadas: 1, naoLidas: 1, limiteUtc: '2026-11-18T13:00:00.0000001Z' });
     await clearing;
@@ -237,11 +241,73 @@ describe('NotificacoesService realtime', () => {
     expect(service.isEmpty()).toBe(false);
   });
 
+  it('aplica o corte inclusivo de 100 ns e mantém o contador do POST se a consulta falhar', async () => {
+    const before = { id: 'before', criadaEmUtc: '2026-11-18T13:00:00.1234566' };
+    const atLimit = { id: 'at-limit', criadaEmUtc: '2026-11-18T10:00:00.1234567-03:00' };
+    const after = { id: 'after', criadaEmUtc: '2026-11-18T13:00:00.1234568Z' };
+    response = { ...response, items: [before, atLimit], naoLidas: 25 };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(25));
+
+    const clearing = firstValueFrom(service.marcarTodasComoLidas());
+    const created = signalrMocks.connection.handlers.get('NotificacaoCriada');
+    created?.({ notificacao: after, naoLidas: 26 });
+    const unavailable = throwError(() => new HttpErrorResponse({ status: 503 }));
+    api.get.mockReturnValueOnce(unavailable).mockReturnValueOnce(unavailable);
+    const result = { marcadas: 25, naoLidas: 1, limiteUtc: '2026-11-18T13:00:00.1234567Z' };
+    http.expectOne('/api/Notificacoes/Leitura/Todas').flush(result);
+
+    await expect(clearing).resolves.toEqual(result);
+    await vi.waitFor(() => expect(api.get).toHaveBeenCalledTimes(3));
+    created?.({ notificacao: before, naoLidas: 26 });
+    created?.({ notificacao: atLimit, naoLidas: 26 });
+    expect(service.notifications()).toEqual([after]);
+    expect(service.unreadCount()).toBe(1);
+    expect(service.loadError()).toBeNull();
+  });
+
+  it('preserva o estado se o POST falhar e permite repetir o lote', async () => {
+    response = { ...response, items: [{ id: 'pending', criadaEmUtc: '2026-11-18T13:00:00Z' }], naoLidas: 1 };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
+
+    const failed = firstValueFrom(service.marcarTodasComoLidas());
+    http.expectOne('/api/Notificacoes/Leitura/Todas').flush(null, {
+      status: 503, statusText: 'Service Unavailable',
+    });
+    await expect(failed).rejects.toMatchObject({ status: 503 });
+    expect(service.notifications()).toEqual(response.items);
+    expect(service.unreadCount()).toBe(1);
+    expect(api.get).toHaveBeenCalledOnce();
+
+    response = { ...response, items: [], naoLidas: 0 };
+    const retried = firstValueFrom(service.marcarTodasComoLidas());
+    http.expectOne('/api/Notificacoes/Leitura/Todas').flush({
+      marcadas: 1, naoLidas: 0, limiteUtc: '2026-11-18T13:00:00Z',
+    });
+    await retried;
+    expect(service.unreadCount()).toBe(0);
+    expect(service.notifications()).toEqual([]);
+  });
+
+  it('mantém o total confirmado pelo lote se a listagem vier sem naoLidas', async () => {
+    response = { ...response, naoLidas: 25 };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(25));
+
+    api.get.mockReturnValueOnce(of({ items: [] }));
+    const clearing = firstValueFrom(service.marcarTodasComoLidas());
+    http.expectOne('/api/Notificacoes/Leitura/Todas').flush({
+      marcadas: 25, naoLidas: 1, limiteUtc: '2026-11-18T13:00:00Z',
+    });
+    await clearing;
+    await vi.waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+    expect(service.unreadCount()).toBe(1);
+  });
+
   it('reconcilia a outra aba por REST e ignora eventos de leitura duplicados com contador antigo', async () => {
     response = { ...response, items: [{ id: 'first' }, { id: 'second' }], naoLidas: 22 };
     await vi.waitFor(() => expect(service.unreadCount()).toBe(22));
     const read = signalrMocks.connection.handlers.get('NotificacaoLida');
     response = { ...response, items: [{ id: 'new' }], naoLidas: 1 };
+    api.get.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 0 })));
     read?.({ notificacaoId: 'second', naoLidas: 0 });
     read?.({ notificacaoId: 'first', naoLidas: 7 });
     await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
@@ -263,6 +329,46 @@ describe('NotificacoesService realtime', () => {
 
     await expect(firstValueFrom(service.marcarComoLida(item.id))).resolves.toEqual(result);
     expect(api.post).toHaveBeenCalledExactlyOnceWith('/Notificacoes/individual/Leitura', {});
+    expect(service.notifications()).toEqual([]);
+    expect(service.unreadCount()).toBe(0);
+  });
+
+  it('ignora o contador de uma leitura individual iniciada antes do lote mesmo se o GET falhar', async () => {
+    const item = { id: 'individual', criadaEmUtc: '2026-11-18T12:00:00Z' };
+    response = { ...response, items: [item], naoLidas: 25 };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(25));
+
+    const individual = firstValueFrom(service.marcarComoLida(item.id));
+    const clearing = firstValueFrom(service.marcarTodasComoLidas());
+    api.get.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+    http.expectOne('/api/Notificacoes/Leitura/Todas').flush({
+      marcadas: 24, naoLidas: 0, limiteUtc: '2026-11-18T13:00:00Z',
+    });
+    await clearing;
+    http.expectOne('/api/Notificacoes/individual/Leitura').flush({ notificacao: item, naoLidas: 24 });
+    await individual;
+
+    expect(service.unreadCount()).toBe(0);
+    expect(service.notifications()).toEqual([]);
+  });
+
+  it('descarta a leitura individual assim que o logout encerra a conexão', async () => {
+    response = { ...response, items: [{ id: 'individual' }], naoLidas: 1 };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
+    const next = vi.fn();
+    const complete = vi.fn();
+    service.marcarComoLida('individual').subscribe({ next, complete });
+
+    await service.stopRealtime();
+    // O fluxo de logout encerra o hub antes de limpar a sessão de autenticação.
+    expect(loggedIn()).toBe(true);
+    http.expectOne('/api/Notificacoes/individual/Leitura').flush({
+      notificacao: { id: 'individual' }, naoLidas: 24,
+    });
+
+    expect(next).not.toHaveBeenCalled();
+    expect(complete).toHaveBeenCalledOnce();
+    expect(api.get).toHaveBeenCalledOnce();
     expect(service.notifications()).toEqual([]);
     expect(service.unreadCount()).toBe(0);
   });

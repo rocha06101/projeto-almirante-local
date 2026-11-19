@@ -193,7 +193,7 @@ export class UserEdit implements OnDestroy {
       return;
     }
     if (hasDataChanges && !ignorarDocumentosVazios) {
-      const documentosVazios = this.documentosObrigatoriosVazios(usuario, values);
+      const documentosVazios = this.documentosObrigatoriosVazios(usuario, payload);
       if (documentosVazios.length) {
         this.confirmarDocumentosVazios(documentosVazios);
         return;
@@ -207,7 +207,7 @@ export class UserEdit implements OnDestroy {
       return;
     }
 
-    if (payload.endereco && this.addressNeedsCep(values)) {
+    if (payload.endereco && (payload.endereco.cep === '' || this.addressNeedsCep(values))) {
       this.form.controls.cep.markAsTouched();
       const message = 'Informe um CEP válido antes de atualizar o endereço.';
       this.errorMessage.set(message);
@@ -350,8 +350,8 @@ export class UserEdit implements OnDestroy {
     this.form.reset(
       {
         nome: usuario.nome ?? '',
-        cpf: usuario.cpf ?? '',
-        rg: usuario.rg ?? '',
+        cpf: { value: usuario.cpf ?? '', disabled: this.isDocumentLocked(usuario, 'cpf') },
+        rg: { value: usuario.rg ?? '', disabled: this.isDocumentLocked(usuario, 'rg') },
         dataNascimento: apiDateToForm(usuario.dataNascimento),
         responsavelNome: usuario.responsavelNome ?? '',
         responsavelTelefone: usuario.responsavelTelefone ?? '',
@@ -387,15 +387,16 @@ export class UserEdit implements OnDestroy {
     rg.updateValueAndValidity({ emitEvent: false });
   }
 
-  private documentosObrigatoriosVazios(
-    usuario: UserModel,
-    values: ReturnType<typeof this.form.getRawValue>,
-  ): Array<'cpf' | 'rg'> {
+  private isDocumentLocked(usuario: UserModel, field: 'cpf' | 'rg'): boolean {
+    return !!usuario[field]?.trim() || (field === 'rg' && usuario.ehCin === true);
+  }
+
+  private documentosObrigatoriosVazios(usuario: UserModel, payload: PatchUserRequest): Array<'cpf' | 'rg'> {
     const campos: Array<'cpf' | 'rg'> = [];
-    if (!onlyDigits(values.cpf)) {
+    if (!onlyDigits(payload.cpf ?? usuario.cpf)) {
       campos.push('cpf');
     }
-    if (!(usuario.ehCin ?? false) && !values.rg.trim()) {
+    if (!usuario.ehCin && !(payload.rg ?? usuario.rg)?.trim()) {
       campos.push('rg');
     }
     return campos;
@@ -445,11 +446,12 @@ export class UserEdit implements OnDestroy {
     }
 
     const cpf = onlyDigits(values.cpf);
-    if (!usuario.cpf?.trim() && cpf) {
+    if (cpf && this.form.controls.cpf.enabled && !this.isDocumentLocked(usuario, 'cpf')) {
       payload.cpf = cpf;
     }
-    if (!usuario.ehCin && !usuario.rg?.trim() && values.rg.trim()) {
-      payload.rg = values.rg.trim();
+    const rg = values.rg.trim();
+    if (rg && this.form.controls.rg.enabled && !this.isDocumentLocked(usuario, 'rg')) {
+      payload.rg = rg;
     }
     if (this.changed(values.dataNascimento, apiDateToForm(usuario.dataNascimento))) {
       payload.dataNascimento = formDateToApi(values.dataNascimento);
@@ -544,11 +546,22 @@ export class UserEdit implements OnDestroy {
       .pipe(
         switchMap(request => {
           if (!request) {
+            this.cepFeedback.set({ status: 'neutral', message: '' });
             return of(null);
           }
           const { cep, clearAddress } = request;
+          const enderecoOriginal = this.usuario()?.endereco;
+          const mesmoCep = cep === onlyDigits(enderecoOriginal?.cep);
           if (clearAddress) {
-            this.form.patchValue({ logradouro: '', bairro: '' }, { emitEvent: false });
+            const endereco = !cep || mesmoCep ? enderecoOriginal : null;
+            this.form.patchValue(
+              { logradouro: endereco?.logradouro ?? '', bairro: endereco?.bairro ?? '' },
+              { emitEvent: false },
+            );
+          }
+          if (mesmoCep && cep) {
+            this.cepFeedback.set({ status: 'neutral', message: '' });
+            return of(null);
           }
           if (cep.length !== 8) {
             this.cepFeedback.set({
@@ -649,7 +662,11 @@ export class UserEdit implements OnDestroy {
   private handleSaveError(error: unknown): void {
     const fields = usuarioFieldErrors(error);
     for (const [name, message] of Object.entries(fields)) {
-      this.form.get(name)?.setErrors({ ...(this.form.get(name)?.errors ?? {}), server: message });
+      const field = name.startsWith('endereco.') ? name.slice('endereco.'.length).toLowerCase() : name;
+      const control = this.form.get(field);
+      if (control?.enabled) {
+        control.setErrors({ ...control.errors, server: message });
+      }
     }
     const message = describeUsuarioError(error, 'Não foi possível salvar as alterações. Tente novamente.');
     this.errorMessage.set(message);

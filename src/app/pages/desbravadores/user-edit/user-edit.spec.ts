@@ -225,6 +225,25 @@ describe('UserEdit', () => {
 
   });
 
+  it('completa o CPF ausente de usuário com CIN e ignora alteração programática do RG', async () => {
+    const original = { ...usuario, cpf: null, rg: null, ehCin: true };
+    await createComponent({ usuario: original });
+    const component = fixture.componentInstance;
+    const { cpf, rg } = component.form.controls;
+    expect(cpf.enabled).toBe(true);
+    expect(rg.disabled).toBe(true);
+    service.atualizarUsuarioParcial.mockReturnValueOnce(of({ ...original, cpf: '52998224725' }));
+    cpf.setValue('529.982.247-25');
+    rg.setValue('987654321');
+
+    component.salvar();
+
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledExactlyOnceWith(usuario.id, { cpf: '52998224725' });
+    expect(cpf.disabled).toBe(true);
+    expect(rg.value).toBe('');
+    expect(component.usuario()?.ehCin).toBe(true);
+  });
+
   it('envia CPF e RG preenchidos quando estavam ausentes no cadastro', async () => {
     await createComponent({
       usuario: { ...usuario, cpf: null, rg: null },
@@ -241,11 +260,28 @@ describe('UserEdit', () => {
     expect(service.atualizarUsuarioParcial.mock.calls[0][1]).not.toHaveProperty('ehCin');
   });
 
+  it('permite preencher somente o RG ausente quando o CPF já existe', async () => {
+    await createComponent({ usuario: { ...usuario, rg: null } });
+    const component = fixture.componentInstance;
+    const { cpf, rg } = component.form.controls;
+    expect(cpf.disabled).toBe(true);
+    expect(rg.enabled).toBe(true);
+    cpf.setValue('');
+    rg.setValue('98.765.432-1');
+
+    component.salvar();
+
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledExactlyOnceWith(usuario.id, { rg: '98.765.432-1' });
+  });
+
   it('ignora alterações programáticas em CPF e RG já cadastrados', async () => {
     await createComponent();
     const component = fixture.componentInstance;
-    component.form.controls.cpf.setValue('11144477735');
-    component.form.controls.rg.setValue('987654321');
+    const { cpf, rg } = component.form.controls;
+    cpf.enable();
+    rg.enable();
+    cpf.setValue('11144477735');
+    rg.setValue('987654321');
     component.emailResumo.setValue('outro@example.com');
     component.cargoResumo.setValue('Tesoureiro');
 
@@ -255,6 +291,35 @@ describe('UserEdit', () => {
     component.salvar();
 
     expect(service.atualizarUsuarioParcial).toHaveBeenCalledWith(usuario.id, { telefone: '21988887777' });
+  });
+
+  it('usa os documentos gravados quando valores programáticos em campos bloqueados estão vazios ou inválidos', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    component.form.patchValue({ cpf: '', rg: 'inválido', telefone: '21988887777' });
+
+    component.salvar();
+
+    expect(TestBed.inject(ToastService).toasts().some(toast => toast.type === 'warning')).toBe(false);
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledExactlyOnceWith(usuario.id, { telefone: '21988887777' });
+    expect(component.usuario()?.cpf).toBe(usuario.cpf);
+    expect(component.usuario()?.rg).toBe(usuario.rg);
+  });
+
+  it('ignora documentos ausentes preenchidos em controles desabilitados', async () => {
+    await createComponent({ usuario: { ...usuario, cpf: null, rg: null } });
+    const component = fixture.componentInstance;
+    component.form.controls.cpf.disable();
+    component.form.controls.rg.disable();
+    component.form.patchValue({ cpf: '52998224725', rg: '987654321', telefone: '21988887777' });
+
+    component.salvar();
+
+    const aviso = TestBed.inject(ToastService).toasts().find(toast => toast.type === 'warning');
+    expect(aviso?.message).toContain('CPF e RG');
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
+    aviso?.actions?.[0].onClick();
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledExactlyOnceWith(usuario.id, { telefone: '21988887777' });
   });
 
   it('não atualiza o avatar da sessão ao salvar a foto de outra pessoa', async () => {
@@ -833,24 +898,27 @@ describe('UserEdit', () => {
     expect(component.form.controls.complemento.value).toBe(endereco.complemento);
   });
 
-  it('envia null apenas no complemento removido', async () => {
+  it.each([
+    ['Bloco B', 'Bloco B'],
+    ['', null],
+  ])('envia somente complemento quando é preenchido com "%s"', async (complemento, esperado) => {
     await createComponent();
     const component = fixture.componentInstance;
-    component.form.controls.complemento.setValue('');
+    component.form.controls.complemento.setValue(complemento);
     component.salvar();
 
-    expect(service.atualizarUsuarioParcial).toHaveBeenCalledWith(usuario.id, { endereco: { complemento: null } });
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledWith(usuario.id, { endereco: { complemento: esperado } });
   });
 
   it('envia o CEP novo e aplica os dados oficiais e os campos zerados devolvidos pela API', async () => {
     await createComponent();
     const component = fixture.componentInstance;
     const endereco = { cep: '20040002', logradouro: 'Rua da Assembleia', bairro: 'Centro', numero: null, complemento: null };
-    service.consultarCep.mockReturnValueOnce(of(endereco));
+    service.consultarCep.mockReturnValueOnce(of({ ...endereco, logradouro: 'Prévia da consulta' }));
     service.atualizarUsuarioParcial.mockReturnValueOnce(of({ ...usuario, endereco }));
     component.form.controls.cep.setValue('20040-002');
     expect(service.consultarCep).toHaveBeenCalledWith('20040002');
-    expect(component.form.controls.logradouro.value).toBe(endereco.logradouro);
+    expect(component.form.controls.logradouro.value).toBe('Prévia da consulta');
 
     component.salvar();
 
@@ -858,6 +926,8 @@ describe('UserEdit', () => {
     expect(component.form.controls.numero.value).toBe('');
     expect(component.form.controls.complemento.value).toBe('');
     expect(component.form.controls.bairro.value).toBe(endereco.bairro);
+    expect(component.form.controls.logradouro.value).toBe(endereco.logradouro);
+    expect(component.cepFeedback().status).toBe('neutral');
   });
 
   it('exige CEP para adicionar número em um cadastro sem endereço', async () => {
@@ -884,7 +954,50 @@ describe('UserEdit', () => {
 
     expect(component.form.controls.cep.hasError('required')).toBe(true);
     expect(component.usuario()?.endereco).toEqual(usuario.endereco);
+    expect(component.form.controls.logradouro.value).toBe(usuario.endereco?.logradouro);
+    expect(component.form.controls.bairro.value).toBe(usuario.endereco?.bairro);
     expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
+
+    component.form.controls.cep.setValue('01001-000');
+    expect(component.hasUnsavedChanges()).toBe(false);
+    expect(service.consultarCep).not.toHaveBeenCalled();
+  });
+
+  it('bloqueia a remoção com todos os campos vazios mesmo sem o validador do CEP', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    component.form.patchValue({ cep: '', numero: '', complemento: '', telefone: '21987654321' });
+    component.form.controls.cep.disable();
+    expect(component.form.valid).toBe(true);
+
+    component.salvar();
+
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
+    expect(component.errorMessage()).toContain('Informe um CEP válido');
+    expect(component.usuario()?.endereco).toEqual(usuario.endereco);
+    expect(component.hasUnsavedChanges()).toBe(true);
+  });
+
+  it('mapeia erros de endereço do PATCH para os controles e conserva o cadastro confirmado e o rascunho', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    const mensagem = 'endereco.cep não encontrado no ViaCEP.';
+    const { cep, complemento } = component.form.controls;
+    service.atualizarUsuarioParcial.mockReturnValueOnce(throwError(() => new HttpErrorResponse({
+      status: 400,
+      error: { errors: { 'Endereco.Cep': [mensagem], 'Endereco.Complemento': ['Complemento inválido.'] } },
+    })));
+    component.form.patchValue({ cep: '20040002', complemento: 'Novo complemento' });
+
+    component.salvar();
+
+    expect(cep.getError('server')).toBe(mensagem);
+    expect(complemento.getError('server')).toBe('Complemento inválido.');
+    expect(cep.value).toBe('20040002');
+    expect(complemento.value).toBe('Novo complemento');
+    expect(component.usuario()?.endereco).toEqual(usuario.endereco);
+    expect(component.successMessage()).toBe('');
+    expect(component.errorMessage()).toBe(mensagem);
   });
 
   it('evita PATCH quando não há alterações e apresenta erro HTTP 403', async () => {

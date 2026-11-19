@@ -101,6 +101,15 @@ describe('User', () => {
     expect(atualizado).toEqual(resposta);
   });
 
+  it('envia endereço parcial por PATCH e preserva null explícito para limpar o complemento', () => {
+    const id = '14e31d19-c2c2-4ad8-9ee1-472846ee0a80';
+    service.atualizarUsuarioParcial(id, { endereco: { complemento: null } }).subscribe();
+
+    const req = http.expectOne({ method: 'PATCH', url: `/api/Usuarios/${id}` });
+    expect(req.request.serializeBody()).toBe('{"endereco":{"complemento":null}}');
+    req.flush({ id, endereco: { cep: '01001000', numero: '100', complemento: null } });
+  });
+
   it('carrega o perfil completo autenticado com GET /api/Me', () => {
     let profile: unknown;
     service.obterMeuPerfil().subscribe(resultado => (profile = resultado));

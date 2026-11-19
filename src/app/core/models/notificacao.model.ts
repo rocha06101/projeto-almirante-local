@@ -20,3 +20,9 @@ export interface MarcarLeituraResponse {
   notificacao: Notificacao;
   naoLidas: number;
 }
+
+export interface MarcarTodasLeiturasResponse {
+  marcadas: number;
+  naoLidas: number;
+  limiteUtc: string;
+}

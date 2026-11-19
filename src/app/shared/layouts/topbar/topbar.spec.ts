@@ -1,18 +1,27 @@
-import { provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
+import { Subject, throwError } from 'rxjs';
+import { MarcarTodasLeiturasResponse } from '../../../core/models/notificacao.model';
+import { ToastService } from '../../../core/services/toast.service';
 import { signal } from '@angular/core';
 import { AuthService } from '../../../core/services/auth';
 import { NotificacoesService } from '../../../core/services/notificacoes';
 import { TopbarComponent } from './topbar';
 
-describe('TopbarComponent avatar', () => {
+describe('TopbarComponent', () => {
   let fixture: ComponentFixture<TopbarComponent>;
   let auth: AuthService;
   let http: HttpTestingController;
+  const clear = vi.fn();
+  const unreadCount = signal(0);
+  const notifications = signal<{ id: string }[]>([]);
 
   beforeEach(() => {
+    clear.mockReset();
+    unreadCount.set(0);
+    notifications.set([]);
     TestBed.configureTestingModule({
       imports: [TopbarComponent],
       providers: [
@@ -22,15 +31,14 @@ describe('TopbarComponent avatar', () => {
         {
           provide: NotificacoesService,
           useValue: {
-            notifications: signal([]),
-            unreadCount: signal(0),
+            notifications,
+            unreadCount,
             isLoading: signal(false),
             isEmpty: signal(true),
             loadError: signal(null),
             stopRealtime: vi.fn(),
             marcarComoLida: vi.fn(),
-            confirmarLeitura: vi.fn(),
-            removerNotificacaoInexistente: vi.fn(),
+            marcarTodasComoLidas: clear,
           },
         },
       ],
@@ -73,4 +81,70 @@ describe('TopbarComponent avatar', () => {
     expect(page.querySelector<HTMLImageElement>('.large-avatar')?.getAttribute('src')).toBe('blob:shared-avatar');
     expect(http.match('/api/Me/foto')).toHaveLength(0);
   });
+  it('não chama o serviço quando não há pendências', () => {
+    http.expectOne('/api/Me/foto').flush(new Blob());
+    fixture.componentInstance.clearNotifications();
+    expect(clear).not.toHaveBeenCalled();
+  });
+
+  it('deixa o encerramento das notificações a cargo da sessão autenticada no logout', () => {
+    http.expectOne('/api/Me/foto').flush(new Blob());
+    const logout = new Subject<void>();
+    vi.spyOn(auth, 'logout').mockReturnValue(logout);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const { stopRealtime } = TestBed.inject(NotificacoesService);
+    fixture.componentInstance.toggleProfile();
+
+    fixture.componentInstance.logout();
+
+    expect(auth.logout).toHaveBeenCalledOnce();
+    expect(fixture.componentInstance.profileOpen()).toBe(false);
+    expect(stopRealtime).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+
+    logout.next();
+    logout.complete();
+    expect(navigate).toHaveBeenCalledExactlyOnceWith(['/login']);
+  });
+
+  it('exibe o botão com contador positivo e lista vazia e bloqueia cliques repetidos', () => {
+    http.expectOne('/api/Me/foto').flush(new Blob());
+    const batch = new Subject<MarcarTodasLeiturasResponse>();
+    clear.mockReturnValue(batch);
+    unreadCount.set(25);
+    fixture.componentInstance.toggleNotifications();
+    fixture.detectChanges();
+    const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.clear-btn')!;
+    button.click();
+    fixture.componentInstance.clearNotifications();
+    fixture.detectChanges();
+
+    expect(clear).toHaveBeenCalledOnce();
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    expect(button.textContent?.trim()).toBe('Limpando...');
+    expect(TestBed.inject(ToastService).toasts()).toEqual([]);
+
+    batch.next({ marcadas: 25, naoLidas: 0, limiteUtc: '2026-11-18T13:00:00Z' });
+    batch.complete();
+    expect(fixture.componentInstance.isClearingNotifications()).toBe(false);
+    expect(TestBed.inject(ToastService).toasts()).toEqual([expect.objectContaining({ type: 'success' })]);
+  });
+
+  it.each([401, 403, 0, 503])('mantém as pendências e permite nova tentativa após erro %i', status => {
+    http.expectOne('/api/Me/foto').flush(new Blob());
+    notifications.set([{ id: 'pending' }]);
+    unreadCount.set(1);
+    clear.mockReturnValue(throwError(() => new HttpErrorResponse({ status })));
+
+    fixture.componentInstance.clearNotifications();
+    expect(fixture.componentInstance.isClearingNotifications()).toBe(false);
+    expect(notifications()).toEqual([{ id: 'pending' }]);
+    expect(unreadCount()).toBe(1);
+    expect(TestBed.inject(ToastService).toasts()).toEqual([expect.objectContaining({ type: 'error' })]);
+
+    fixture.componentInstance.clearNotifications();
+    expect(clear).toHaveBeenCalledTimes(2);
+  });
+
 });

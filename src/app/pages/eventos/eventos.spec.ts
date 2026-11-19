@@ -110,6 +110,8 @@ describe('Eventos: HTTP, consultas e concorrência de navegação', () => {
     p.eventos.set([evento]); p.selecionarEvento('e1'); p.selecionarEvento('e1');
     expect(p.proximos()).toEqual([]); expect(p.modal()?.id).toBe('e1');
     p.modal.set(null); p.selecionarDia('2026-11-19');
+    expect(p.selectedEventId()).toBeNull(); expect(p.modal()).toBeNull();
+    p.selecionarDia('2026-11-19');
     expect(p.selectedEventId()).toBeNull(); expect(p.modal()).toEqual({ id: null, data: '2026-11-19' });
   });
   it('preserva seleção ao atualizar e limpa se desaparecer ou navegar para outro período', () => {

@@ -86,8 +86,16 @@ async function detalhes(page: Page) {
   await page.locator('.upcoming-card').first().click();
   await expect(page.getByRole('dialog').getByRole('heading', { name: 'Evento — Igreja' })).toBeVisible();
 }
+async function abrirCadastro(page: Page) {
+  const dia = page.getByRole('button', { name: '19 de novembro de 2026', exact: true });
+  await dia.click();
+  await expect(dia).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await dia.click();
+}
+
 async function preencher(page: Page) {
-  await page.getByRole('button', { name: '19 de novembro de 2026', exact: true }).click();
+  await abrirCadastro(page);
   await page.getByLabel('Título', { exact: true }).fill('Trilha na Praia do Sol');
   await page.getByLabel('Descrição', { exact: true }).fill('Saída às 8h\n<b>Levar água.</b>');
   await page.getByLabel('Local', { exact: true }).fill('Praia');
@@ -127,7 +135,7 @@ for (const width of [320, 768, 1280, 1440]) {
     await expect(painel).toBeInViewport({ ratio: 1 });
     await page.screenshot({ path: info.outputPath(`seletor-${width}.png`), animations: 'disabled' });
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: '19 de novembro de 2026', exact: true }).click();
+    await abrirCadastro(page);
     await expect(page.getByLabel('Data', { exact: true })).toHaveValue('2026-11-19');
     await expect(page.getByLabel('Título', { exact: true })).toBeVisible();
     await expect(page.getByLabel('Descrição', { exact: true })).toBeVisible();
@@ -158,7 +166,9 @@ for (const width of [320, 768, 1280, 1440]) {
 }
 
 test('navega meses, volta a hoje, seleciona data e pagina eventos futuros', async ({ page }) => {
-  const estado = await preparar(page); await abrir(page);
+  const estado = await preparar(page);
+  estado.eventos.push(novo(6, '2026-11-23', 'Ginásio'), novo(7, '2026-11-24', 'Quadra'));
+  await abrir(page);
   await page.getByRole('button', { name: 'Próximo mês', exact: true }).click();
   await expect(page.locator('.month-navigation h2')).toHaveText(/Dezembro\s+de\s+2026/);
   await expect.poll(() => estado.chamadas.some(c => c.url.search === '?dataInicial=2026-11-30&dataFinal=2027-01-03')).toBe(true);
@@ -166,15 +176,57 @@ test('navega meses, volta a hoje, seleciona data e pagina eventos futuros', asyn
   await expect(page.locator('.month-navigation h2')).toHaveText(/Novembro\s+de\s+2026/);
   await expect(page.getByRole('button', { name: 'Atualizar', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Novo evento', exact: true })).toHaveCount(0);
-  await page.locator('.fc-day[data-date="2026-11-19"]').click({ position: { x: 12, y: 50 } });
+  const diaVazio = page.locator('.fc-day[data-date="2026-11-19"]');
+  for (const data of ['2026-11-19', '2026-11-20', '2026-11-19']) {
+    await page.locator(`.fc-day[data-date="${data}"]`).click({ position: { x: 12, y: 50 } });
+    await expect(page.locator('.selected-day')).toHaveAttribute('data-date', data);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  }
+  await diaVazio.click({ position: { x: 12, y: 50 } });
   await expect(page.getByLabel('Data', { exact: true })).toHaveValue('2026-11-19');
   await page.keyboard.press('Escape');
+  await expect(page.locator('.selected-day')).toHaveAttribute('data-date', '2026-11-19');
   await page.getByRole('button', { name: 'Hoje', exact: true }).click();
   await expect(page.locator('.selected-day')).toHaveAttribute('data-date', hoje);
   await expect(page.locator('app-proximos-eventos')).not.toContainText('Praça Central');
   await page.getByRole('button', { name: 'Mais eventos' }).click();
   await expect(page.locator('.upcoming-card')).toContainText('Sede do clube');
 });
+
+for (const paginas of [[3], [5], [5, 1], [5, 5, 2]]) {
+  const total = paginas.reduce((soma, quantidade) => soma + quantidade, 0);
+  test(`lista ${total} eventos em páginas de ${paginas.join(', ')} cards`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const estado = await preparar(page);
+    const eventos = Array.from({ length: total }, (_, i) => novo(i + 1, `2026-11-${17 + i}`, `Local ${i + 1}`));
+    estado.eventos = [...eventos].reverse();
+    await abrir(page);
+
+    const cards = page.locator('.upcoming-card');
+    const paginacao = page.getByRole('navigation', { name: 'Paginação de próximos eventos' });
+    const proxima = page.getByRole('button', { name: 'Mais eventos' });
+    const anterior = page.getByRole('button', { name: 'Eventos anteriores' });
+    for (const [pagina, quantidade] of paginas.entries()) {
+      await expect(cards).toHaveCount(quantidade);
+      expect(await cards.evaluateAll(botoes => botoes.map(botao => botao.getAttribute('data-event-id'))))
+        .toEqual(eventos.slice(pagina * 5, pagina * 5 + quantidade).map(evento => evento.id));
+      const lista = page.locator('.upcoming-list');
+      expect(await lista.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+      if (paginas.length === 1) {
+        await expect(paginacao).toHaveCount(0);
+      } else {
+        await expect(paginacao).toContainText(`${pagina + 1} de ${paginas.length}`);
+        if (pagina === 0) await expect(anterior).toBeDisabled();
+        if (pagina + 1 < paginas.length) await proxima.click();
+        else await expect(proxima).toBeDisabled();
+      }
+    }
+    if (paginas.length > 1) {
+      await anterior.click();
+      await expect(cards).toHaveCount(5);
+    }
+  });
+}
 
 test('cadastro exige confirmação e preserva idempotência após resposta incerta e reabertura', async ({ page }) => {
   const estado = await preparar(page); estado.erroPost = 503; await abrir(page); await preencher(page);
@@ -208,9 +260,16 @@ test('cadastro exige confirmação e preserva idempotência após resposta incer
 });
 
 test('edição mantém versão, exige motivo ao remover membro e recarrega após 409', async ({ page }) => {
-  const estado = await preparar(page); await abrir(page); await detalhes(page);
+  const estado = await preparar(page);
+  estado.eventos[0].alimentacao.valor = 0;
+  estado.eventos[0].valorPorMembro = 15;
+  estado.eventos[0].total = 30;
+  await abrir(page); await detalhes(page);
   await page.getByRole('button', { name: 'Editar evento' }).click();
   await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Evento — Igreja');
+  await expect(page.getByLabel('Transporte (R$)', { exact: true })).toHaveValue('12.5');
+  await expect(page.getByLabel('Alimentação (R$)', { exact: true })).toHaveValue('0');
+  await expect(page.getByLabel('Seguro (R$)', { exact: true })).toHaveValue('2.5');
   await expect(page.getByLabel('Caio Lima', { exact: true })).toHaveCount(0);
   await page.getByLabel('Bruno Santos', { exact: true }).uncheck();
   await expect(page.getByRole('button', { name: 'Revisar evento' })).toBeDisabled();
@@ -240,8 +299,17 @@ test('edição mantém versão, exige motivo ao remover membro e recarrega após
 
 });
 
-test('exclusão confirma motivo e versão, atualiza calendário e próximos', async ({ page }) => {
-  const estado = await preparar(page); await abrir(page); await detalhes(page);
+test('exclusão confirma motivo e versão, atualiza calendário e ajusta a última página', async ({ page }) => {
+  const estado = await preparar(page);
+  estado.eventos = Array.from({ length: 6 }, (_, i) => novo(i + 1, `2026-11-${17 + i}`, `Local ${i + 1}`));
+  await abrir(page);
+  const alvo = estado.eventos[5];
+  const calendario = page.locator(`.fc-day[data-date="${alvo.dataEvento}"] .fc-daygrid-event`);
+  const card = page.locator(`.upcoming-card[data-event-id="${alvo.id}"]`);
+  const paginacao = page.getByRole('navigation', { name: 'Paginação de próximos eventos' });
+  await calendario.click();
+  await expect(paginacao).toContainText('2 de 2');
+  await card.click();
   await page.getByRole('button', { name: 'Excluir evento', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Confirmar exclusão' })).toBeDisabled();
   await page.getByLabel('Motivo da exclusão').fill('Evento cancelado');
@@ -249,8 +317,11 @@ test('exclusão confirma motivo e versão, atualiza calendário e próximos', as
   await page.getByRole('button', { name: 'Confirmar exclusão' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
   expect(estado.chamadas.find(c => c.method === 'DELETE')!.body).toEqual({ motivo: 'Evento cancelado', versao: 'AAAAAAAABAA=' });
-  await expect(page.locator('.fc-daygrid-event').filter({ hasText: 'Igreja' })).toHaveCount(0);
-  await expect(page.locator('.upcoming-card').filter({ hasText: 'Igreja' })).toHaveCount(0);
+  await expect(calendario).toHaveCount(0);
+  await expect(card).toHaveCount(0);
+  await expect(paginacao).toHaveCount(0);
+  await expect(page.locator('.upcoming-card')).toHaveCount(5);
+  await expect(page.locator('.upcoming-card[aria-pressed="true"]')).toHaveCount(0);
 });
 
 test('bloqueios financeiros e grupos preservam cadastros individuais', async ({ page }) => {
@@ -269,7 +340,7 @@ test('bloqueios financeiros e grupos preservam cadastros individuais', async ({ 
 test('seleção em massa, exceções manuais e custos independentes no cadastro', async ({ page }) => {
   const estado = await preparar(page);
   await abrir(page);
-  await page.getByRole('button', { name: '19 de novembro de 2026', exact: true }).click();
+  await abrirCadastro(page);
   const todos = page.getByLabel('Todos', { exact: true });
   const diretoria = page.getByLabel('Diretoria', { exact: true });
   const desbravadores = page.getByLabel('Desbravadores', { exact: true });
@@ -288,6 +359,30 @@ test('seleção em massa, exceções manuais e custos independentes no cadastro'
   await expect(bruno).toBeChecked();
   await expect(ana).not.toBeChecked();
   await expect(page.getByLabel('Caio Lima', { exact: true })).toBeChecked();
+
+  const custosEstimados = page.locator('.estimate span');
+  const estimativa = custosEstimados.filter({ hasText: 'Estimativa por participante' }).locator('strong');
+  const totalEstimado = custosEstimados.filter({ hasText: 'Total estimado' }).locator('strong');
+  for (const custo of ['Transporte', 'Alimentação', 'Seguro']) {
+    const caixa = page.getByLabel(custo, { exact: true });
+    const valor = page.getByLabel(`${custo} (R$)`, { exact: true });
+    await expect(valor).toHaveAttribute('placeholder', '0');
+    await expect(valor).toHaveValue('');
+    await caixa.check();
+    await valor.pressSequentially('150');
+    await expect(valor).toHaveValue('150');
+    await expect(estimativa).toContainText('150,00');
+    await expect(totalEstimado).toContainText('300,00');
+    await valor.clear();
+    await expect(valor).toHaveValue('');
+    await expect(estimativa).toHaveText(/R\$\s*0,00/);
+    await expect(totalEstimado).toHaveText(/R\$\s*0,00/);
+    await valor.press('0');
+    await expect(valor).toHaveValue('0');
+    await caixa.uncheck();
+    await expect(valor).toBeDisabled();
+    await expect(valor).toHaveValue('0');
+  }
 
   const seguro = page.getByLabel('Seguro', { exact: true });
   const valorSeguro = page.getByLabel('Seguro (R$)', { exact: true });
@@ -397,6 +492,8 @@ test('seleção pelo ID sincroniza calendário e lista sem consultas até o segu
   await expect(calendario).toHaveText('Evento — Igreja');
   await expect(calendario).not.toContainText('participantes');
   await expect(lateral).toContainText('2 participantes');
+  await page.getByRole('button', { name: '17 de novembro de 2026', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await calendario.click();
   await expect(lateral).toHaveAttribute('aria-pressed', 'true');
   await expect(calendario).toHaveClass(/selected-event/);
@@ -404,10 +501,13 @@ test('seleção pelo ID sincroniza calendário e lista sem consultas até o segu
   const outro = page.locator('.upcoming-card').nth(1);
   await outro.click();
   await expect(lateral).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.selected-day')).toHaveCount(1);
+  await expect(page.locator('.selected-day')).toHaveAttribute('data-date', '2026-11-18');
   await expect(page.locator('.fc-day[data-date="2026-11-18"] .fc-daygrid-event')).toHaveClass(/selected-event/);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(estado.chamadas).toHaveLength(consultas);
   await calendario.click();
+  await expect(page.locator('.selected-day')).toHaveAttribute('data-date', hoje);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await lateral.click();
   await expect(page.getByRole('dialog')).toBeVisible();
@@ -422,19 +522,67 @@ test('seleção pelo ID sincroniza calendário e lista sem consultas até o segu
   expect(estado.chamadas.every(c => c.method === 'GET')).toBe(true);
 });
 
+test('última página navega até o mês e o ano do evento sem repetir a consulta', async ({ page }) => {
+  const estado = await preparar(page);
+  const alvo = novo(8, '2027-01-17', 'Acampamento de janeiro');
+  estado.eventos.push(novo(7, '2026-11-27', 'Quadra'), alvo);
+  await abrir(page);
+  await page.getByRole('button', { name: 'Mais eventos' }).click();
+  const card = page.locator(`.upcoming-card[data-event-id="${alvo.id}"]`);
+  await card.click();
+  await expect(page.locator('.month-navigation h2')).toHaveText(/Janeiro\s+de\s+2027/);
+  await expect(page.locator('.selected-day')).toHaveAttribute('data-date', alvo.dataEvento);
+  await expect(page.locator('.selected-day .selected-event')).toHaveText('Evento — Acampamento de janeiro');
+  await expect(card).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('navigation', { name: 'Paginação de próximos eventos' })).toContainText('2 de 2');
+  expect(estado.chamadas.filter(c => c.url.pathname === '/api/Eventos')).toHaveLength(3);
+
+  await page.getByRole('button', { name: 'Mês anterior' }).click();
+  await expect(page.locator('.month-navigation h2')).toHaveText(/Dezembro\s+de\s+2026/);
+  await expect(page.locator('.selected-day, .selected-event')).toHaveCount(0);
+  await expect(card).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('contorno de seleção usa as quatro cores dos eventos no calendário e na lista', async ({ page }) => {
+  const estado = await preparar(page);
+  estado.eventos = Array.from({ length: 4 }, (_, i) => novo(i + 1, `2026-11-${17 + i}`, `Local ${i + 1}`));
+  await abrir(page);
+
+  const cores = new Set<string>();
+  for (const [indice, dados] of estado.eventos.entries()) {
+    const evento = page.locator(`.fc-day[data-date="${dados.dataEvento}"] .fc-daygrid-event`);
+    const card = page.locator(`.upcoming-card[data-event-id="${dados.id}"]`);
+    const cor = await card.evaluate(el => getComputedStyle(el).borderLeftColor);
+    cores.add(cor);
+    await expect(evento).toHaveCSS('border-left-color', cor);
+    await expect(evento).toHaveCSS('box-shadow', 'none');
+    await expect(card).toHaveCSS('box-shadow', 'none');
+    await expect(card).not.toHaveCSS('border-right-color', cor);
+
+    const origem = indice % 2 === 0 ? evento : card;
+    await origem.click();
+    await expect(card).toHaveAttribute('aria-pressed', 'true');
+    await expect(evento).toHaveCSS('box-shadow', `${cor} 0px 0px 0px 2px inset`);
+    await expect(card).toHaveCSS('box-shadow', `${cor} 0px 0px 0px 1px`);
+    for (const lado of ['top', 'right', 'bottom', 'left']) {
+      await expect(card).toHaveCSS(`border-${lado}-color`, cor);
+    }
+  }
+  expect(cores.size).toBe(4);
+});
+
 test('evento passado ausente da lista abre normalmente; dia vazio e navegação limpam seleção', async ({ page }) => {
   await preparar(page); await abrir(page);
   const passado = page.locator('.fc-daygrid-event').filter({ hasText: 'Praça Central' });
   await passado.click();
   await expect(passado).toHaveClass(/selected-event/);
   await expect(page.locator('.upcoming-card[aria-pressed="true"]')).toHaveCount(0);
-  await expect(page.locator('.upcoming-card')).toHaveCount(3);
+  await expect(page.locator('.upcoming-card')).toHaveCount(4);
   await passado.click();
   await expect(page.getByRole('dialog').getByRole('heading', { name: 'Evento — Praça Central' })).toBeVisible();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '19 de novembro de 2026', exact: true }).click();
   await expect(page.locator('.selected-event')).toHaveCount(0);
-  await page.locator('.backdrop').click({ position: { x: 2, y: 2 } });
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await passado.click();
   await page.getByRole('button', { name: 'Próximo mês', exact: true }).click();
@@ -443,27 +591,108 @@ test('evento passado ausente da lista abre normalmente; dia vazio e navegação 
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('seleção localiza próxima página e rola apenas a lista lateral', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 720 });
-  const estado = await preparar(page);
-  estado.eventos.push(...[6, 7, 8, 9, 10].map(id => novo(id, `2026-11-${19 + id}`, 'Local '.repeat(35))));
-  await abrir(page);
-  const scroll = await page.evaluate(() => scrollY);
-  const evento = page.locator('.fc-day[data-date="2026-11-27"] .fc-daygrid-event');
-  await evento.click();
-  const card = page.locator('.upcoming-card[aria-pressed="true"]');
-  await expect(card).toHaveAttribute('data-event-id', estado.eventos.find(e => e.dataEvento === '2026-11-27')!.id);
-  await expect(card).toBeInViewport();
-  expect(await page.evaluate(() => scrollY)).toBe(scroll);
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-});
+for (const { width, reduzido, alvo } of [
+  { width: 1280, reduzido: false, alvo: 10 },
+  { width: 390, reduzido: true, alvo: 12 },
+]) {
+  test(`calendário revela o card selecionado e preserva a paginação manual em ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 720 });
+    await page.emulateMedia({ reducedMotion: reduzido ? 'reduce' : 'no-preference' });
+    const estado = await preparar(page);
+    estado.eventos = Array.from({ length: 12 }, (_, i) => ({
+      ...novo(i + 1, `2026-11-${17 + i}`, 'Local '.repeat(35)),
+      titulo: `Evento ${i + 1}`,
+    }));
+    await abrir(page);
+    await page.evaluate(() => {
+      const scrollIntoView = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = function (opcoes) {
+        if (this.matches('.upcoming-card') && typeof opcoes === 'object') {
+          this.setAttribute('data-scroll-behavior', opcoes.behavior ?? '');
+        }
+        scrollIntoView.call(this, opcoes);
+      };
+    });
+
+    const paginacao = page.getByRole('navigation', { name: 'Paginação de próximos eventos' });
+    const anterior = page.getByRole('button', { name: 'Eventos anteriores' });
+    const proxima = page.getByRole('button', { name: 'Mais eventos' });
+    const dados = estado.eventos[alvo - 1];
+    const evento = page.locator(`.fc-day[data-date="${dados.dataEvento}"] .fc-daygrid-event`);
+    const card = page.locator(`.upcoming-card[data-event-id="${dados.id}"]`);
+    const numeroPagina = alvo === 10 ? 2 : 3;
+    await expect(paginacao).toContainText('1 de 3');
+    const scroll = await page.evaluate(() => scrollY);
+    await evento.click();
+    await expect(paginacao).toContainText(`${numeroPagina} de 3`);
+    await expect(evento).toHaveClass(/selected-event/);
+    await expect(card).toHaveAttribute('aria-pressed', 'true');
+    await expect(card).toHaveCSS('border-right-color', await evento.evaluate(el => getComputedStyle(el).borderLeftColor));
+    await expect(card).toHaveAttribute('data-scroll-behavior', reduzido ? 'instant' : 'smooth');
+    await expect(card).toBeInViewport({ ratio: 1 });
+    if (width >= 992) {
+      expect(await page.evaluate(() => scrollY)).toBe(scroll);
+      expect(await page.locator('.upcoming-list').evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+    } else {
+      expect(await page.evaluate(() => scrollY)).toBeGreaterThan(scroll);
+      expect(await page.locator('.upcoming-list').evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+    }
+    expect((await measureOverflow(page)).documentOverflow).toBeLessThanOrEqual(1);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    await anterior.click();
+    await expect(paginacao).toContainText(`${numeroPagina - 1} de 3`);
+    await expect(card).toHaveCount(0);
+    await expect(evento).toHaveClass(/selected-event/);
+    await proxima.click();
+    await expect(card).toHaveAttribute('aria-pressed', 'true');
+    await expect(card).not.toHaveAttribute('data-scroll-behavior');
+
+    await anterior.click();
+    await evento.click();
+    await expect(paginacao).toContainText(`${numeroPagina} de 3`);
+    await expect(page.getByRole('dialog')).toBeVisible();
+  });
+}
+
+for (const constaNaLista of [true, false]) {
+  test(`seleção antes da resposta dos próximos eventos ${constaNaLista ? 'com' : 'sem'} o card correspondente`, async ({ page }) => {
+    const estado = await preparar(page);
+    estado.eventos = Array.from({ length: 7 }, (_, i) => novo(i + 1, `2026-11-${17 + i}`, `Local ${i + 1}`));
+    const alvo = estado.eventos[6];
+    const resposta = Promise.withResolvers<void>();
+    await page.route(url => url.pathname === '/api/Eventos' && url.searchParams.get('dataInicial') === hoje, async rota => {
+      await resposta.promise;
+      await rota.fulfill({ json: {
+        items: constaNaLista ? estado.eventos : estado.eventos.slice(0, -1),
+        dataInicial: hoje, dataFinal: '2027-11-17', dataMinimaCadastro: '2026-11-01',
+      } });
+    });
+    await abrir(page);
+    try {
+      await expect(page.getByText('Carregando próximos eventos…')).toBeVisible();
+      const evento = page.locator(`.fc-day[data-date="${alvo.dataEvento}"] .fc-daygrid-event`);
+      await evento.click();
+      await expect(evento).toHaveClass(/selected-event/);
+    } finally {
+      resposta.resolve();
+    }
+
+    const paginacao = page.getByRole('navigation', { name: 'Paginação de próximos eventos' });
+    const selecionado = page.locator('.upcoming-card[aria-pressed="true"]');
+    await expect(paginacao).toContainText(constaNaLista ? '2 de 2' : '1 de 2');
+    await expect(page.locator('.fc-daygrid-event.selected-event')).toHaveText(alvo.titulo!);
+    if (constaNaLista) await expect(selecionado).toHaveAttribute('data-event-id', alvo.id);
+    else await expect(selecionado).toHaveCount(0);
+  });
+}
 
 for (const edicao of [false, true]) {
   test(`${edicao ? 'edição' : 'criação'} protege alterações no backdrop, Escape e cancelar`, async ({ page }) => {
     const estado = await preparar(page); await abrir(page);
     if (edicao) {
       await detalhes(page); await page.getByRole('button', { name: 'Editar evento', exact: true }).click();
-    } else await page.getByRole('button', { name: '19 de novembro de 2026', exact: true }).click();
+    } else await abrirCadastro(page);
     await page.getByLabel('Título', { exact: true }).fill('Título ainda não salvo');
     await page.getByLabel('Descrição', { exact: true }).fill('Descrição preservada');
     await page.getByLabel('Local', { exact: true }).click();
@@ -492,7 +721,7 @@ test('edição intacta fecha pelo backdrop; Escape fecha primeiro o seletor nati
   await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Evento — Igreja');
   await page.locator('.backdrop').click({ position: { x: 2, y: 2 } });
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.getByRole('button', { name: '19 de novembro de 2026', exact: true }).click();
+  await abrirCadastro(page);
   const data = page.getByLabel('Data', { exact: true });
   const caixa = await data.boundingBox();
   await data.click({ position: { x: caixa!.width - 16, y: caixa!.height / 2 } });
@@ -514,7 +743,7 @@ test('título completo e participantes preservados no evento de 21/11/2026', asy
   await evento.click();
   const lateral = page.locator('.upcoming-card[aria-pressed="true"]');
   await expect(lateral).toContainText('15 participantes');
-  await expect(lateral).toHaveCSS('border-right-color', 'rgb(52, 64, 157)');
+  await expect(lateral).toHaveCSS('border-right-color', await evento.evaluate(el => getComputedStyle(el).borderLeftColor));
   const titulo = page.locator('.calendar-event strong').filter({ hasText: 'Evento com título muito extenso' });
   await expect(titulo).toHaveCSS('text-overflow', 'ellipsis');
   expect(await titulo.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
@@ -530,8 +759,15 @@ test('dias com vários eventos continuam consultáveis pelo popover do calendár
   estado.eventos.push(novo(31, hoje, 'Passeio A'), novo(32, hoje, 'Passeio B'));
   await abrir(page);
   await page.locator(`.fc-day[data-date="${hoje}"] .fc-daygrid-more-link`).click();
+  const outro = page.locator('.fc-popover .fc-event').filter({ hasText: 'Passeio A' });
+  await outro.click();
+  await expect(outro).toHaveClass(/selected-event/);
+  await expect(page.locator('.fc-daygrid-day.selected-day')).toHaveAttribute('data-date', hoje);
   const card = page.locator('.fc-popover .fc-event').filter({ hasText: 'Passeio B' });
   await card.click();
+  await expect(outro).not.toHaveClass(/selected-event/);
+  await expect(card).toHaveClass(/selected-event/);
+  await expect(page.locator('.fc-daygrid-day.selected-day')).toHaveAttribute('data-date', hoje);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('.upcoming-card[aria-pressed="true"]')).toContainText('Passeio B');
   await card.click();

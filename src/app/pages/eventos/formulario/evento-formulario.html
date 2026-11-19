@@ -73,14 +73,14 @@
         <legend>Custos por participante</legend>
         <label class="check"><input type="checkbox" name="cobrarTransporte" [ngModel]="!modelo.transporte.ehGratis"
           (ngModelChange)="modelo.transporte.ehGratis = !$event">Transporte</label>
-        <label>Transporte (R$)<input type="number" name="transporte" min="0" step="0.01"
+        <label>Transporte (R$)<input type="number" name="transporte" min="0" step="0.01" placeholder="0"
           [required]="!modelo.transporte.ehGratis" [(ngModel)]="modelo.transporte.valor" [disabled]="modelo.transporte.ehGratis"></label>
         <label class="check"><input type="checkbox" name="cobrarAlimentacao" [ngModel]="!modelo.alimentacao.individual"
           (ngModelChange)="modelo.alimentacao.individual = !$event">Alimentação</label>
-        <label>Alimentação (R$)<input type="number" name="alimentacao" min="0" step="0.01"
+        <label>Alimentação (R$)<input type="number" name="alimentacao" min="0" step="0.01" placeholder="0"
           [required]="!modelo.alimentacao.individual" [(ngModel)]="modelo.alimentacao.valor" [disabled]="modelo.alimentacao.individual"></label>
         <label class="check"><input type="checkbox" name="incluirSeguro" [(ngModel)]="seguroAtivo">Seguro</label>
-        <label>Seguro (R$)<input type="number" name="seguro" min="0" step="0.01" [required]="seguroAtivo"
+        <label>Seguro (R$)<input type="number" name="seguro" min="0" step="0.01" placeholder="0" [required]="seguroAtivo"
           [(ngModel)]="modelo.seguroObrigatorio" [disabled]="!seguroAtivo"></label>
       </fieldset>
       @if (reducaoComPagamento()) { <label>Motivo da redução ou zeragem<textarea name="motivo" required maxlength="255" [(ngModel)]="motivo"></textarea></label> }

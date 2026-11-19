@@ -106,6 +106,11 @@ export class EventosCalendario implements OnChanges {
     this.calendar.getApi().gotoDate(data);
   }
 
+  mostrarData(data: string): void {
+    const [ano, mes] = data.split('-').map(Number);
+    if (ano !== this.ano() || mes - 1 !== this.mes()) this.irPara(mes - 1, ano);
+  }
+
   @HostListener('document:click', ['$event'])
   cliqueFora(evento: MouseEvent): void {
     if (this.painel() && !this.seletor.nativeElement.contains(evento.target as Node)) this.fecharSeletor();
@@ -160,8 +165,17 @@ export class EventosCalendario implements OnChanges {
       this.ano.set(arg.view.currentStart.getFullYear());
       this.periodo.emit(periodoInclusivo(arg.start, arg.end));
     },
-    dateClick: arg => this.selecionarDia.emit(arg.dateStr),
-    eventClick: arg => { arg.jsEvent.preventDefault(); this.selecionarEvento.emit(arg.event.id); },
+    dateClick: arg => {
+      // O botão do dia já trata seu próprio clique, inclusive por teclado.
+      const alvo = arg.jsEvent.target;
+      if (alvo instanceof Element && alvo.closest('.day-button')) return;
+      this.selecionarDia.emit(arg.dateStr);
+    },
+    eventClick: arg => {
+      arg.jsEvent.preventDefault();
+      arg.jsEvent.stopPropagation();
+      this.selecionarEvento.emit(arg.event.id);
+    },
   };
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['eventos']) this.eventosVisuais = mapearEventos(this.eventos);

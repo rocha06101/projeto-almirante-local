@@ -66,8 +66,8 @@
   "options": {
     "proxyConfig": "proxy.conf.mjs",
     "ssl": true,
-    "sslCert": "certs/localhost.crt",
-    "sslKey": "certs/localhost.key"
+    "sslCert": "certs/localhost.pem",
+    "sslKey": "certs/localhost-key.pem"
   },
   "configurations": {
     "production": {

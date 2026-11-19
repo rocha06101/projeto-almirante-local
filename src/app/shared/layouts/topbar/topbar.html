@@ -114,9 +114,15 @@
           <div class="dropdown notification-dropdown" id="notification-dropdown">
             <div class="dropdown-header">
               <h4>Notificações</h4>
-              @if (notifications().length > 0) {
-                <button type="button" class="clear-btn" (click)="clearNotifications()">
-                  Limpar
+              @if (hasPendingNotifications() || isClearingNotifications()) {
+                <button
+                  type="button"
+                  class="clear-btn"
+                  [disabled]="isClearingNotifications()"
+                  [attr.aria-busy]="isClearingNotifications()"
+                  (click)="clearNotifications()"
+                >
+                  {{ isClearingNotifications() ? 'Limpando...' : 'Limpar' }}
                 </button>
               }
             </div>

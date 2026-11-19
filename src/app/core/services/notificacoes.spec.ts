@@ -1,7 +1,10 @@
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { WritableSignal, signal } from '@angular/core';
 import { HubConnectionState } from '@microsoft/signalr';
-import { of } from 'rxjs';
+import { firstValueFrom, of, Subject } from 'rxjs';
+import { MarcarTodasLeiturasResponse, NotificacoesPendentesResponse } from '../models/notificacao.model';
 import { ApiService } from './api';
 import { AuthService } from './auth';
 import { NotificacoesService } from './notificacoes';
@@ -43,9 +46,10 @@ vi.mock('@microsoft/signalr', () => ({
 describe('NotificacoesService realtime', () => {
   let service: NotificacoesService;
   let loggedIn: WritableSignal<boolean>;
-  let auth: { isLoggedIn: WritableSignal<boolean>; accessTokenForSignalR: ReturnType<typeof vi.fn> };
+  let auth: { user: WritableSignal<{ id: string }>; isLoggedIn: WritableSignal<boolean>; accessTokenForSignalR: ReturnType<typeof vi.fn> };
   let api: { get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn> };
-  let response: { items: { id: string; titulo: string }[]; naoLidas: number; pageSize: number; proximoCursor: null };
+  let response: NotificacoesPendentesResponse;
+  let http: HttpTestingController;
 
   beforeEach(() => {
     signalrMocks.connection.state = HubConnectionState.Disconnected;
@@ -63,26 +67,30 @@ describe('NotificacoesService realtime', () => {
 
     loggedIn = signal(true);
     auth = {
+      user: signal({ id: 'user-1' }),
       isLoggedIn: loggedIn,
       accessTokenForSignalR: vi.fn(async () => 'fresh-token'),
     };
     response = { items: [], naoLidas: 0, pageSize: 20, proximoCursor: null };
-    api = {
-      get: vi.fn(() => of(response)),
-      post: vi.fn(),
-    };
-
     TestBed.configureTestingModule({
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
         NotificacoesService,
         { provide: AuthService, useValue: auth },
-        { provide: ApiService, useValue: api },
       ],
     });
+    const realApi = TestBed.inject(ApiService);
+    api = {
+      get: vi.spyOn(realApi, 'get').mockImplementation(() => of(response)),
+      post: vi.spyOn(realApi, 'post'),
+    };
     service = TestBed.inject(NotificacoesService);
+    http = TestBed.inject(HttpTestingController);
   });
 
   afterEach(async () => {
+    http.verify();
     await service.stopRealtime();
     TestBed.resetTestingModule();
   });
@@ -117,8 +125,10 @@ describe('NotificacoesService realtime', () => {
       naoLidas: 1,
     };
 
+    response = { ...response, items: [payload.notificacao], naoLidas: 1 };
     notify?.(payload);
     notify?.(payload);
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
 
     expect(service.notifications()).toEqual([payload.notificacao]);
     expect(service.unreadCount()).toBe(1);
@@ -164,4 +174,121 @@ describe('NotificacoesService realtime', () => {
     expect(service.notifications()).toEqual([]);
     expect(service.unreadCount()).toBe(0);
   });
+  it.each([1, 20, 25])('envia um único POST sem corpo para %i pendências', async total => {
+    response = {
+      ...response,
+      items: Array.from({ length: Math.min(20, total) }, (_, id) => ({
+        id: String(id), criadaEmUtc: '2026-11-18T12:00:00Z',
+      })),
+      naoLidas: total,
+    };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(total));
+
+    const result = { marcadas: total, naoLidas: 0, limiteUtc: '2026-11-18T13:00:00Z' };
+    response = { ...response, items: [], naoLidas: 0 };
+
+    const clearing = firstValueFrom(service.marcarTodasComoLidas());
+    const request = http.expectOne({ url: '/api/Notificacoes/Leitura/Todas', method: 'POST' });
+    expect(request.request.body).toBeNull();
+    request.flush(result);
+
+    await expect(clearing).resolves.toEqual(result);
+    expect(api.post).toHaveBeenCalledOnce();
+    expect(service.notifications()).toEqual([]);
+    expect(service.unreadCount()).toBe(0);
+    expect(service.isEmpty()).toBe(true);
+  });
+
+  it('mantém o estado quando o POST devolve um corpo inválido', async () => {
+    response = { ...response, items: [{ id: 'pending' }], naoLidas: 1 };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
+
+    const clearing = firstValueFrom(service.marcarTodasComoLidas());
+    http.expectOne('/api/Notificacoes/Leitura/Todas').flush({ marcadas: 1 });
+    await expect(clearing).rejects.toThrow('Resposta inválida');
+
+    expect(service.notifications()).toEqual(response.items);
+    expect(service.unreadCount()).toBe(1);
+    expect(api.get).toHaveBeenCalledOnce();
+  });
+
+  it('preserva uma notificação criada durante o lote e ignora uma listagem anterior ao commit', async () => {
+    const oldItem = { id: 'old', criadaEmUtc: '2026-11-18T12:00:00Z' };
+    const newItem = { id: 'new', criadaEmUtc: '2026-11-18T13:00:00.0000002Z' };
+    response = { ...response, items: [oldItem], naoLidas: 1 };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
+
+    const batch = new Subject<MarcarTodasLeiturasResponse>();
+    const staleList = new Subject<NotificacoesPendentesResponse>();
+    api.post.mockReturnValue(batch);
+    api.get.mockReturnValueOnce(staleList);
+    const clearing = firstValueFrom(service.marcarTodasComoLidas());
+    signalrMocks.connection.handlers.get('NotificacaoCriada')?.({ notificacao: newItem, naoLidas: 2 });
+
+    batch.next({ marcadas: 1, naoLidas: 1, limiteUtc: '2026-11-18T13:00:00.0000001Z' });
+    await clearing;
+    expect(service.notifications()).toEqual([newItem]);
+    response = { ...response, items: [newItem], naoLidas: 1 };
+    staleList.next({ ...response, items: [oldItem], naoLidas: 40 });
+
+    await vi.waitFor(() => expect(api.get).toHaveBeenCalledTimes(3));
+    expect(service.notifications()).toEqual([newItem]);
+    expect(service.unreadCount()).toBe(1);
+    expect(service.isEmpty()).toBe(false);
+  });
+
+  it('reconcilia a outra aba por REST e ignora eventos de leitura duplicados com contador antigo', async () => {
+    response = { ...response, items: [{ id: 'first' }, { id: 'second' }], naoLidas: 22 };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(22));
+    const read = signalrMocks.connection.handlers.get('NotificacaoLida');
+    response = { ...response, items: [{ id: 'new' }], naoLidas: 1 };
+    read?.({ notificacaoId: 'second', naoLidas: 0 });
+    read?.({ notificacaoId: 'first', naoLidas: 7 });
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
+    const requests = api.get.mock.calls.length;
+    read?.({ notificacaoId: 'second', naoLidas: 0 });
+
+    expect(api.get).toHaveBeenCalledTimes(requests);
+    expect(service.notifications()).toEqual(response.items);
+    expect(service.unreadCount()).toBe(1);
+  });
+
+  it('continua marcando uma notificação individual pelo ID', async () => {
+    const item = { id: 'individual' };
+    response = { ...response, items: [item], naoLidas: 1 };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
+    response = { ...response, items: [], naoLidas: 0 };
+    const result = { notificacao: item, naoLidas: 0 };
+    api.post.mockReturnValue(of(result));
+
+    await expect(firstValueFrom(service.marcarComoLida(item.id))).resolves.toEqual(result);
+    expect(api.post).toHaveBeenCalledExactlyOnceWith('/Notificacoes/individual/Leitura', {});
+    expect(service.notifications()).toEqual([]);
+    expect(service.unreadCount()).toBe(0);
+  });
+
+  it('descarta a resposta do lote depois do logout e de uma nova sessão', async () => {
+    await vi.waitFor(() => expect(api.get).toHaveBeenCalledOnce());
+    const batch = new Subject<MarcarTodasLeiturasResponse>();
+    api.post.mockReturnValue(batch);
+    const next = vi.fn();
+    const complete = vi.fn();
+    service.marcarTodasComoLidas().subscribe({ next, complete });
+    loggedIn.set(false);
+    await vi.waitFor(() => expect(signalrMocks.connection.stop).toHaveBeenCalledOnce());
+
+    response = { ...response, items: [{ id: 'other-user' }], naoLidas: 1 };
+    auth.user.set({ id: 'user-2' });
+    loggedIn.set(true);
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
+
+    batch.next({ marcadas: 2, naoLidas: 0, limiteUtc: '2026-11-18T13:00:00Z' });
+    batch.complete();
+
+    expect(next).not.toHaveBeenCalled();
+    expect(complete).toHaveBeenCalledOnce();
+    expect(service.notifications()).toEqual(response.items);
+    expect(service.unreadCount()).toBe(1);
+  });
+
 });

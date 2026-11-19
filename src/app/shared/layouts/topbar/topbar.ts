@@ -1,11 +1,13 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { CommonModule, DatePipe } from '@angular/common';
-import { Component, ElementRef, HostListener, ViewChild, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, HostListener, ViewChild, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { finalize } from 'rxjs';
 import { Notificacao } from '../../../core/models/notificacao.model';
 import { AuthService } from '../../../core/services/auth';
 import { NotificacoesService } from '../../../core/services/notificacoes';
+import { ToastService } from '../../../core/services/toast.service';
 import { UserAvatarService } from '../../../core/services/user-avatar.service';
 
 @Component({
@@ -20,6 +22,8 @@ export class TopbarComponent {
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
   private readonly notificacoesService = inject(NotificacoesService);
+  private readonly toast = inject(ToastService);
+  private readonly destroyRef = inject(DestroyRef);
   readonly userAvatar = inject(UserAvatarService);
   private readonly datePipe = inject(DatePipe);
   private readonly readingIds = new Set<string>();
@@ -32,6 +36,10 @@ export class TopbarComponent {
   notificationOpen = signal(false);
   notifications = this.notificacoesService.notifications;
   unreadCount = this.notificacoesService.unreadCount;
+  readonly isClearingNotifications = signal(false);
+  readonly hasPendingNotifications = computed(
+    () => this.unreadCount() > 0 || this.notifications().length > 0,
+  );
   isLoading = this.notificacoesService.isLoading;
   isEmpty = this.notificacoesService.isEmpty;
   loadError = this.notificacoesService.loadError;
@@ -99,9 +107,18 @@ export class TopbarComponent {
   }
 
   clearNotifications() {
-    for (const notification of this.notifications()) {
-      this.markNotificationAsRead(notification);
+    if (this.isClearingNotifications() || !this.hasPendingNotifications()) {
+      return;
     }
+
+    this.isClearingNotifications.set(true);
+    this.notificacoesService.marcarTodasComoLidas().pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.isClearingNotifications.set(false)),
+    ).subscribe({
+      next: () => this.toast.success('Notificações marcadas como lidas.'),
+      error: () => this.toast.error('Não foi possível limpar as notificações. Tente novamente.'),
+    });
   }
 
   formatNotificationDate(value?: string | null): string {
@@ -130,22 +147,10 @@ export class TopbarComponent {
 
     this.readingIds.add(notification.id);
 
-    this.notificacoesService.marcarComoLida(notification.id).subscribe({
-      next: response => {
-        this.notificacoesService.confirmarLeitura(
-          notification.id,
-          response.naoLidas ?? this.unreadCount() - 1,
-        );
-        this.readingIds.delete(notification.id);
-      },
-      error: (error: unknown) => {
-        if (error instanceof HttpErrorResponse && error.status === 404) {
-          this.notificacoesService.removerNotificacaoInexistente(notification.id);
-        }
-
-        this.readingIds.delete(notification.id);
-      },
-    });
+    this.notificacoesService.marcarComoLida(notification.id).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.readingIds.delete(notification.id)),
+    ).subscribe({ error: () => {} });
   }
 
   isNotificationReading(id: string): boolean {

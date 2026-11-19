@@ -1,9 +1,11 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { DestroyRef, Injectable, effect, inject, signal } from '@angular/core';
 import { HubConnection, HubConnectionBuilder, HubConnectionState } from '@microsoft/signalr';
-import { firstValueFrom, Observable } from 'rxjs';
+import { catchError, defer, EMPTY, filter, firstValueFrom, Observable, tap, throwError } from 'rxjs';
 import { resolveApiBaseUrl } from '../config/api-base';
 import {
   MarcarLeituraResponse,
+  MarcarTodasLeiturasResponse,
   Notificacao,
   NotificacoesPendentesResponse,
 } from '../models/notificacao.model';
@@ -49,11 +51,17 @@ export class NotificacoesService {
 
   constructor() {
     effect(() => {
-      if (this.auth.isLoggedIn()) {
-        void this.startRealtime();
-      } else {
-        void this.stopRealtime();
-        this.resetState();
+      const userId = this.auth.user()?.id;
+      const loggedIn = this.auth.isLoggedIn();
+      const stopped = this.stopRealtime();
+      this.resetState();
+      const revision = this.sessionRevision;
+      if (loggedIn) {
+        void stopped.then(() => {
+          if (this.isCurrentSession(revision, userId)) {
+            void this.startRealtime();
+          }
+        });
       }
     });
 
@@ -73,7 +81,75 @@ export class NotificacoesService {
   }
 
   marcarComoLida(id: string): Observable<MarcarLeituraResponse> {
-    return this.api.post<MarcarLeituraResponse>(`/Notificacoes/${encodeURIComponent(id)}/Leitura`, {});
+    return defer(() => {
+      const session = this.sessionRevision;
+      const userId = this.auth.user()?.id;
+      const revision = this.eventRevision;
+      return this.api.post<MarcarLeituraResponse>(`/Notificacoes/${encodeURIComponent(id)}/Leitura`, {}).pipe(
+        tap({
+          next: response => {
+            if (!this.isCurrentSession(session, userId)) {
+              return;
+            }
+
+            const currentCount = revision === this.eventRevision
+              ? response.naoLidas ?? this.unreadCount() - 1
+              : this.unreadCount();
+            this.confirmarLeitura(id, currentCount);
+            void this.syncPendentes(false);
+          },
+          error: (error: unknown) => {
+            if (this.isCurrentSession(session, userId) && error instanceof HttpErrorResponse && error.status === 404) {
+              this.removerNotificacaoInexistente(id);
+              void this.syncPendentes(false);
+            }
+          },
+        }),
+      );
+    });
+  }
+
+  marcarTodasComoLidas(): Observable<MarcarTodasLeiturasResponse> {
+    return defer(() => {
+      const session = this.sessionRevision;
+      const userId = this.auth.user()?.id;
+      const revision = this.eventRevision;
+      return this.api.post<MarcarTodasLeiturasResponse>('/Notificacoes/Leitura/Todas', null).pipe(
+        catchError((error: unknown) =>
+          this.isCurrentSession(session, userId) ? throwError(() => error) : EMPTY,
+        ),
+        filter(() => this.isCurrentSession(session, userId)),
+        tap(response => {
+          if (
+            !response ||
+            !Number.isInteger(response.marcadas) || response.marcadas < 0 ||
+            !Number.isInteger(response.naoLidas) || response.naoLidas < 0 ||
+            typeof response.limiteUtc !== 'string' || !Number.isFinite(Date.parse(response.limiteUtc))
+          ) {
+            throw new Error('Resposta inválida ao marcar notificações como lidas.');
+          }
+
+          const limit = Date.parse(response.limiteUtc);
+          const remaining = this.notifications().filter(notification => {
+            // A API tem precisão submilissegundo. A consulta resolve empates no mesmo milissegundo.
+            if (Date.parse(notification.criadaEmUtc ?? '') < limit) {
+              this.readNotificationIds.add(notification.id);
+              this.liveNotifications.delete(notification.id);
+              return false;
+            }
+
+            return true;
+          });
+          this.notifications.set(remaining);
+          this.isEmpty.set(remaining.length === 0);
+          if (revision === this.eventRevision) {
+            this.unreadCount.set(response.naoLidas);
+          }
+          this.eventRevision++;
+          void this.syncPendentes(false);
+        }),
+      );
+    });
   }
 
   confirmarLeitura(id: string, naoLidas: number): void {
@@ -100,6 +176,7 @@ export class NotificacoesService {
 
     const connection = this.connection;
     this.connection = undefined;
+    this.startPromise = undefined;
     if (connection && connection.state !== HubConnectionState.Disconnected) {
       await connection.stop();
     }
@@ -115,29 +192,38 @@ export class NotificacoesService {
 
     const connection = this.connection ?? this.createConnection();
     this.connection = connection;
+    const session = this.sessionRevision;
+    const userId = this.auth.user()?.id;
+    const isCurrentConnection = () =>
+      this.connection === connection && this.isCurrentSession(session, userId);
 
-    this.startPromise = (async () => {
+    const startPromise = (async () => {
       try {
         if (connection.state === HubConnectionState.Disconnected) {
           await connection.start();
         }
 
-        if (this.auth.isLoggedIn() && this.connection === connection) {
+        if (isCurrentConnection()) {
           this.reconnectAttempt = 0;
           await this.syncPendentes();
         }
       } catch {
-        if (this.auth.isLoggedIn() && this.connection === connection) {
+        if (isCurrentConnection()) {
           console.error('Não foi possível conectar às notificações em tempo real; nova tentativa agendada.');
           await this.syncPendentes();
-          this.scheduleReconnect();
+          if (isCurrentConnection()) {
+            this.scheduleReconnect();
+          }
         }
       }
     })().finally(() => {
-      this.startPromise = undefined;
+      if (this.startPromise === startPromise) {
+        this.startPromise = undefined;
+      }
     });
 
-    return this.startPromise;
+    this.startPromise = startPromise;
+    return startPromise;
   }
 
   private createConnection(): HubConnection {
@@ -148,25 +234,26 @@ export class NotificacoesService {
       .withAutomaticReconnect()
       .build();
 
+    const session = this.sessionRevision;
+    const userId = this.auth.user()?.id;
+    const isCurrentConnection = () => this.connection === connection && this.isCurrentSession(session, userId);
+
     connection.on('NotificacaoCriada', (event: NotificacaoCriadaEvent) => {
-      if (
-        this.connection !== connection ||
-        !this.auth.isLoggedIn() ||
-        !event?.notificacao?.id
-      ) {
+      const notification = event?.notificacao;
+      if (!isCurrentConnection() || !notification?.id ||
+          this.readNotificationIds.has(notification.id) || this.liveNotifications.has(notification.id) ||
+          this.notifications().some(item => item.id === notification.id)) {
         return;
       }
 
       this.eventRevision++;
-      this.unreadCount.set(Math.max(0, event.naoLidas ?? this.unreadCount()));
-      if (!this.readNotificationIds.has(event.notificacao.id)) {
-        this.liveNotifications.set(event.notificacao.id, event.notificacao);
-        this.mergeNotification(event.notificacao);
-      }
+      this.liveNotifications.set(notification.id, notification);
+      this.mergeNotification(notification);
+      void this.syncPendentes(false);
     });
 
     connection.on('NotificacaoLida', (event: NotificacaoLidaEvent) => {
-      if (this.connection !== connection || !this.auth.isLoggedIn() || !event?.notificacaoId) {
+      if (!isCurrentConnection() || !event?.notificacaoId || this.readNotificationIds.has(event.notificacaoId)) {
         return;
       }
 
@@ -174,11 +261,11 @@ export class NotificacoesService {
       this.liveNotifications.delete(event.notificacaoId);
       this.eventRevision++;
       this.removePending(event.notificacaoId);
-      this.unreadCount.set(Math.max(0, event.naoLidas ?? this.unreadCount()));
+      void this.syncPendentes(false);
     });
 
     connection.onreconnected(() => {
-      if (this.connection !== connection || !this.auth.isLoggedIn()) {
+      if (!isCurrentConnection()) {
         return;
       }
 
@@ -187,7 +274,7 @@ export class NotificacoesService {
     });
 
     connection.onclose(() => {
-      if (this.auth.isLoggedIn() && this.connection === connection) {
+      if (isCurrentConnection()) {
         this.scheduleReconnect();
       }
     });
@@ -207,37 +294,38 @@ export class NotificacoesService {
     }, delay);
   }
 
-  private syncPendentes(): Promise<void> {
+  private syncPendentes(showLoading = true): Promise<void> {
     if (this.pendingSync) {
       this.syncAgain = true;
       return this.pendingSync;
     }
 
-    this.isLoading.set(true);
+    if (showLoading) {
+      this.isLoading.set(true);
+    }
     const revision = this.eventRevision;
     const sessionRevision = this.sessionRevision;
+    const userId = this.auth.user()?.id;
     const syncPromise = firstValueFrom(this.listarPendentes(20))
       .then(response => {
-        if (sessionRevision !== this.sessionRevision || !this.auth.isLoggedIn()) {
+        if (!this.isCurrentSession(sessionRevision, userId)) {
           return;
         }
 
-        const apiItems = (response.items ?? []).filter(item => !this.readNotificationIds.has(item.id));
-        const apiIds = new Set(apiItems.map(item => item.id));
-        const realtimeItems = [...this.liveNotifications.values()].filter(
-          item => !apiIds.has(item.id) && !this.readNotificationIds.has(item.id),
-        );
-        const items = [...realtimeItems, ...apiItems];
-
-        this.notifications.set(items);
-        if (revision === this.eventRevision) {
-          this.unreadCount.set(Math.max(0, response.naoLidas ?? items.length));
+        if (revision !== this.eventRevision) {
+          this.syncAgain = true;
+          return;
         }
+
+        const items = (response.items ?? []).filter(item => !this.readNotificationIds.has(item.id));
+        this.liveNotifications.clear();
+        this.notifications.set(items);
+        this.unreadCount.set(Math.max(0, response.naoLidas ?? items.length));
         this.isEmpty.set(items.length === 0);
         this.loadError.set(null);
       })
       .catch(() => {
-        if (sessionRevision !== this.sessionRevision || !this.auth.isLoggedIn()) {
+        if (!showLoading || !this.isCurrentSession(sessionRevision, userId)) {
           return;
         }
 
@@ -248,9 +336,9 @@ export class NotificacoesService {
         if (this.pendingSync === syncPromise) {
           this.isLoading.set(false);
           this.pendingSync = undefined;
-          if (this.syncAgain && this.auth.isLoggedIn()) {
+          if (this.syncAgain && this.isCurrentSession(sessionRevision, userId)) {
             this.syncAgain = false;
-            void this.syncPendentes();
+            void this.syncPendentes(showLoading);
           }
         }
       });
@@ -275,6 +363,10 @@ export class NotificacoesService {
   private removePending(id: string): void {
     this.notifications.update(items => items.filter(item => item.id !== id));
     this.isEmpty.set(this.notifications().length === 0);
+  }
+
+  private isCurrentSession(revision: number, userId: string | undefined): boolean {
+    return revision === this.sessionRevision && this.auth.isLoggedIn() && this.auth.user()?.id === userId;
   }
 
   private resetState(): void {

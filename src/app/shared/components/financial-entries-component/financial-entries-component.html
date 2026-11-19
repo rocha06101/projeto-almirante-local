@@ -1,6 +1,6 @@
 <section class="financial-entries" aria-label="Lançamentos financeiros">
   <header class="financial-entries-header">
-    <h2 class="financial-entries-header-title">Lançamentos financeiros</h2>
+    <h2 #listHeading tabindex="-1" class="financial-entries-header-title">Lançamentos financeiros</h2>
 
     <div class="toolbar" role="search">
       <label class="search-wrapper">
@@ -54,23 +54,22 @@
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" cdkTrapFocus [cdkTrapFocusAutoCapture]="true" (click)="$event.stopPropagation()">
         <div class="modal-header">
           <h3 id="modal-title">{{ modalTitle() }}</h3>
-          <button type="button" class="close-button" aria-label="Fechar modal" (click)="closeModal()">×</button>
+          <button type="button" class="close-button" aria-label="Fechar modal" [disabled]="modalDevolucaoOcupado()" (click)="closeModal()">×</button>
         </div>
 
         @if (mode === 'view' && selected(); as item) {
           <dl class="detail-list">
-            <div><dt>Beneficiário</dt><dd>{{ item.membroNome }}</dd></div>
+            <div><dt>{{ item.lancamentoOrigemId ? 'Membro' : 'Beneficiário' }}</dt><dd>{{ item.membroNome }}</dd></div>
             <div><dt>Finalidade</dt><dd>{{ item.finalidade || '—' }}</dd></div>
             <div><dt>Descrição</dt><dd>{{ item.descricao || '—' }}</dd></div>
             <div><dt>Categoria</dt><dd>{{ item.categoria }}</dd></div>
             <div><dt>Fluxo</dt><dd>{{ fluxoLabel(item.tipoFluxo) }}</dd></div>
-            <div><dt>Valor</dt><dd>{{ formatCurrency(item.valor) }}</dd></div>
+            <div><dt>{{ item.lancamentoOrigemId ? 'Valor esperado da devolução' : 'Valor' }}</dt><dd>{{ formatCurrency(item.valor) }}</dd></div>
             <div><dt>Vencimento</dt><dd>{{ formatDate(item.vencimento) }}</dd></div>
             <div><dt>Status</dt><dd><app-status-badge [status]="item.status"></app-status-badge></dd></div>
             @if (item.lancamentoOrigemId) {
-              <div><dt>Operação</dt><dd>Devolução de evento · {{ item.status === 'Pago' ? 'Concluída' : 'Pendente de processamento pela tesouraria' }}</dd></div>
-              <div><dt>Cobrança de origem</dt><dd>{{ item.lancamentoOrigemId }}</dd></div>
-              <div><dt>Valor esperado da devolução</dt><dd>{{ formatCurrency(item.valor) }}</dd></div>
+              @if (item.eventoId) { <div><dt>ID do evento</dt><dd>{{ item.eventoId }}</dd></div> }
+              <div><dt>Pagamento de origem</dt><dd>{{ item.lancamentoOrigemId }}</dd></div>
               @if (item.valorPago != null) { <div><dt>Valor devolvido</dt><dd>{{ formatCurrency(item.valorPago!) }}</dd></div> }
               @if (item.dataPagamento) { <div><dt>Data da devolução</dt><dd>{{ formatDate(item.dataPagamento) }}</dd></div> }
               @if (item.devolucaoMotivo) { <div><dt>Motivo</dt><dd>{{ item.devolucaoMotivo }}</dd></div> }
@@ -79,6 +78,93 @@
           </dl>
           <div class="modal-actions">
             <button type="button" class="secondary-button" (click)="closeModal()">Fechar</button>
+          </div>
+        } @else if (modalDevolucao() && selected(); as item) {
+          <div class="modal-body">
+            <dl class="detail-list">
+              <div><dt>Membro</dt><dd>{{ item.membroNome }}</dd></div>
+              @if (eventoDaDevolucao(item); as evento) {
+                <div><dt>Evento</dt><dd>{{ evento }}</dd></div>
+              }
+              <div><dt>Valor esperado</dt><dd>{{ formatCurrency(item.valor) }}</dd></div>
+            </dl>
+
+            @if (revisaoDevolucao(); as revisao) {
+              <p #devolucaoFocus tabindex="-1" class="delete-text">
+                {{ mode === 'registrarDevolucao' ? 'Confirme o registro da devolução.' : 'Confirme a correção da devolução.' }}
+              </p>
+              <dl class="detail-list">
+                <div><dt>Valor devolvido</dt><dd>{{ formatCurrency(revisao.valorPago) }}</dd></div>
+                <div><dt>Data da devolução</dt><dd>{{ formatDate(revisao.dataPagamento) }}</dd></div>
+                @if (revisao.justificativa) {
+                  <div><dt>Justificativa</dt><dd>{{ revisao.justificativa }}</dd></div>
+                }
+              </dl>
+            } @else {
+              @let erros = errosDevolucao();
+              <form id="form-devolucao" class="modal-body" (ngSubmit)="revisarDevolucao()" novalidate>
+                <div class="form-row">
+                  <div class="form-field">
+                    <label for="valor-devolucao">Valor devolvido</label>
+                    <input #valorDevolucao #devolucaoFocus id="valor-devolucao" type="text" inputmode="numeric" required
+                      placeholder="R$ 0,00" [value]="valorDevolucaoTexto"
+                      [disabled]="consultandoDevolucao()"
+                      [attr.aria-invalid]="erros.valorPago ? 'true' : null"
+                      [attr.aria-describedby]="erros.valorPago ? 'erro-valor-devolucao' : null"
+                      (input)="onValorDevolucaoInput(valorDevolucao, $event)" />
+                    @if (erros.valorPago) {
+                      <span id="erro-valor-devolucao" class="form-error" role="alert">{{ erros.valorPago }}</span>
+                    }
+                  </div>
+                  <div class="form-field">
+                    <label for="data-devolucao">Data da devolução</label>
+                    <input id="data-devolucao" type="date" name="dataDevolucao" required [(ngModel)]="dataDevolucao"
+                      [disabled]="consultandoDevolucao()"
+                      [attr.aria-invalid]="erros.dataPagamento ? 'true' : null"
+                      [attr.aria-describedby]="erros.dataPagamento ? 'erro-data-devolucao' : null" />
+                    @if (erros.dataPagamento) {
+                      <span id="erro-data-devolucao" class="form-error" role="alert">{{ erros.dataPagamento }}</span>
+                    }
+                  </div>
+                </div>
+                <div class="form-field">
+                  <label for="justificativa-devolucao">Justificativa</label>
+                  <input id="justificativa-devolucao" type="text" name="justificativaDevolucao" [(ngModel)]="justificativaDevolucao"
+                    [disabled]="consultandoDevolucao()"
+                    [attr.aria-invalid]="erros.justificativa ? 'true' : null"
+                    [attr.aria-describedby]="erros.justificativa ? 'ajuda-justificativa erro-justificativa' : 'ajuda-justificativa'" />
+                  <small id="ajuda-justificativa">Obrigatória quando o valor devolvido difere do esperado.</small>
+                  @if (erros.justificativa) {
+                    <span id="erro-justificativa" class="form-error" role="alert">{{ erros.justificativa }}</span>
+                  }
+                </div>
+              </form>
+            }
+
+            @if (formError()) {
+              <p class="form-error" role="alert">{{ formError() }}</p>
+            }
+            @if (consultandoDevolucao()) {
+              <span role="status">Consultando o estado da devolução…</span>
+            }
+            @if (saving()) {
+              <span role="status">Salvando devolução…</span>
+            }
+          </div>
+          <div class="modal-actions">
+            @if (revisaoDevolucao()) {
+              <button type="button" class="secondary-button" [disabled]="saving()" (click)="voltarDevolucao()">Voltar</button>
+              <button type="button" class="primary-button" [disabled]="saving()" (click)="confirmarDevolucao()">
+                {{ mode === 'registrarDevolucao' ? 'Confirmar devolução' : 'Confirmar correção' }}
+              </button>
+            } @else {
+              <button type="button" class="secondary-button" [disabled]="consultandoDevolucao()" (click)="closeModal()">Cancelar</button>
+              @if (precisaConsultarDevolucao()) {
+                <button type="button" class="primary-button" [disabled]="consultandoDevolucao()" (click)="consultarDevolucao()">Consultar devolução</button>
+              } @else if (!devolucaoDesatualizada()) {
+                <button type="submit" form="form-devolucao" class="primary-button">Revisar devolução</button>
+              }
+            }
           </div>
         } @else if (mode === 'delete' && selected(); as item) {
           <p class="delete-text">
@@ -223,12 +309,39 @@
       </thead>
       <tbody role="rowgroup">
         @for (item of items(); track item.id) {
+          @let devolucao = !!item.lancamentoOrigemId;
           <tr role="row">
             <td role="cell" class="cell-title">{{ item.membroNome }}</td>
-            <td role="cell" data-label="Finalidade">{{ item.finalidade || '—' }}</td>
+            <td role="cell" data-label="Finalidade">
+              @if (devolucao) {
+                <div class="refund-summary">
+                  <strong>Devolução</strong>
+                  @if (eventoDaDevolucao(item); as evento) {
+                    <small>{{ evento }}</small>
+                  }
+                  <small>Pagamento de origem <span class="refund-reference">{{ item.lancamentoOrigemId }}</span></small>
+                </div>
+              } @else {
+                {{ item.finalidade || '—' }}
+              }
+            </td>
             <td role="cell" data-label="Categoria">{{ item.categoria }}</td>
             <td role="cell" data-label="Fluxo">{{ fluxoLabel(item.tipoFluxo) }}</td>
-            <td role="cell" data-label="Valor">{{ formatCurrency(item.valor) }}</td>
+            <td role="cell" [attr.data-label]="devolucao ? 'Valor esperado' : 'Valor'">
+              @if (devolucao) {
+                <div class="refund-summary">
+                  <span>{{ formatCurrency(item.valor) }}</span>
+                  @if (item.valorPago != null) {
+                    <small>Devolvido {{ formatCurrency(item.valorPago!) }}</small>
+                  }
+                  @if (item.dataPagamento) {
+                    <small>em {{ formatDate(item.dataPagamento) }}</small>
+                  }
+                </div>
+              } @else {
+                {{ formatCurrency(item.valor) }}
+              }
+            </td>
             <td role="cell" data-label="Vencimento">{{ formatDate(item.vencimento) }}</td>
             <td role="cell" data-label="Status">
               <app-status-badge [status]="item.status"></app-status-badge>
@@ -238,12 +351,17 @@
                 <button type="button" class="icon-button" [attr.aria-label]="'Visualizar lançamento de ' + item.membroNome" title="Visualizar" (click)="viewEntry(item)">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>
                 </button>
-                @if (permissoes.tem('financeiro.lancamentos.editar')) {
+                @if (podeRegistrarDevolucao(item)) {
+                  <button type="button" class="secondary-button refund-action" (click)="openDevolucao(item, 'registrarDevolucao')">Registrar devolução</button>
+                } @else if (podeCorrigirDevolucao(item)) {
+                  <button type="button" class="secondary-button refund-action" (click)="openDevolucao(item, 'corrigirDevolucao')">Corrigir devolução</button>
+                }
+                @if (!devolucao && permissoes.tem('financeiro.lancamentos.editar')) {
                 <button type="button" class="icon-button" [attr.aria-label]="'Editar lançamento de ' + item.membroNome" [title]="isFromEvento(item) ? 'Gerado por evento: edite em Eventos' : 'Editar'" [disabled]="isFromEvento(item)" (click)="openEditEntry(item)">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm14.71-9.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.26 1.26 3.75 3.75 1.26-1.26Z"/></svg>
                 </button>
                 }
-                @if (permissoes.tem('financeiro.lancamentos.excluir')) {
+                @if (!devolucao && permissoes.tem('financeiro.lancamentos.excluir')) {
                 <button type="button" class="icon-button danger" [attr.aria-label]="'Excluir lançamento de ' + item.membroNome" [title]="isFromEvento(item) ? 'Gerado por evento: exclua em Eventos' : 'Excluir'" [disabled]="isFromEvento(item)" (click)="openDelete(item)">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-1 7h2v8H8v-8Zm6 0h2v8h-2v-8ZM5 7h14l-1 12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7Z"/></svg>
                 </button>

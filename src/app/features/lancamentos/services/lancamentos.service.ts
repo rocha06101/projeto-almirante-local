@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 
 import { ApiService } from '../../../core/services/api';
 import {
+  DevolucaoLancamentoInput,
   Lancamento,
   LancamentoGeralResponse,
   LancamentosFilters,
@@ -35,6 +36,14 @@ export class LancamentosService {
 
   getById(id: string): Observable<Lancamento> {
     return this.api.get<Lancamento>(`/Lancamentos/${id}`);
+  }
+
+  registrarDevolucao(id: string, payload: DevolucaoLancamentoInput): Observable<Lancamento> {
+    return this.api.post<Lancamento>(`/Lancamentos/${id}/Devolucao`, payload);
+  }
+
+  corrigirDevolucao(id: string, payload: DevolucaoLancamentoInput): Observable<Lancamento> {
+    return this.api.put<Lancamento>(`/Lancamentos/${id}/Devolucao`, payload);
   }
 
   /**

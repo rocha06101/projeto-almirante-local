@@ -1,6 +1,6 @@
 /**
  * Contrato de /api/Lancamentos (Swagger do backend; enums serializados como texto).
- * Acesso restrito à diretoria (política GestaoFinanceira): 403 para os demais papéis.
+ * O acesso a cada operação depende das permissões financeiras.
  */
 export type LancamentoStatus = 'Pendente' | 'Pago' | 'Atrasado';
 export type LancamentoCategoria = 'Evento' | 'Clube';
@@ -23,9 +23,19 @@ export interface Lancamento {
   dataPagamento?: string | null;
   valorPago?: number | null;
   valorRestante?: number | null;
+  pagamentoRegistradoEmUtc?: string | null;
+  /** Identifica uma devolução de evento e referencia o pagamento original. */
   lancamentoOrigemId?: string | null;
   devolucaoMotivo?: string | null;
   devolucaoJustificativa?: string | null;
+}
+
+/** Corpo de RegistrarDevolucaoRequest e AtualizarDevolucaoRequest. A resposta é LancamentoDto. */
+export interface DevolucaoLancamentoInput {
+  /** Data civil no formato yyyy-MM-dd. */
+  dataPagamento: string;
+  valorPago: number;
+  justificativa: string | null;
 }
 
 export interface LancamentosFilters {

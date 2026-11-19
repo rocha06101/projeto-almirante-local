@@ -1,7 +1,7 @@
 import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { Subject, throwError } from 'rxjs';
 import { MarcarTodasLeiturasResponse } from '../../../core/models/notificacao.model';
 import { ToastService } from '../../../core/services/toast.service';
@@ -85,6 +85,26 @@ describe('TopbarComponent', () => {
     http.expectOne('/api/Me/foto').flush(new Blob());
     fixture.componentInstance.clearNotifications();
     expect(clear).not.toHaveBeenCalled();
+  });
+
+  it('deixa o encerramento das notificações a cargo da sessão autenticada no logout', () => {
+    http.expectOne('/api/Me/foto').flush(new Blob());
+    const logout = new Subject<void>();
+    vi.spyOn(auth, 'logout').mockReturnValue(logout);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const { stopRealtime } = TestBed.inject(NotificacoesService);
+    fixture.componentInstance.toggleProfile();
+
+    fixture.componentInstance.logout();
+
+    expect(auth.logout).toHaveBeenCalledOnce();
+    expect(fixture.componentInstance.profileOpen()).toBe(false);
+    expect(stopRealtime).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+
+    logout.next();
+    logout.complete();
+    expect(navigate).toHaveBeenCalledExactlyOnceWith(['/login']);
   });
 
   it('exibe o botão com contador positivo e lista vazia e bloqueia cliques repetidos', () => {

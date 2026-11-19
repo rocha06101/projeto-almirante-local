@@ -102,7 +102,6 @@ export class TopbarComponent {
 
   logout() {
     this.profileOpen.set(false);
-    void this.notificacoesService.stopRealtime();
     this.auth.logout().subscribe(() => this.router.navigate(['/login']));
   }
 

@@ -38,10 +38,12 @@ export class NotificacoesService {
   private syncAgain = false;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private reconnectAttempt = 0;
+  private realtimeRevision = 0;
   private readonly readNotificationIds = new Set<string>();
   private readonly liveNotifications = new Map<string, Notificacao>();
   private eventRevision = 0;
   private sessionRevision = 0;
+  private sessionUserId?: string;
   private batchPending = false;
 
   readonly notifications = signal<Notificacao[]>([]);
@@ -52,20 +54,32 @@ export class NotificacoesService {
 
   constructor() {
     effect(() => {
-      const userId = this.auth.user()?.id;
-      const loggedIn = this.auth.isLoggedIn();
+      const userId = this.auth.isLoggedIn() ? this.auth.user()?.id : undefined;
+      if (userId === this.sessionUserId) {
+        return;
+      }
+
+      if (this.sessionUserId !== undefined) {
+        this.resetState();
+      }
+      this.sessionUserId = userId;
+
       const stopped = this.stopRealtime();
-      const revision = this.sessionRevision;
-      if (loggedIn) {
+      const session = this.sessionRevision;
+      const realtime = this.realtimeRevision;
+      if (userId !== undefined) {
         void stopped.then(() => {
-          if (this.isCurrentSession(revision, userId)) {
+          if (realtime === this.realtimeRevision && this.isCurrentSession(session, userId)) {
             void this.startRealtime();
           }
         });
       }
     });
 
-    this.destroyRef.onDestroy(() => void this.stopRealtime());
+    this.destroyRef.onDestroy(() => {
+      this.sessionUserId = undefined;
+      void this.stopRealtime();
+    });
   }
 
   listarPendentes(pageSize = 20, cursor?: string | null): Observable<NotificacoesPendentesResponse> {
@@ -182,6 +196,7 @@ export class NotificacoesService {
   }
 
   async stopRealtime(): Promise<void> {
+    this.realtimeRevision++;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = undefined;
@@ -190,14 +205,16 @@ export class NotificacoesService {
     const connection = this.connection;
     this.connection = undefined;
     this.startPromise = undefined;
-    this.resetState();
+    this.reconnectAttempt = 0;
     if (connection && connection.state !== HubConnectionState.Disconnected) {
       await connection.stop();
     }
   }
 
   private async startRealtime(): Promise<void> {
-    if (!this.auth.isLoggedIn() || this.startPromise) {
+    const session = this.sessionRevision;
+    const userId = this.sessionUserId;
+    if (!this.isCurrentSession(session, userId) || this.startPromise) {
       return this.startPromise;
     }
 
@@ -206,8 +223,6 @@ export class NotificacoesService {
 
     const connection = this.connection ?? this.createConnection();
     this.connection = connection;
-    const session = this.sessionRevision;
-    const userId = this.auth.user()?.id;
     const isCurrentConnection = () =>
       this.connection === connection && this.isCurrentSession(session, userId);
 
@@ -409,7 +424,8 @@ export class NotificacoesService {
   }
 
   private isCurrentSession(revision: number, userId: string | undefined): boolean {
-    return revision === this.sessionRevision && this.auth.isLoggedIn() && this.auth.user()?.id === userId;
+    return userId !== undefined && this.sessionUserId === userId &&
+      revision === this.sessionRevision && this.auth.isLoggedIn() && this.auth.user()?.id === userId;
   }
 
   private resetState(): void {

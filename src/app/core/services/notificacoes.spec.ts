@@ -165,15 +165,20 @@ describe('NotificacoesService realtime', () => {
     expect(service.unreadCount()).toBe(1);
   });
 
-  it('encerra a conexão quando a sessão autenticada termina', async () => {
-    await vi.waitFor(() => expect(signalrMocks.connection.start).toHaveBeenCalledOnce());
+  it('mantém a conexão e as pendências quando o perfil do mesmo usuário é atualizado', async () => {
+    response = { ...response, items: [{ id: 'pending' }], naoLidas: 3 };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(3));
 
-    loggedIn.set(false);
+    auth.user.set({ id: 'user-1' });
+    TestBed.tick();
 
-    await vi.waitFor(() => expect(signalrMocks.connection.stop).toHaveBeenCalledOnce());
-    expect(service.notifications()).toEqual([]);
-    expect(service.unreadCount()).toBe(0);
+    expect(signalrMocks.connection.stop).not.toHaveBeenCalled();
+    expect(signalrMocks.connection.start).toHaveBeenCalledOnce();
+    expect(api.get).toHaveBeenCalledOnce();
+    expect(service.notifications()).toEqual(response.items);
+    expect(service.unreadCount()).toBe(3);
   });
+
   it.each([0, 1, 20, 25])('aceita a resposta de um único POST sem corpo para %i pendências', async total => {
     response = {
       ...response,
@@ -288,6 +293,24 @@ describe('NotificacoesService realtime', () => {
     expect(service.notifications()).toEqual([]);
   });
 
+  it('libera o lote cancelado para uma nova tentativa', async () => {
+    response = { ...response, items: [{ id: 'pending' }], naoLidas: 1 };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
+
+    const clearing = service.marcarTodasComoLidas().subscribe();
+    const request = http.expectOne('/api/Notificacoes/Leitura/Todas');
+    service.marcarTodasComoLidas().subscribe();
+    http.expectNone('/api/Notificacoes/Leitura/Todas');
+    clearing.unsubscribe();
+
+    expect(request.cancelled).toBe(true);
+    expect(service.notifications()).toEqual(response.items);
+    expect(service.unreadCount()).toBe(1);
+    const retry = service.marcarTodasComoLidas().subscribe();
+    http.expectOne('/api/Notificacoes/Leitura/Todas');
+    retry.unsubscribe();
+  });
+
   it('mantém o total confirmado pelo lote se a listagem vier sem naoLidas', async () => {
     response = { ...response, naoLidas: 25 };
     await vi.waitFor(() => expect(service.unreadCount()).toBe(25));
@@ -352,16 +375,30 @@ describe('NotificacoesService realtime', () => {
     expect(service.notifications()).toEqual([]);
   });
 
-  it('descarta a leitura individual assim que o logout encerra a conexão', async () => {
+  it('preserva as pendências quando apenas a conexão é interrompida', async () => {
+    response = { ...response, items: [{ id: 'pending' }], naoLidas: 3 };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(3));
+    const read = signalrMocks.connection.handlers.get('NotificacaoLida');
+
+    await service.stopRealtime();
+    read?.({ notificacaoId: 'pending', lidaEmUtc: '2026-11-18T13:00:00Z', naoLidas: 0 });
+
+    expect(signalrMocks.connection.stop).toHaveBeenCalledOnce();
+    expect(api.get).toHaveBeenCalledOnce();
+    expect(service.notifications()).toEqual(response.items);
+    expect(service.unreadCount()).toBe(3);
+    expect(service.isEmpty()).toBe(false);
+  });
+
+  it('limpa as pendências e descarta a leitura individual quando a autenticação termina', async () => {
     response = { ...response, items: [{ id: 'individual' }], naoLidas: 1 };
     await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
     const next = vi.fn();
     const complete = vi.fn();
     service.marcarComoLida('individual').subscribe({ next, complete });
 
-    await service.stopRealtime();
-    // O fluxo de logout encerra o hub antes de limpar a sessão de autenticação.
-    expect(loggedIn()).toBe(true);
+    loggedIn.set(false);
+    await vi.waitFor(() => expect(signalrMocks.connection.stop).toHaveBeenCalledOnce());
     http.expectOne('/api/Notificacoes/individual/Leitura').flush({
       notificacao: { id: 'individual' }, naoLidas: 24,
     });
@@ -371,28 +408,45 @@ describe('NotificacoesService realtime', () => {
     expect(api.get).toHaveBeenCalledOnce();
     expect(service.notifications()).toEqual([]);
     expect(service.unreadCount()).toBe(0);
+    expect(service.isEmpty()).toBe(true);
   });
 
-  it('descarta a resposta do lote depois do logout e de uma nova sessão', async () => {
-    await vi.waitFor(() => expect(api.get).toHaveBeenCalledOnce());
+  it('isola respostas REST e eventos do usuário anterior na troca de sessão', async () => {
+    response = { ...response, items: [{ id: 'first-user' }], naoLidas: 3 };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(3));
+    const oldList = new Subject<NotificacoesPendentesResponse>();
+    api.get.mockReturnValueOnce(oldList);
+    const oldReconnected = signalrMocks.connection.onreconnected.mock.calls[0][0] as () => void;
+    const oldCreated = signalrMocks.connection.handlers.get('NotificacaoCriada');
+    oldReconnected();
+
     const batch = new Subject<MarcarTodasLeiturasResponse>();
     api.post.mockReturnValue(batch);
     const next = vi.fn();
     const complete = vi.fn();
     service.marcarTodasComoLidas().subscribe({ next, complete });
-    loggedIn.set(false);
-    await vi.waitFor(() => expect(signalrMocks.connection.stop).toHaveBeenCalledOnce());
+
+    const secondUserList = new Subject<NotificacoesPendentesResponse>();
+    api.get.mockReturnValueOnce(secondUserList);
+    auth.user.set({ id: 'user-2' });
+    await vi.waitFor(() => expect(api.get).toHaveBeenCalledTimes(3));
+    expect(signalrMocks.connection.stop).toHaveBeenCalledOnce();
+    expect(service.notifications()).toEqual([]);
+    expect(service.unreadCount()).toBe(0);
 
     response = { ...response, items: [{ id: 'other-user' }], naoLidas: 1 };
-    auth.user.set({ id: 'user-2' });
-    loggedIn.set(true);
+    secondUserList.next(response);
     await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
 
+    oldCreated?.({ notificacao: { id: 'old-event' }, naoLidas: 50 });
+    oldList.next({ ...response, items: [{ id: 'old-rest' }], naoLidas: 99 });
     batch.next({ marcadas: 2, naoLidas: 0, limiteUtc: '2026-11-18T13:00:00Z' });
     batch.complete();
+    await Promise.resolve();
 
     expect(next).not.toHaveBeenCalled();
     expect(complete).toHaveBeenCalledOnce();
+    expect(api.get).toHaveBeenCalledTimes(3);
     expect(service.notifications()).toEqual(response.items);
     expect(service.unreadCount()).toBe(1);
   });

@@ -1,4 +1,4 @@
-import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, ViewChild, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, catchError, finalize, of, map, startWith, switchMap } from 'rxjs';
 import { EventoDto, PeriodoEventos } from '../../core/models/evento.model';
@@ -33,7 +33,8 @@ export class Eventos implements OnInit {
   readonly modal = signal<{ id: string | null; data: string } | null>(null);
   readonly selectedEventId = signal<string | null>(null);
   readonly pedidoDeRolagem = signal(0);
-  private dataEventoSelecionado = '';
+  private diaSelecionadoPorClique = false;
+  @ViewChild(EventosCalendario) private calendario?: EventosCalendario;
 
   ngOnInit(): void {
     this.periodos.pipe(switchMap(periodo => {
@@ -59,8 +60,10 @@ export class Eventos implements OnInit {
   mudarPeriodo(periodo: PeriodoEventos): void {
     if (!this.acesso.tem('eventos.consultar') || (this.periodoAtual?.dataInicial === periodo.dataInicial && this.periodoAtual?.dataFinal === periodo.dataFinal)) return;
     this.periodoAtual = periodo;
-    if (this.dataEventoSelecionado < periodo.dataInicial || this.dataEventoSelecionado > periodo.dataFinal) this.limparSelecao();
-    if (this.selecionada() < periodo.dataInicial || this.selecionada() > periodo.dataFinal) this.selecionada.set('');
+    if (this.selecionada() < periodo.dataInicial || this.selecionada() > periodo.dataFinal) {
+      this.limparSelecao();
+      this.selecionada.set('');
+    }
     this.periodos.next(periodo);
   }
   recarregar(): void {
@@ -74,26 +77,32 @@ export class Eventos implements OnInit {
     const evento = this.eventos().find(e => e.id === id) ?? this.proximos().find(e => e.id === id);
     if (!evento) return;
     if (this.selectedEventId() === id) this.modal.set({ id, data: '' });
-    else {
-      this.selectedEventId.set(id);
-      this.dataEventoSelecionado = evento.dataEvento;
-    }
+    this.selectedEventId.set(id);
+    this.selecionada.set(evento.dataEvento);
+    this.diaSelecionadoPorClique = false;
     if (noCalendario) this.pedidoDeRolagem.update(pedido => pedido + 1);
+    else this.calendario?.mostrarData(evento.dataEvento);
   }
-  private limparSelecao(): void { this.selectedEventId.set(null); this.dataEventoSelecionado = ''; }
+  private limparSelecao(): void {
+    this.selectedEventId.set(null);
+    this.diaSelecionadoPorClique = false;
+  }
   private validarSelecao(items: EventoDto[], periodo: PeriodoEventos, eventosVisiveis: EventoDto[] = []): void {
     const id = this.selectedEventId();
     if (!id) return;
     const selecionado = items.find(e => e.id === id);
-    if (selecionado) this.dataEventoSelecionado = selecionado.dataEvento;
-    else if (this.dataEventoSelecionado >= periodo.dataInicial && this.dataEventoSelecionado <= periodo.dataFinal &&
+    if (selecionado) this.selecionada.set(selecionado.dataEvento);
+    else if (this.selecionada() >= periodo.dataInicial && this.selecionada() <= periodo.dataFinal &&
         !eventosVisiveis.some(e => e.id === id)) this.limparSelecao();
   }
   voltarHoje(data: string): void { this.limparSelecao(); this.selecionada.set(data); }
   selecionarDia(data: string): void {
+    if (!this.acesso.tem('eventos.consultar') || this.modal()) return;
+    const repetirSelecao = this.diaSelecionadoPorClique && this.selecionada() === data;
     this.limparSelecao();
     this.selecionada.set(data);
-    if (this.acesso.tem('eventos.consultar') && this.acesso.tem('eventos.criar')) {
+    this.diaSelecionadoPorClique = true;
+    if (repetirSelecao && this.acesso.tem('eventos.criar')) {
       this.modal.set({ id: null, data });
     }
   }

@@ -2,7 +2,7 @@
 aside { display: flex; flex-direction: column; background: white; border-radius: 9px; padding: 20px 16px; color: #27283a; }
 h2 { font-size: 15px; font-weight: 600; margin: 0 0 26px; }
 .upcoming-list { display: flex; flex-direction: column; gap: 16px; padding: 2px; }
-.upcoming-card { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding: 13px 14px; text-align: left; width: 100%; border: 1px solid #e9e8f0; border-left: 4px solid #a69bbd; border-radius: 5px; background: white; color: #242338; overflow-wrap: anywhere; flex-shrink: 0; transition: border-color .18s, background-color .18s, box-shadow .18s; }
+.upcoming-card { --cor-evento: #a69bbd; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding: 13px 14px; text-align: left; width: 100%; border: 1px solid #e9e8f0; border-left: 4px solid var(--cor-evento); border-radius: 5px; background: white; color: #242338; overflow-wrap: anywhere; flex-shrink: 0; transition: border-color .18s, background-color .18s, box-shadow .18s; }
 .upcoming-card:hover, .upcoming-card:focus-visible { background: #f5f1fa; outline-color: #7043bc; }
 .upcoming-card strong { font-size: 12px; font-weight: 600; }
 .date-badge { border-radius: 12px; background: #817b96; color: white; font-size: 13px; line-height: 1.4; padding: 0 8px; margin-bottom: 2px; }
@@ -10,13 +10,13 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 26px; }
 .meta, small { font-size: 11px; color: #666681; }
 .meta { display: flex; gap: 5px; }
 .meta svg { width: 12px; height: 12px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.8; margin-top: 3px; }
-.roxo { border-left-color: #5a10ae; } .azul { border-left-color: #4662d6; } .verde { border-left-color: #008a60; } .laranja { border-left-color: #dc8124; }
+.roxo { --cor-evento: #5a10ae; } .azul { --cor-evento: #4662d6; } .verde { --cor-evento: #008a60; } .laranja { --cor-evento: #dc8124; }
 nav { display: flex; align-items: center; justify-content: center; gap: 12px; padding-top: 20px; font-size: 12px; color: #77738d; }
 nav button, .retry { background: white; color: #5005a1; border: 1px solid #e9e8f0; border-radius: 6px; min-height: 44px; min-width: 44px; }
 button:disabled { opacity: .4; cursor: default; }
 p { font-size: 13px; }
 .empty { color: #77738d; padding: 24px 0; }
-.upcoming-card.selected { border-top-color: #34409d; border-right-color: #34409d; border-bottom-color: #34409d; background: #f0f1fb; box-shadow: 0 0 0 1px #34409d; }
+.upcoming-card.selected { border-color: var(--cor-evento); background: #f0f1fb; box-shadow: 0 0 0 1px var(--cor-evento); }
 @media (min-width: 992px) {
   aside { max-height: 100%; }
   h2 { margin-bottom: 20px; }

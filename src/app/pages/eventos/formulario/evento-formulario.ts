@@ -13,6 +13,11 @@ import { User } from '../../../core/services/user';
 import { temPagamentos, erroEvento, motivoValido, nomeEvento, podeRemoverMembro, respostaIncerta } from '../eventos.utils';
 
 type GrupoParticipantes = 'desbravadores' | 'diretoria' | 'todos';
+type ModeloEvento = Omit<CriarEvento, 'transporte' | 'alimentacao' | 'seguroObrigatorio'> & {
+  transporte: { ehGratis: boolean; valor: number | null };
+  alimentacao: { individual: boolean; valor: number | null };
+  seguroObrigatorio: number | null;
+};
 const ROLE_DESBRAVADOR = 'DS';
 // Caracteres graváveis nas colunas varchar do backend, incluindo as extensões do Windows-1252.
 const TEXTO_EVENTO = /^[\r\n\x20-\x7E\xA0-\xFF€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]*$/u;
@@ -69,10 +74,10 @@ export class EventoFormulario implements OnInit {
   readonly nomeEvento = nomeEvento;
   readonly tituloMaximo = 150;
   readonly descricaoMaxima = 2000;
-  modelo: CriarEvento = {
+  modelo: ModeloEvento = {
     titulo: '', descricao: null, dataEvento: '', local: '', membros: [],
-    transporte: { ehGratis: true, valor: 0 }, alimentacao: { individual: true, valor: 0 },
-    seguroObrigatorio: 0, eventoReferenciaId: null,
+    transporte: { ehGratis: true, valor: null }, alimentacao: { individual: true, valor: null },
+    seguroObrigatorio: null, eventoReferenciaId: null,
   };
   seguroAtivo = false;
   motivo = '';
@@ -90,7 +95,7 @@ export class EventoFormulario implements OnInit {
       dataEvento: e.dataEvento, local: e.local, membros: [...new Set(e.membros)],
       transporte: { ...e.transporte }, alimentacao: { ...e.alimentacao }, seguroObrigatorio: e.seguroObrigatorio,
     } : { ...this.modelo, dataEvento: this.data };
-    this.seguroAtivo = this.modelo.seguroObrigatorio > 0;
+    this.seguroAtivo = (this.modelo.seguroObrigatorio ?? 0) > 0;
     this.estadoInicial = this.estadoEditavel();
     if (pendente) this.estadoRevisado = this.estadoEditavel();
     for (const id of this.modelo.membros) this.membrosExibidos.add(id);
@@ -218,10 +223,11 @@ export class EventoFormulario implements OnInit {
   }
   componentes(): { nome: string; antes: number; depois: number }[] {
     const e = this.evento;
+    const [transporte, alimentacao, seguro] = this.valoresCustos();
     return [
-      { nome: 'Transporte', antes: e?.transporte.ehGratis ? 0 : e?.transporte.valor ?? 0, depois: this.modelo.transporte.ehGratis ? 0 : this.modelo.transporte.valor },
-      { nome: 'Alimentação', antes: e?.alimentacao.individual ? 0 : e?.alimentacao.valor ?? 0, depois: this.modelo.alimentacao.individual ? 0 : this.modelo.alimentacao.valor },
-      { nome: 'Seguro', antes: e?.seguroObrigatorio ?? 0, depois: this.valorSeguro() },
+      { nome: 'Transporte', antes: e?.transporte.ehGratis ? 0 : e?.transporte.valor ?? 0, depois: transporte ?? 0 },
+      { nome: 'Alimentação', antes: e?.alimentacao.individual ? 0 : e?.alimentacao.valor ?? 0, depois: alimentacao ?? 0 },
+      { nome: 'Seguro', antes: e?.seguroObrigatorio ?? 0, depois: seguro ?? 0 },
     ];
   }
   private erroRegrasEdicao(): string {
@@ -244,12 +250,16 @@ export class EventoFormulario implements OnInit {
   cancelaCobrancas(): boolean {
     return !!this.evento?.lancamentos.some(l => l.status !== 'Pago') && this.evento.valorPorMembro > 0 && this.porMembro() === 0;
   }
-  private valorSeguro(): number {
-    return this.seguroAtivo ? this.modelo.seguroObrigatorio : 0;
+  private valoresCustos(): [number | null, number | null, number | null] {
+    const { transporte, alimentacao, seguroObrigatorio } = this.modelo;
+    return [
+      transporte.ehGratis ? 0 : transporte.valor,
+      alimentacao.individual ? 0 : alimentacao.valor,
+      this.seguroAtivo ? seguroObrigatorio : 0,
+    ];
   }
   porMembro(): number {
-    return ((this.modelo.transporte.ehGratis ? 0 : Math.round(this.modelo.transporte.valor * 100)) +
-      (this.modelo.alimentacao.individual ? 0 : Math.round(this.modelo.alimentacao.valor * 100)) + Math.round(this.valorSeguro() * 100)) / 100;
+    return this.valoresCustos().reduce<number>((centavos, valor) => centavos + Math.round((valor ?? 0) * 100), 0) / 100;
   }
   total(): number { return Math.round(this.porMembro() * 100) * this.modelo.membros.length / 100; }
   podeSalvar(): boolean { return this.acesso.tem(this.evento ? 'eventos.editar' : 'eventos.criar'); }
@@ -285,8 +295,7 @@ export class EventoFormulario implements OnInit {
     if (this.exigeMotivo() && !motivoValido(this.motivo)) {
       this.erro.set('Informe o motivo com 1 a 255 caracteres, sem emojis, tabulações ou quebras de linha.'); return;
     }
-    const valores = [this.valorSeguro(), this.modelo.transporte.ehGratis ? 0 : this.modelo.transporte.valor,
-      this.modelo.alimentacao.individual ? 0 : this.modelo.alimentacao.valor];
+    const valores = this.valoresCustos();
     if (valores.some(v => v == null || !Number.isFinite(v) || v < 0 || Math.abs(v * 100 - Math.round(v * 100)) > 0.00001) || !Number.isSafeInteger(Math.round(this.total() * 100))) {
       this.erro.set('Informe custos válidos, positivos ou zero, com até duas casas decimais.'); return;
     }
@@ -303,10 +312,11 @@ export class EventoFormulario implements OnInit {
     }
     this.erro.set(''); this.salvando.set(true); this.ocupacao.emit(true);
     const { eventoReferenciaId, ...base } = this.modelo;
+    const [transporte, alimentacao, seguro] = this.valoresCustos();
     const conteudo = { ...structuredClone(base), ...this.normalizarTextos(), local: base.local.trim(), membros: [...new Set(base.membros)].sort(),
-      seguroObrigatorio: this.valorSeguro(),
-      transporte: { ...base.transporte, valor: base.transporte.ehGratis ? 0 : base.transporte.valor },
-      alimentacao: { ...base.alimentacao, valor: base.alimentacao.individual ? 0 : base.alimentacao.valor } };
+      seguroObrigatorio: seguro ?? 0,
+      transporte: { ...base.transporte, valor: transporte ?? 0 },
+      alimentacao: { ...base.alimentacao, valor: alimentacao ?? 0 } };
     let requisicao;
     if (this.evento) {
       const informarMotivo = this.exigeMotivo();

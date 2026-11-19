@@ -31,6 +31,16 @@ necessário nesses modos. Em produção, os endpoints usam o host calculado por 
   se falhar, a sessão local é encerrada e o usuário volta ao `/login`. `403` **não** encerra a sessão. `429` mostra o `Retry-After`.
 - `withCredentials` e `Authorization` são aplicados **apenas** a URLs da API (`core/config/api-base.ts`), nunca a domínios externos.
 
+## Edição administrativa de usuários
+
+- A edição usa `PATCH /api/Usuarios/{id}` da [issue #193](https://github.com/LucasDevolps/Desbravadores.Backend/issues/193).
+  Em desenvolvimento, confirme a operação PATCH no Swagger em `https://localhost:8444/swagger/index.html`.
+  Se a rota estiver ausente, use uma revisão do backend que contenha o [PR #216](https://github.com/LucasDevolps/Desbravadores.Backend/pull/216)
+  e reconstrua a API local com `docker compose -f compose.yaml -f compose.https.yaml up -d --build api` no repositório do backend.
+- A remoção completa do endereço fica restrita à API. A tela de edição mantém o CEP obrigatório quando já existe endereço
+  e permite limpar número e complemento separadamente. Com um novo CEP, o PATCH segue a regra da API de limpar número e
+  complemento omitidos.
+
 ## Notificações em tempo real
 
 - O `NotificacoesService` mantém uma única conexão `/hubs/notificacoes` enquanto há sessão autenticada. O access token

@@ -29,7 +29,7 @@ import {
   timer,
   Subject,
 } from 'rxjs';
-import { User as UserModel } from '../../../core/models/user.model';
+import { PatchUserRequest, UserAddressPatch, User as UserModel } from '../../../core/models/user.model';
 import { PermissoesService } from '../../../core/services/permissoes';
 import { AuthService } from '../../../core/services/auth';
 import { User as UserService } from '../../../core/services/user';
@@ -183,7 +183,8 @@ export class UserEdit implements OnDestroy {
     this.errorMessage.set('');
     this.successMessage.set('');
     const values = this.form.getRawValue();
-    const hasDataChanges = this.hasDataChanges(usuario, values);
+    const payload = this.createUserPatch(usuario, values);
+    const hasDataChanges = Object.keys(payload).length > 0;
     const pendingPhoto = this.pendingPhoto();
     if (pendingPhoto && !this.isValidPhotoFile(pendingPhoto)) {
       const message = 'Selecione uma foto JPEG, PNG ou WebP de até 10 MB.';
@@ -191,10 +192,12 @@ export class UserEdit implements OnDestroy {
       this.toast.error(message);
       return;
     }
-    const documentosVazios = this.documentosObrigatoriosVazios(usuario, values);
-    if (documentosVazios.length && !ignorarDocumentosVazios) {
-      this.confirmarDocumentosVazios(documentosVazios);
-      return;
+    if (hasDataChanges && !ignorarDocumentosVazios) {
+      const documentosVazios = this.documentosObrigatoriosVazios(usuario, payload);
+      if (documentosVazios.length) {
+        this.confirmarDocumentosVazios(documentosVazios);
+        return;
+      }
     }
     if (hasDataChanges && this.form.invalid) {
       this.form.markAllAsTouched();
@@ -204,7 +207,7 @@ export class UserEdit implements OnDestroy {
       return;
     }
 
-    if (hasDataChanges && this.addressChanged(usuario, values) && this.addressNeedsCep(values)) {
+    if (payload.endereco && (payload.endereco.cep === '' || this.addressNeedsCep(values))) {
       this.form.controls.cep.markAsTouched();
       const message = 'Informe um CEP válido antes de atualizar o endereço.';
       this.errorMessage.set(message);
@@ -217,12 +220,11 @@ export class UserEdit implements OnDestroy {
       return;
     }
 
-    const payload = hasDataChanges ? this.createUserPayload(usuario, values) : null;
     let dataWasSaved = false;
     let photoUploadStarted = false;
     this.saving.set(true);
-    const dataSave$ = payload
-      ? this.userService.atualizarUsuario(usuario.id, payload).pipe(
+    const dataSave$ = hasDataChanges
+      ? this.userService.atualizarUsuarioParcial(usuario.id, payload).pipe(
           take(1),
           tap(updated => {
             dataWasSaved = true;
@@ -348,8 +350,8 @@ export class UserEdit implements OnDestroy {
     this.form.reset(
       {
         nome: usuario.nome ?? '',
-        cpf: usuario.cpf ?? '',
-        rg: usuario.rg ?? '',
+        cpf: { value: usuario.cpf ?? '', disabled: this.isDocumentLocked(usuario, 'cpf') },
+        rg: { value: usuario.rg ?? '', disabled: this.isDocumentLocked(usuario, 'rg') },
         dataNascimento: apiDateToForm(usuario.dataNascimento),
         responsavelNome: usuario.responsavelNome ?? '',
         responsavelTelefone: usuario.responsavelTelefone ?? '',
@@ -385,15 +387,16 @@ export class UserEdit implements OnDestroy {
     rg.updateValueAndValidity({ emitEvent: false });
   }
 
-  private documentosObrigatoriosVazios(
-    usuario: UserModel,
-    values: ReturnType<typeof this.form.getRawValue>,
-  ): Array<'cpf' | 'rg'> {
+  private isDocumentLocked(usuario: UserModel, field: 'cpf' | 'rg'): boolean {
+    return !!usuario[field]?.trim() || (field === 'rg' && usuario.ehCin === true);
+  }
+
+  private documentosObrigatoriosVazios(usuario: UserModel, payload: PatchUserRequest): Array<'cpf' | 'rg'> {
     const campos: Array<'cpf' | 'rg'> = [];
-    if (!onlyDigits(values.cpf)) {
+    if (!onlyDigits(payload.cpf ?? usuario.cpf)) {
       campos.push('cpf');
     }
-    if (!(usuario.ehCin ?? false) && !values.rg.trim()) {
+    if (!usuario.ehCin && !(payload.rg ?? usuario.rg)?.trim()) {
       campos.push('rg');
     }
     return campos;
@@ -428,72 +431,58 @@ export class UserEdit implements OnDestroy {
 
   hasUnsavedChanges(): boolean {
     const usuario = this.usuario();
-    return !!usuario && (this.hasDataChanges(usuario, this.form.getRawValue()) || this.hasPendingPhoto());
-  }
-
-  private hasDataChanges(
-    usuario: UserModel,
-    values: ReturnType<typeof this.form.getRawValue>,
-  ): boolean {
-    return (
-      this.changed(values.nome, usuario.nome) ||
-      (!usuario.cpf?.trim() && onlyDigits(values.cpf) !== onlyDigits(usuario.cpf)) ||
-      (!usuario.ehCin && !usuario.rg?.trim() && this.changed(values.rg, usuario.rg ?? '')) ||
-      this.changed(values.dataNascimento, apiDateToForm(usuario.dataNascimento)) ||
-      onlyDigits(values.telefone) !== onlyDigits(usuario.telefone) ||
-      this.changed(values.tipoSanguineo, usuario.tipoSanguineo ?? '') ||
-      this.changed(values.doencasAlergias, usuario.doencasAlergias ?? '') ||
-      this.responsibleDataChanged(usuario, values) ||
-      this.addressChanged(usuario, values)
+    return !!usuario && (
+      this.hasPendingPhoto() || Object.keys(this.createUserPatch(usuario, this.form.getRawValue())).length > 0
     );
   }
 
-  private createUserPayload(
+  private createUserPatch(
     usuario: UserModel,
     values: ReturnType<typeof this.form.getRawValue>,
-  ) {
-    const ehCin = usuario.ehCin ?? false;
-    return {
-      nome: values.nome.trim(),
-      email: usuario.email,
-      cargoId: usuario.cargo?.id ?? usuario.cargoId!,
-      ...(!usuario.cpf?.trim() && onlyDigits(values.cpf) !== onlyDigits(usuario.cpf)
-        ? { cpf: values.cpf.trim() }
-        : {}),
-      ...(!ehCin && !usuario.rg?.trim() && this.changed(values.rg, usuario.rg ?? '')
-        ? { rg: values.rg.trim() }
-        : {}),
-      ...(this.changed(values.dataNascimento, apiDateToForm(usuario.dataNascimento))
-        ? { dataNascimento: formDateToApi(values.dataNascimento) }
-        : {}),
-      ...(this.changed(values.telefone, usuario.telefone ?? '')
-        ? { telefone: values.telefone.trim() || null }
-        : {}),
-      ...(this.changed(values.tipoSanguineo, usuario.tipoSanguineo ?? '')
-        ? { tipoSanguineo: values.tipoSanguineo || null }
-        : {}),
-      ...(this.changed(values.doencasAlergias, usuario.doencasAlergias ?? '')
-        ? { doencasAlergias: values.doencasAlergias.trim() || null }
-        : {}),
-      ...(this.changed(values.responsavelNome, usuario.responsavelNome)
-        ? { responsavelNome: values.responsavelNome.trim() || null }
-        : {}),
-      ...(onlyDigits(values.responsavelTelefone) !== onlyDigits(usuario.responsavelTelefone)
-        ? { responsavelTelefone: values.responsavelTelefone.trim() || null }
-        : {}),
-      ...(this.changed(values.responsavelEmail, usuario.responsavelEmail)
-        ? { responsavelEmail: values.responsavelEmail.trim() || null }
-        : {}),
-      ...(this.addressChanged(usuario, values)
-        ? {
-            endereco: {
-              ...(onlyDigits(values.cep) ? { cep: onlyDigits(values.cep) } : {}),
-              numero: values.numero.trim() || null,
-              complemento: values.complemento.trim() || null,
-            },
-          }
-        : {}),
-    };
+  ): PatchUserRequest {
+    const payload: PatchUserRequest = {};
+    if (this.changed(values.nome, usuario.nome)) {
+      payload.nome = values.nome.trim();
+    }
+
+    const cpf = onlyDigits(values.cpf);
+    if (cpf && this.form.controls.cpf.enabled && !this.isDocumentLocked(usuario, 'cpf')) {
+      payload.cpf = cpf;
+    }
+    const rg = values.rg.trim();
+    if (rg && this.form.controls.rg.enabled && !this.isDocumentLocked(usuario, 'rg')) {
+      payload.rg = rg;
+    }
+    if (this.changed(values.dataNascimento, apiDateToForm(usuario.dataNascimento))) {
+      payload.dataNascimento = formDateToApi(values.dataNascimento);
+    }
+
+    for (const field of ['telefone', 'responsavelTelefone'] as const) {
+      const digits = onlyDigits(values[field]);
+      if (digits !== onlyDigits(usuario[field])) {
+        payload[field] = digits || null;
+      }
+    }
+    for (const field of ['tipoSanguineo', 'doencasAlergias', 'responsavelNome', 'responsavelEmail'] as const) {
+      if (this.changed(values[field], usuario[field])) {
+        payload[field] = values[field].trim() || null;
+      }
+    }
+
+    const endereco: UserAddressPatch = {};
+    const cep = onlyDigits(values.cep);
+    if (cep !== onlyDigits(usuario.endereco?.cep)) {
+      endereco.cep = cep;
+    }
+    for (const field of ['numero', 'complemento'] as const) {
+      if (this.changed(values[field], usuario.endereco?.[field])) {
+        endereco[field] = values[field].trim() || null;
+      }
+    }
+    if (Object.keys(endereco).length) {
+      payload.endereco = endereco;
+    }
+    return payload;
   }
 
   private commitUsuario(usuario: UserModel): void {
@@ -529,32 +518,11 @@ export class UserEdit implements OnDestroy {
       .subscribe(() => void this.router.navigate(['/desbravadores']));
   }
 
-  private addressChanged(
-    usuario: UserModel,
-    values: ReturnType<typeof this.form.getRawValue>,
-  ): boolean {
-    const original = usuario.endereco;
-    return (
-      onlyDigits(values.cep) !== onlyDigits(original?.cep) ||
-      this.changed(values.numero, original?.numero ?? '') ||
-      this.changed(values.complemento, original?.complemento ?? '')
-    );
-  }
-
   private addressNeedsCep(values: ReturnType<typeof this.form.getRawValue>): boolean {
     return (
       [values.cep, values.numero, values.complemento].some(value => value.trim()) &&
       onlyDigits(values.cep).length !== 8
     );
-  }
-
-  private responsibleDataChanged(
-    usuario: UserModel,
-    values: ReturnType<typeof this.form.getRawValue>,
-  ): boolean {
-    return this.changed(values.responsavelNome, usuario.responsavelNome) ||
-      onlyDigits(values.responsavelTelefone) !== onlyDigits(usuario.responsavelTelefone) ||
-      this.changed(values.responsavelEmail, usuario.responsavelEmail);
   }
 
   private changed(value: string, original: string | null | undefined): boolean {
@@ -578,11 +546,22 @@ export class UserEdit implements OnDestroy {
       .pipe(
         switchMap(request => {
           if (!request) {
+            this.cepFeedback.set({ status: 'neutral', message: '' });
             return of(null);
           }
           const { cep, clearAddress } = request;
+          const enderecoOriginal = this.usuario()?.endereco;
+          const mesmoCep = cep === onlyDigits(enderecoOriginal?.cep);
           if (clearAddress) {
-            this.form.patchValue({ logradouro: '', bairro: '' }, { emitEvent: false });
+            const endereco = !cep || mesmoCep ? enderecoOriginal : null;
+            this.form.patchValue(
+              { logradouro: endereco?.logradouro ?? '', bairro: endereco?.bairro ?? '' },
+              { emitEvent: false },
+            );
+          }
+          if (mesmoCep && cep) {
+            this.cepFeedback.set({ status: 'neutral', message: '' });
+            return of(null);
           }
           if (cep.length !== 8) {
             this.cepFeedback.set({
@@ -683,7 +662,11 @@ export class UserEdit implements OnDestroy {
   private handleSaveError(error: unknown): void {
     const fields = usuarioFieldErrors(error);
     for (const [name, message] of Object.entries(fields)) {
-      this.form.get(name)?.setErrors({ ...(this.form.get(name)?.errors ?? {}), server: message });
+      const field = name.startsWith('endereco.') ? name.slice('endereco.'.length).toLowerCase() : name;
+      const control = this.form.get(field);
+      if (control?.enabled) {
+        control.setErrors({ ...control.errors, server: message });
+      }
     }
     const message = describeUsuarioError(error, 'Não foi possível salvar as alterações. Tente novamente.');
     this.errorMessage.set(message);

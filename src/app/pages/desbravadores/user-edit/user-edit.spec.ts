@@ -71,7 +71,7 @@ function expectRenderedProfile(page: HTMLElement): void {
 describe('UserEdit', () => {
   let fixture: ComponentFixture<UserEdit>;
   let service: {
-    atualizarUsuario: ReturnType<typeof vi.fn>;
+    atualizarUsuarioParcial: ReturnType<typeof vi.fn>;
     obterFoto: ReturnType<typeof vi.fn>;
     enviarFoto: ReturnType<typeof vi.fn>;
     consultarCep: ReturnType<typeof vi.fn>;
@@ -97,7 +97,7 @@ describe('UserEdit', () => {
 
   beforeEach(() => {
     service = {
-      atualizarUsuario: vi.fn().mockImplementation((_id, payload) => of({ ...usuario, ...payload })),
+      atualizarUsuarioParcial: vi.fn().mockImplementation((_id, payload) => of({ ...usuario, ...payload })),
       obterFoto: vi.fn().mockReturnValue(of(new Blob())),
       enviarFoto: vi.fn(),
       consultarCep: vi.fn().mockReturnValue(of({})),
@@ -161,7 +161,7 @@ describe('UserEdit', () => {
 
     expect(service.enviarFoto).toHaveBeenCalledWith(usuario.id, file);
     expect(userAvatar.reloadCurrentUserPhoto).toHaveBeenCalledOnce();
-    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
   });
 
   it('deixa editar CPF e RG ausentes e oferece somente manter documentos vazios', async () => {
@@ -195,11 +195,11 @@ describe('UserEdit', () => {
     const actions = TestBed.inject(ToastService).toasts().find(record => record.type === 'warning')?.actions;
     actions?.[0].onClick();
 
-    expect(service.atualizarUsuario).toHaveBeenCalledWith(
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledWith(
       'user-1',
-      expect.objectContaining({ telefone: '(21) 98888-7777' }),
+      { telefone: '21988887777' },
     );
-    const payload = service.atualizarUsuario.mock.calls[0][1] as Record<string, unknown>;
+    const payload = service.atualizarUsuarioParcial.mock.calls[0][1] as Record<string, unknown>;
     expect(payload).not.toHaveProperty('cpf');
     expect(payload).not.toHaveProperty('rg');
     expect(payload).not.toHaveProperty('ehCin');
@@ -211,6 +211,7 @@ describe('UserEdit', () => {
       usuario: { ...usuario, cpf: null, rg: null, ehCin: true },
     });
     const component = fixture.componentInstance;
+    component.form.controls.telefone.setValue('21988887777');
     component.salvar();
 
     const actions = TestBed.inject(ToastService).toasts().find(record => record.type === 'warning')?.actions;
@@ -224,6 +225,25 @@ describe('UserEdit', () => {
 
   });
 
+  it('completa o CPF ausente de usuário com CIN e ignora alteração programática do RG', async () => {
+    const original = { ...usuario, cpf: null, rg: null, ehCin: true };
+    await createComponent({ usuario: original });
+    const component = fixture.componentInstance;
+    const { cpf, rg } = component.form.controls;
+    expect(cpf.enabled).toBe(true);
+    expect(rg.disabled).toBe(true);
+    service.atualizarUsuarioParcial.mockReturnValueOnce(of({ ...original, cpf: '52998224725' }));
+    cpf.setValue('529.982.247-25');
+    rg.setValue('987654321');
+
+    component.salvar();
+
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledExactlyOnceWith(usuario.id, { cpf: '52998224725' });
+    expect(cpf.disabled).toBe(true);
+    expect(rg.value).toBe('');
+    expect(component.usuario()?.ehCin).toBe(true);
+  });
+
   it('envia CPF e RG preenchidos quando estavam ausentes no cadastro', async () => {
     await createComponent({
       usuario: { ...usuario, cpf: null, rg: null },
@@ -233,31 +253,78 @@ describe('UserEdit', () => {
     component.form.controls.rg.setValue('987654321');
     component.salvar();
 
-    expect(service.atualizarUsuario).toHaveBeenCalledWith(
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledWith(
       'user-1',
       expect.objectContaining({ cpf: '52998224725', rg: '987654321' }),
     );
-    expect(service.atualizarUsuario.mock.calls[0][1]).not.toHaveProperty('ehCin');
+    expect(service.atualizarUsuarioParcial.mock.calls[0][1]).not.toHaveProperty('ehCin');
+  });
+
+  it('permite preencher somente o RG ausente quando o CPF já existe', async () => {
+    await createComponent({ usuario: { ...usuario, rg: null } });
+    const component = fixture.componentInstance;
+    const { cpf, rg } = component.form.controls;
+    expect(cpf.disabled).toBe(true);
+    expect(rg.enabled).toBe(true);
+    cpf.setValue('');
+    rg.setValue('98.765.432-1');
+
+    component.salvar();
+
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledExactlyOnceWith(usuario.id, { rg: '98.765.432-1' });
   });
 
   it('ignora alterações programáticas em CPF e RG já cadastrados', async () => {
     await createComponent();
     const component = fixture.componentInstance;
-    component.form.controls.cpf.setValue('11144477735');
-    component.form.controls.rg.setValue('987654321');
+    const { cpf, rg } = component.form.controls;
+    cpf.enable();
+    rg.enable();
+    cpf.setValue('11144477735');
+    rg.setValue('987654321');
+    component.emailResumo.setValue('outro@example.com');
+    component.cargoResumo.setValue('Tesoureiro');
 
     expect(component.hasUnsavedChanges()).toBe(false);
 
     component.form.controls.telefone.setValue('(21) 98888-7777');
     component.salvar();
 
-    const payload = service.atualizarUsuario.mock.calls[0][1] as Record<string, unknown>;
-    expect(payload).not.toHaveProperty('cpf');
-    expect(payload).not.toHaveProperty('rg');
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledWith(usuario.id, { telefone: '21988887777' });
+  });
+
+  it('usa os documentos gravados quando valores programáticos em campos bloqueados estão vazios ou inválidos', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    component.form.patchValue({ cpf: '', rg: 'inválido', telefone: '21988887777' });
+
+    component.salvar();
+
+    expect(TestBed.inject(ToastService).toasts().some(toast => toast.type === 'warning')).toBe(false);
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledExactlyOnceWith(usuario.id, { telefone: '21988887777' });
+    expect(component.usuario()?.cpf).toBe(usuario.cpf);
+    expect(component.usuario()?.rg).toBe(usuario.rg);
+  });
+
+  it('ignora documentos ausentes preenchidos em controles desabilitados', async () => {
+    await createComponent({ usuario: { ...usuario, cpf: null, rg: null } });
+    const component = fixture.componentInstance;
+    component.form.controls.cpf.disable();
+    component.form.controls.rg.disable();
+    component.form.patchValue({ cpf: '52998224725', rg: '987654321', telefone: '21988887777' });
+
+    component.salvar();
+
+    const aviso = TestBed.inject(ToastService).toasts().find(toast => toast.type === 'warning');
+    expect(aviso?.message).toContain('CPF e RG');
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
+    aviso?.actions?.[0].onClick();
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledExactlyOnceWith(usuario.id, { telefone: '21988887777' });
   });
 
   it('não atualiza o avatar da sessão ao salvar a foto de outra pessoa', async () => {
-    await createComponent();
+    const usuarioSemRg = { ...usuario, rg: null };
+    await createComponent({ usuario: usuarioSemRg });
     const auth = TestBed.inject(AuthService);
     auth.user.set({
       id: 'session-user',
@@ -267,7 +334,7 @@ describe('UserEdit', () => {
     });
 
     const file = new File(['image'], 'other.webp', { type: 'image/webp' });
-    service.enviarFoto.mockReturnValue(of(usuario));
+    service.enviarFoto.mockReturnValue(of(usuarioSemRg));
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:other-preview');
     const input = document.createElement('input');
     input.type = 'file';
@@ -279,17 +346,18 @@ describe('UserEdit', () => {
 
     expect(service.enviarFoto).toHaveBeenCalledWith(usuario.id, file);
     expect(userAvatar.reloadCurrentUserPhoto).not.toHaveBeenCalled();
-    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
   });
 
   it('repete somente o upload quando os dados foram salvos e a foto falhou', async () => {
     await createComponent();
     const component = fixture.componentInstance;
     const file = new File(['image'], 'profile.webp', { type: 'image/webp' });
-    service.atualizarUsuario.mockReturnValueOnce(of({ ...usuario, telefone: '21999999999' }));
+    const salvo = { ...usuario, telefone: '21999999999' };
+    service.atualizarUsuarioParcial.mockReturnValueOnce(of(salvo));
     service.enviarFoto
       .mockReturnValueOnce(throwError(() => new Error('upload failed')))
-      .mockReturnValueOnce(of(usuario));
+      .mockReturnValueOnce(of(salvo));
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:pending-photo');
     const input = document.createElement('input');
     input.type = 'file';
@@ -299,26 +367,29 @@ describe('UserEdit', () => {
 
     component.salvar();
 
-    expect(service.atualizarUsuario).toHaveBeenCalledOnce();
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledOnce();
     expect(service.enviarFoto).toHaveBeenCalledOnce();
     expect(component.pendingPhoto()).toBe(file);
     expect(component.errorMessage()).toContain('Os dados foram salvos, mas a foto');
+    expect(component.successMessage()).toBe('');
+    expect(component.usuario()).toEqual(salvo);
     expect(component.redirecting()).toBe(false);
     expect(component.saving()).toBe(false);
 
     component.salvar();
 
-    expect(service.atualizarUsuario).toHaveBeenCalledOnce();
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledOnce();
     expect(service.enviarFoto).toHaveBeenCalledTimes(2);
     expect(component.pendingPhoto()).toBeNull();
     expect(component.redirecting()).toBe(true);
+    expect(component.form.controls.telefone.value).toBe(salvo.telefone);
   });
 
   it('não envia a foto se a atualização dos dados falhar', async () => {
     await createComponent();
     const component = fixture.componentInstance;
     const file = new File(['image'], 'profile.webp', { type: 'image/webp' });
-    service.atualizarUsuario.mockReturnValueOnce(
+    service.atualizarUsuarioParcial.mockReturnValueOnce(
       throwError(() => new HttpErrorResponse({ status: 500 })),
     );
     service.enviarFoto.mockReturnValueOnce(of(usuario));
@@ -331,7 +402,7 @@ describe('UserEdit', () => {
 
     component.salvar();
 
-    expect(service.atualizarUsuario).toHaveBeenCalledOnce();
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledOnce();
     expect(service.enviarFoto).not.toHaveBeenCalled();
     expect(component.pendingPhoto()).toBe(file);
     expect(component.form.controls.telefone.value).toBe('21999999999');
@@ -369,7 +440,7 @@ describe('UserEdit', () => {
     component.salvar();
 
     expect(service.enviarFoto).toHaveBeenCalledWith(usuario.id, fileB);
-    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
   });
 
   it('descarta a foto pendente ao cancelar e bloqueia foto se os dados estiverem inválidos', async () => {
@@ -386,7 +457,7 @@ describe('UserEdit', () => {
     component.form.controls.nome.setValue('');
     component.salvar();
 
-    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
     expect(service.enviarFoto).not.toHaveBeenCalled();
     expect(component.pendingPhoto()).toBe(file);
 
@@ -396,7 +467,7 @@ describe('UserEdit', () => {
     expect(component.pendingPhoto()).toBeNull();
     expect(component.fotoAtual()).toBeNull();
     expect(revokeSpy).toHaveBeenCalledWith('blob:pending-photo');
-    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
     expect(service.enviarFoto).not.toHaveBeenCalled();
   });
 
@@ -490,7 +561,7 @@ describe('UserEdit', () => {
     expect(component.form.controls.responsavelTelefone.value).toBe('');
     expect(component.form.controls.responsavelEmail.value).toBe('');
     expect(component.form.controls.responsavelEmail.valid).toBe(true);
-    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
   });
 
   it('valida o e-mail do responsável e preserva o texto inválido sem enviar', async () => {
@@ -500,7 +571,7 @@ describe('UserEdit', () => {
 
     component.salvar();
 
-    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
     expect(component.form.controls.responsavelEmail.value).toBe('email-invalido');
     expect(component.errorMessage()).toContain('e-mail válido');
   });
@@ -512,11 +583,11 @@ describe('UserEdit', () => {
 
     component.salvar();
 
-    expect(service.atualizarUsuario).toHaveBeenCalledWith(
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledWith(
       'user-1',
-      expect.objectContaining({ responsavelTelefone: '(21) 98888-7777' }),
+      { responsavelTelefone: '21988887777' },
     );
-    const payload = service.atualizarUsuario.mock.calls[0][1] as Record<string, unknown>;
+    const payload = service.atualizarUsuarioParcial.mock.calls[0][1] as Record<string, unknown>;
     expect(payload).not.toHaveProperty('responsavelNome');
     expect(payload).not.toHaveProperty('responsavelEmail');
     expect(payload).not.toHaveProperty('responsavelCpf');
@@ -638,10 +709,10 @@ describe('UserEdit', () => {
     expect(fixture.componentInstance.isLoaded()).toBe(false);
     expect(page.querySelector('.container-center')).toBeNull();
     expect(fixture.componentInstance.errorMessage()).toContain('identificar o usuário');
-    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
   });
 
-  it('salva com o ID e cargo originais e não envia metadados nem dados ocultos', async () => {
+  it('envia somente o telefone e a limpeza do campo opcional que foram alterados', async () => {
     await createComponent();
     const component = fixture.componentInstance;
     const toast = TestBed.inject(ToastService);
@@ -652,24 +723,10 @@ describe('UserEdit', () => {
     component.form.controls.doencasAlergias.setValue('');
     component.salvar();
 
-    expect(service.atualizarUsuario).toHaveBeenCalledWith(
-      'user-1',
-      expect.objectContaining({
-        nome: 'Ana Silva',
-        email: 'ana@example.com',
-        cargoId: 'cargo-1',
-        telefone: '(21) 98765-4321',
-        doencasAlergias: null,
-      }),
-    );
-    const payload = service.atualizarUsuario.mock.calls[0][1] as Record<string, unknown>;
-    expect(payload).not.toHaveProperty('senha');
-    expect(payload).not.toHaveProperty('dataExpiracao');
-    expect(payload).not.toHaveProperty('responsavelNome');
-    expect(payload).not.toHaveProperty('endereco');
-    expect(payload).not.toHaveProperty('cpf');
-    expect(payload).not.toHaveProperty('rg');
-    expect(payload).not.toHaveProperty('ehCin');
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledWith(usuario.id, {
+      telefone: '21987654321',
+      doencasAlergias: null,
+    });
     expect(component.successMessage()).toContain('atualizados com sucesso');
     expect(toast.toasts().find(record => record.type === 'success')).toMatchObject({
       message: 'Os dados do usuário foram atualizados com sucesso.',
@@ -683,6 +740,74 @@ describe('UserEdit', () => {
     expect(navigate).toHaveBeenCalledWith(['/desbravadores']);
     expect(component.redirecting()).toBe(true);
     vi.useRealTimers();
+  });
+
+  it('envia somente nome quando editado, preservando os espaços internos', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    component.form.controls.nome.setValue(' Ana  Maria ');
+
+    component.salvar();
+
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledWith(usuario.id, { nome: 'Ana  Maria' });
+  });
+
+  it('envia somente o telefone e sincroniza o cargo alterado por outro administrador', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    const resposta = new Subject<UserModel>();
+    service.atualizarUsuarioParcial.mockReturnValueOnce(resposta);
+    expect(component.cargoResumo.value).toBe(usuario.cargo?.nome);
+
+    const cadastroNoServidor: UserModel = {
+      ...usuario,
+      cargo: { id: 'cargo-2', nome: 'Tesoureiro', role: 'TES' },
+      nome: 'Ana Souza',
+      email: 'ana.souza@example.com',
+    };
+    component.form.controls.telefone.setValue('(11) 98765-4321');
+    component.salvar();
+    component.salvar();
+
+    expect(component.saving()).toBe(true);
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledExactlyOnceWith(usuario.id, { telefone: '11987654321' });
+    const cadastroAtualizado = { ...cadastroNoServidor, telefone: '11987654321' };
+    resposta.next(cadastroAtualizado);
+
+    expect(component.usuario()).toEqual(cadastroAtualizado);
+    expect(component.cargoResumo.value).toBe('Tesoureiro');
+    expect(component.emailResumo.value).toBe('ana.souza@example.com');
+    expect(component.form.controls.nome.value).toBe('Ana Souza');
+    expect(component.form.controls.telefone.value).toBe('11987654321');
+    expect(component.hasUnsavedChanges()).toBe(false);
+    expect(component.saving()).toBe(false);
+    expect(TestBed.inject(Location).getState()).toMatchObject({ usuario: cadastroAtualizado });
+  });
+
+  it('ignora valores restaurados e diferenças apenas de máscara, data ou espaços externos', async () => {
+    await createComponent({ usuario: { ...usuario, dataNascimento: '2000-02-29T00:00:00Z' } });
+    const component = fixture.componentInstance;
+    const controls = component.form.controls;
+    controls.nome.setValue('Outro nome');
+    controls.nome.markAsDirty();
+    expect(component.hasUnsavedChanges()).toBe(true);
+    component.form.patchValue({
+      nome: ' Ana Silva ',
+      telefone: '(11) 99999-9999',
+      responsavelTelefone: '(11) 98888-7777',
+      dataNascimento: '29/02/2000',
+      cep: '01001-000',
+    });
+
+    expect(component.hasUnsavedChanges()).toBe(false);
+    component.salvar();
+
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
+    expect(component.form.pristine).toBe(true);
+    expect(component.successMessage()).toBe('');
+    expect(TestBed.inject(ToastService).toasts()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'error', message: expect.stringContaining('Nenhuma alteração') }),
+    ]));
   });
 
   it('salva data e telefone nulos como valores válidos e mantém RG bloqueado com ehCin', async () => {
@@ -703,29 +828,43 @@ describe('UserEdit', () => {
 
     component.form.controls.dataNascimento.setValue('15/04/2005');
     component.form.controls.telefone.setValue('(11) 91234-5678');
-    service.atualizarUsuario.mockReturnValueOnce(
+    service.atualizarUsuarioParcial.mockReturnValueOnce(
       of({ ...usuarioComCin, dataNascimento: '2005-04-15', telefone: '(11) 91234-5678' }),
     );
     component.salvar();
 
-    expect(service.atualizarUsuario).toHaveBeenCalledWith(
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledWith(
       'user-1',
       expect.objectContaining({
         dataNascimento: '2005-04-15',
-        telefone: '(11) 91234-5678',
+        telefone: '11912345678',
       }),
     );
-    expect(service.atualizarUsuario.mock.calls[0][1]).not.toHaveProperty('rg');
-    expect(service.atualizarUsuario.mock.calls[0][1]).not.toHaveProperty('ehCin');
+    expect(service.atualizarUsuarioParcial.mock.calls[0][1]).not.toHaveProperty('rg');
+    expect(service.atualizarUsuarioParcial.mock.calls[0][1]).not.toHaveProperty('ehCin');
     expect(component.form.controls.dataNascimento.value).toBe('15/04/2005');
     expect(component.form.controls.telefone.value).toBe('(11) 91234-5678');
+  });
+
+  it('limpa data e telefone com null e omite opcionais que já estavam vazios', async () => {
+    const original = { ...usuario, responsavelTelefone: null, dataExpiracao: undefined };
+    await createComponent({ usuario: original });
+    const component = fixture.componentInstance;
+    const alteracoes = { dataNascimento: null, telefone: null };
+    service.atualizarUsuarioParcial.mockReturnValueOnce(of({ ...original, ...alteracoes }));
+    component.form.patchValue({ dataNascimento: '', telefone: '' });
+
+    component.salvar();
+
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledWith(usuario.id, alteracoes);
+    expect(component.usuario()).toEqual({ ...original, ...alteracoes });
   });
 
   it('mantém os dados salvos no estado de navegação após reabrir a edição', async () => {
     await createComponent();
     const component = fixture.componentInstance;
     component.form.controls.telefone.setValue('(21) 98765-4321');
-    service.atualizarUsuario.mockReturnValueOnce(of({ ...usuario, telefone: '21987654321' }));
+    service.atualizarUsuarioParcial.mockReturnValueOnce(of({ ...usuario, telefone: '21987654321' }));
     component.salvar();
 
     const updatedState = TestBed.inject(Location).getState() as { usuario: UserModel };
@@ -746,28 +885,128 @@ describe('UserEdit', () => {
     ).toBe('(21) 98765-4321');
   });
 
-  it('envia endereço sem campos ViaCEP quando um campo visível muda', async () => {
+  it('envia somente o número e aplica o endereço completo devolvido pela API', async () => {
     await createComponent();
     const component = fixture.componentInstance;
-    component.form.controls.numero.setValue('200');
+    const endereco = { ...usuario.endereco, numero: '200', complemento: 'Alterado por outro admin' };
+    service.atualizarUsuarioParcial.mockReturnValueOnce(of({ ...usuario, endereco }));
+    component.form.patchValue({ numero: '200', logradouro: 'Ignorar', bairro: 'Ignorar' });
     component.salvar();
 
-    const payload = service.atualizarUsuario.mock.calls[0][1] as {
-      endereco: Record<string, unknown>;
-    };
-    expect(payload.endereco).toEqual({ cep: '01001000', numero: '200', complemento: 'Apto 12' });
-    expect(payload.endereco).not.toHaveProperty('logradouro');
-    expect(payload.endereco).not.toHaveProperty('bairro');
-    expect(payload.endereco).not.toHaveProperty('ibge');
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledWith(usuario.id, { endereco: { numero: '200' } });
+    expect(component.usuario()?.endereco).toEqual(endereco);
+    expect(component.form.controls.complemento.value).toBe(endereco.complemento);
   });
 
-  it('evita PUT quando não há alterações e apresenta erro HTTP 403', async () => {
+  it.each([
+    ['Bloco B', 'Bloco B'],
+    ['', null],
+  ])('envia somente complemento quando é preenchido com "%s"', async (complemento, esperado) => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    component.form.controls.complemento.setValue(complemento);
+    component.salvar();
+
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledWith(usuario.id, { endereco: { complemento: esperado } });
+  });
+
+  it('envia o CEP novo e aplica os dados oficiais e os campos zerados devolvidos pela API', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    const endereco = { cep: '20040002', logradouro: 'Rua da Assembleia', bairro: 'Centro', numero: null, complemento: null };
+    service.consultarCep.mockReturnValueOnce(of({ ...endereco, logradouro: 'Prévia da consulta' }));
+    service.atualizarUsuarioParcial.mockReturnValueOnce(of({ ...usuario, endereco }));
+    component.form.controls.cep.setValue('20040-002');
+    expect(service.consultarCep).toHaveBeenCalledWith('20040002');
+    expect(component.form.controls.logradouro.value).toBe('Prévia da consulta');
+
+    component.salvar();
+
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledWith(usuario.id, { endereco: { cep: '20040002' } });
+    expect(component.form.controls.numero.value).toBe('');
+    expect(component.form.controls.complemento.value).toBe('');
+    expect(component.form.controls.bairro.value).toBe(endereco.bairro);
+    expect(component.form.controls.logradouro.value).toBe(endereco.logradouro);
+    expect(component.cepFeedback().status).toBe('neutral');
+  });
+
+  it('exige CEP para adicionar número em um cadastro sem endereço', async () => {
+    await createComponent({ usuario: { ...usuario, endereco: null } });
+    const component = fixture.componentInstance;
+    component.form.controls.numero.setValue('40');
+    component.salvar();
+    expect(component.errorMessage()).toContain('Informe um CEP válido');
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
+
+    component.form.controls.cep.setValue('01001-000');
+    service.atualizarUsuarioParcial.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 503 })));
+    component.salvar();
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledExactlyOnceWith(usuario.id, {
+      endereco: { cep: '01001000', numero: '40' },
+    });
+  });
+
+  it('preserva o endereço cadastrado ao apagar o CEP sem uma ação de remoção', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    component.form.controls.cep.setValue('');
+    component.salvar();
+
+    expect(component.form.controls.cep.hasError('required')).toBe(true);
+    expect(component.usuario()?.endereco).toEqual(usuario.endereco);
+    expect(component.form.controls.logradouro.value).toBe(usuario.endereco?.logradouro);
+    expect(component.form.controls.bairro.value).toBe(usuario.endereco?.bairro);
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
+
+    component.form.controls.cep.setValue('01001-000');
+    expect(component.hasUnsavedChanges()).toBe(false);
+    expect(service.consultarCep).not.toHaveBeenCalled();
+  });
+
+  it('bloqueia a remoção com todos os campos vazios mesmo sem o validador do CEP', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    component.form.patchValue({ cep: '', numero: '', complemento: '', telefone: '21987654321' });
+    component.form.controls.cep.disable();
+    expect(component.form.valid).toBe(true);
+
+    component.salvar();
+
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
+    expect(component.errorMessage()).toContain('Informe um CEP válido');
+    expect(component.usuario()?.endereco).toEqual(usuario.endereco);
+    expect(component.hasUnsavedChanges()).toBe(true);
+  });
+
+  it('mapeia erros de endereço do PATCH para os controles e conserva o cadastro confirmado e o rascunho', async () => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    const mensagem = 'endereco.cep não encontrado no ViaCEP.';
+    const { cep, complemento } = component.form.controls;
+    service.atualizarUsuarioParcial.mockReturnValueOnce(throwError(() => new HttpErrorResponse({
+      status: 400,
+      error: { errors: { 'Endereco.Cep': [mensagem], 'Endereco.Complemento': ['Complemento inválido.'] } },
+    })));
+    component.form.patchValue({ cep: '20040002', complemento: 'Novo complemento' });
+
+    component.salvar();
+
+    expect(cep.getError('server')).toBe(mensagem);
+    expect(complemento.getError('server')).toBe('Complemento inválido.');
+    expect(cep.value).toBe('20040002');
+    expect(complemento.value).toBe('Novo complemento');
+    expect(component.usuario()?.endereco).toEqual(usuario.endereco);
+    expect(component.successMessage()).toBe('');
+    expect(component.errorMessage()).toBe(mensagem);
+  });
+
+  it('evita PATCH quando não há alterações e apresenta erro HTTP 403', async () => {
     await createComponent();
     const component = fixture.componentInstance;
     component.salvar();
-    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
 
-    service.atualizarUsuario.mockReturnValueOnce(
+    service.atualizarUsuarioParcial.mockReturnValueOnce(
       throwError(() => new HttpErrorResponse({ status: 403, error: { detail: 'Acesso negado.' } })),
     );
     component.form.controls.telefone.setValue('21987654321');
@@ -782,7 +1021,7 @@ describe('UserEdit', () => {
     await createComponent();
     const component = fixture.componentInstance;
     component.form.controls.telefone.setValue('21987654321');
-    service.atualizarUsuario.mockReturnValueOnce(
+    service.atualizarUsuarioParcial.mockReturnValueOnce(
       throwError(
         () =>
           new HttpErrorResponse({
@@ -796,13 +1035,57 @@ describe('UserEdit', () => {
     expect(component.form.controls.telefone.value).toBe('21987654321');
     expect(component.form.controls.telefone.errors?.['server']).toBe('Telefone inválido.');
 
-    service.atualizarUsuario.mockReturnValueOnce(
+    service.atualizarUsuarioParcial.mockReturnValueOnce(
       throwError(() => new HttpErrorResponse({ status: 409, error: { detail: 'Cadastro conflitante.' } })),
     );
     component.form.controls.telefone.setValue('21987654322');
     component.salvar();
     expect(component.errorMessage()).toBe('Cadastro conflitante.');
     expect(component.successMessage()).toBe('');
+  });
+
+  it('preserva as regras de responsável por menor aplicadas pela API ao estado final', async () => {
+    const semResponsavel = { ...usuario, responsavelNome: null, responsavelEmail: null };
+    await createComponent({ usuario: semResponsavel });
+    const component = fixture.componentInstance;
+    const dataNascimento = `${new Date().getFullYear() - 10}-01-01`;
+    service.atualizarUsuarioParcial.mockReturnValueOnce(throwError(() => new HttpErrorResponse({
+      status: 400,
+      error: { errors: { ResponsavelNome: ['Informe o nome do responsável.'], ResponsavelEmail: ['Informe o e-mail do responsável.'] } },
+    })));
+    component.form.controls.dataNascimento.setValue(`01/01/${dataNascimento.slice(0, 4)}`);
+    component.salvar();
+
+    expect(service.atualizarUsuarioParcial).toHaveBeenCalledWith(usuario.id, { dataNascimento });
+    expect(component.form.controls.responsavelNome.getError('server')).toBe('Informe o nome do responsável.');
+    expect(component.form.controls.responsavelEmail.getError('server')).toBe('Informe o e-mail do responsável.');
+    expect(component.successMessage()).toBe('');
+    expect(component.usuario()).toEqual(semResponsavel);
+
+    const alteracoes = { dataNascimento, responsavelNome: 'Maria Silva', responsavelEmail: 'maria@example.com' };
+    service.atualizarUsuarioParcial.mockReturnValueOnce(of({ ...semResponsavel, ...alteracoes }));
+    component.form.patchValue({ responsavelNome: alteracoes.responsavelNome, responsavelEmail: alteracoes.responsavelEmail });
+    component.salvar();
+    expect(service.atualizarUsuarioParcial).toHaveBeenLastCalledWith(usuario.id, alteracoes);
+    expect(component.form.controls.responsavelEmail.valid).toBe(true);
+  });
+
+  it.each([
+    [401, 'Sua sessão expirou'],
+    [404, 'Usuário não encontrado'],
+    [503, 'O serviço está temporariamente indisponível'],
+  ])('exibe o erro %i do PATCH e mantém as alterações pendentes', async (status, message) => {
+    await createComponent();
+    const component = fixture.componentInstance;
+    service.atualizarUsuarioParcial.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status })));
+    component.form.controls.telefone.setValue('21987654321');
+    component.salvar();
+
+    expect(component.errorMessage()).toContain(message);
+    expect(component.successMessage()).toBe('');
+    expect(component.saving()).toBe(false);
+    expect(component.hasUnsavedChanges()).toBe(true);
+    expect(component.usuario()).toEqual(usuario);
   });
 
   it('mantém os campos permitidos editáveis e bloqueia resumo, documentos cadastrados e dados do CEP', async () => {
@@ -862,7 +1145,7 @@ describe('UserEdit', () => {
     expect(page.querySelector<HTMLInputElement>('.personal-card [formcontrolname="nome"] input')?.disabled).toBe(false);
     expect(page.querySelector<HTMLInputElement>('.responsible-card [formcontrolname="responsavelNome"] input')?.disabled).toBe(false);
     expect(page.querySelector<HTMLInputElement>('.address-card [formcontrolname="cep"] input')?.disabled).toBe(false);
-    expect(service.atualizarUsuario).not.toHaveBeenCalled();
+    expect(service.atualizarUsuarioParcial).not.toHaveBeenCalled();
   });
 
   it('bloqueia campos permitidos durante salvamento e redirecting', async () => {

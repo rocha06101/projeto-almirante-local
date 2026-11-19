@@ -83,8 +83,8 @@
           <div class="modal-body">
             <dl class="detail-list">
               <div><dt>Membro</dt><dd>{{ item.membroNome }}</dd></div>
-              @if (eventoDaDevolucao(item); as evento) {
-                <div><dt>Evento</dt><dd>{{ evento }}</dd></div>
+              @if (descricaoDaDevolucao(item); as descricao) {
+                <div><dt>{{ item.eventoId ? 'Evento de origem' : 'Descrição' }}</dt><dd>{{ descricao }}</dd></div>
               }
               <div><dt>Valor esperado</dt><dd>{{ formatCurrency(item.valor) }}</dd></div>
             </dl>
@@ -119,6 +119,7 @@
                   <div class="form-field">
                     <label for="data-devolucao">Data da devolução</label>
                     <input id="data-devolucao" type="date" name="dataDevolucao" required [(ngModel)]="dataDevolucao"
+                      [max]="hojeNoClube()"
                       [disabled]="consultandoDevolucao()"
                       [attr.aria-invalid]="erros.dataPagamento ? 'true' : null"
                       [attr.aria-describedby]="erros.dataPagamento ? 'erro-data-devolucao' : null" />
@@ -130,10 +131,14 @@
                 <div class="form-field">
                   <label for="justificativa-devolucao">Justificativa</label>
                   <input id="justificativa-devolucao" type="text" name="justificativaDevolucao" [(ngModel)]="justificativaDevolucao"
+                    [maxlength]="justificativaDevolucaoMaxima"
                     [disabled]="consultandoDevolucao()"
                     [attr.aria-invalid]="erros.justificativa ? 'true' : null"
                     [attr.aria-describedby]="erros.justificativa ? 'ajuda-justificativa erro-justificativa' : 'ajuda-justificativa'" />
-                  <small id="ajuda-justificativa">Obrigatória quando o valor devolvido difere do esperado.</small>
+                  <small id="ajuda-justificativa">
+                    Obrigatória quando o valor devolvido difere do esperado.
+                    {{ justificativaDevolucao.length }}/{{ justificativaDevolucaoMaxima }} caracteres.
+                  </small>
                   @if (erros.justificativa) {
                     <span id="erro-justificativa" class="form-error" role="alert">{{ erros.justificativa }}</span>
                   }
@@ -316,8 +321,8 @@
               @if (devolucao) {
                 <div class="refund-summary">
                   <strong>Devolução</strong>
-                  @if (eventoDaDevolucao(item); as evento) {
-                    <small>{{ evento }}</small>
+                  @if (descricaoDaDevolucao(item); as descricao) {
+                    <small>{{ descricao }}</small>
                   }
                   <small>Pagamento de origem <span class="refund-reference">{{ item.lancamentoOrigemId }}</span></small>
                 </div>

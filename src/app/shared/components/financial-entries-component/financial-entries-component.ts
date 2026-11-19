@@ -43,6 +43,8 @@ export const TODOS_OS_MEMBROS = '__todos__';
 const SEARCH_DEBOUNCE_MS = 300;
 const CONSULTAR_LANCAMENTOS = 'financeiro.lancamentos.consultar';
 const REGISTRAR_PAGAMENTOS = 'financeiro.pagamentos.registrar';
+// Mesmo fuso de Clube:FusoHorario na configuração do backend do Almirante.
+const DATA_CIVIL_CLUBE = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo' });
 
 /**
  * Máscara de centavos do campo Valor: só os dígitos contam ("R$ 1.250,50" → 1250.5).
@@ -108,6 +110,7 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
   valorDevolucaoTexto = '';
   dataDevolucao = '';
   justificativaDevolucao = '';
+  readonly justificativaDevolucaoMaxima = 255;
   readonly errosDevolucao = signal<ErrosDevolucao>({});
   readonly revisaoDevolucao = signal<DevolucaoLancamentoInput | null>(null);
   readonly consultandoDevolucao = signal(false);
@@ -368,12 +371,14 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
     } else if (!/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(dataPagamento) ||
       new Date(`${dataPagamento}T00:00:00Z`).toJSON()?.slice(0, 10) !== dataPagamento) {
       erros.dataPagamento = 'Informe uma data válida.';
+    } else if (dataPagamento > this.hojeNoClube()) {
+      erros.dataPagamento = 'A data da devolução não pode ser futura.';
     }
 
     if (valorDiferente && !justificativa) {
       erros.justificativa = 'Informe a justificativa para devolver um valor diferente do esperado.';
     } else if (this.justificativaDevolucao) {
-      if (justificativa.replace(/\s/g, '').length < 3 || justificativa.length > 255) {
+      if (justificativa.replace(/\s/g, '').length < 3 || justificativa.length > this.justificativaDevolucaoMaxima) {
         erros.justificativa = 'Use de 3 a 255 caracteres. Espaços não contam para o mínimo.';
       } else if (!cabeEmWindows1252(justificativa)) {
         erros.justificativa = 'Use caracteres compatíveis com Windows-1252, sem emojis ou quebras de linha.';
@@ -684,8 +689,12 @@ export class FinancialEntriesComponent implements OnInit, OnDestroy {
     return !!item.eventoId || !!item.lancamentoOrigemId;
   }
 
-  eventoDaDevolucao(item: Lancamento): string | null | undefined {
-    return item.descricao?.replace(/^Devolução - Evento - /, '') || item.eventoId;
+  descricaoDaDevolucao(item: Lancamento): string | null {
+    return item.descricao?.trim() || (item.eventoId ? 'Evento vinculado' : null);
+  }
+
+  hojeNoClube(): string {
+    return DATA_CIVIL_CLUBE.format(Date.now());
   }
 
   fluxoLabel(fluxo: LancamentoTipoFluxo): string {

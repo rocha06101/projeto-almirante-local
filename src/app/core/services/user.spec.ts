@@ -3,6 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
+import { User as UserModel } from '../models/user.model';
 import { User } from './user';
 
 /** Verifica o contrato de /api/Usuarios e /api/Cargos (UsuariosController/CargosController do backend). */
@@ -79,6 +80,25 @@ describe('User', () => {
       doencasAlergias: null,
     });
     req.flush({ id: 'u1' });
+  });
+
+  it('altera só o telefone via PATCH e devolve o cadastro retornado pela API', () => {
+    let atualizado: UserModel | undefined;
+    service.atualizarUsuarioParcial('u/1', { telefone: '11987654321' })
+      .subscribe(usuario => (atualizado = usuario));
+
+    const req = http.expectOne({ method: 'PATCH', url: '/api/Usuarios/u%2F1' });
+    expect(req.request.body).toEqual({ telefone: '11987654321' });
+    const resposta: UserModel = {
+      id: 'u/1',
+      nome: 'Ana',
+      email: 'ana@example.com',
+      dataCriacao: '2024-01-01T00:00:00Z',
+      telefone: '11987654321',
+      cargo: { id: 'c2', nome: 'Tesoureiro', role: 'TES' },
+    };
+    req.flush(resposta);
+    expect(atualizado).toEqual(resposta);
   });
 
   it('carrega o perfil completo autenticado com GET /api/Me', () => {

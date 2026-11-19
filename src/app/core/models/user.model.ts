@@ -139,6 +139,35 @@ export interface UpdateUserRequest {
   endereco?: UserAddressUpdate;
 }
 
+/** EnderecoRequest do PATCH. CEP nulo ou vazio remove o endereço, sem número ou complemento. */
+export interface UserAddressPatch {
+  cep?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+}
+
+/** PatchUsuarioRequest. Propriedades omitidas preservam o valor gravado. */
+export interface PatchUserRequest {
+  nome?: string;
+  email?: string;
+  cargoId?: string;
+  /** CPF já cadastrado não pode ser removido. */
+  cpf?: string | null;
+  dataNascimento?: string | null;
+  telefone?: string | null;
+  /** A remoção do RG depende das regras do documento e de ehCin. */
+  rg?: string | null;
+  ehCin?: boolean;
+  dataExpiracao?: string | null;
+  responsavelNome?: string | null;
+  responsavelEmail?: string | null;
+  responsavelCpf?: string | null;
+  responsavelTelefone?: string | null;
+  tipoSanguineo?: string | null;
+  doencasAlergias?: string | null;
+  endereco?: UserAddressPatch | null;
+}
+
 /** Corpo de `PUT /api/Me`; propriedades ausentes preservam os valores armazenados. */
 export interface UpdateMyProfileRequest {
   nome?: string;

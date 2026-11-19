@@ -8,6 +8,7 @@ import {
   ListUsersOptions,
   MyProfileResponse,
   MembroResumo,
+  PatchUserRequest,
   UpdateMyProfileRequest,
   UpdateUserRequest,
   User as UserModel,
@@ -40,6 +41,11 @@ export class User {
   /** Altera nome, e-mail e cargo de um usuário ativo. */
   atualizarUsuario(id: string, payload: UpdateUserRequest): Observable<UserModel> {
     return this.api.put<UserModel>(`/Usuarios/${encodeURIComponent(id)}`, payload);
+  }
+
+  /** Retorna o cadastro completo após a edição parcial administrativa. */
+  atualizarUsuarioParcial(id: string, payload: PatchUserRequest): Observable<UserModel> {
+    return this.api.patch<UserModel>(`/Usuarios/${encodeURIComponent(id)}`, payload);
   }
 
   obterMeuPerfil(): Observable<MyProfileResponse> {

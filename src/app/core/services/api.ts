@@ -34,6 +34,10 @@ export class ApiService {
     return this.http.put<T>(this.resolveUrl(url), body, options);
   }
 
+  patch<T>(url: string, body: unknown, options?: ApiRequestOptions): Observable<T> {
+    return this.http.patch<T>(this.resolveUrl(url), body, options);
+  }
+
   delete<T>(url: string, options?: ApiRequestOptions): Observable<T> {
     return this.http.delete<T>(this.resolveUrl(url), options);
   }

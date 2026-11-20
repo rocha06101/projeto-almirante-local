@@ -43,8 +43,8 @@
     transition: background-color 0.2s ease, box-shadow 0.2s ease;
 
     &:focus-within {
-      background: light-dark(var(--theme-border), var(--theme-surface-secondary));
-      box-shadow: 0 0 0 3px light-dark(rgba(59, 130, 246, 0.25), var(--focus-ring));
+      background: var(--theme-surface-secondary);
+      box-shadow: 0 0 0 3px var(--focus-ring);
     }
   }
 
@@ -70,7 +70,7 @@
     }
 
     &::placeholder {
-      color: var(--theme-text-muted);
+      color: var(--theme-text-muted-on-secondary);
       text-overflow: ellipsis;
     }
   }
@@ -134,7 +134,7 @@
     width: 1.25rem;
     height: 1.25rem;
     border-radius: 50%;
-    background: light-dark(#ef4444, #b91c1c);
+    background: light-dark(#dc2626, #b91c1c);
     color: #fff;
     font-size: 0.7rem;
     font-weight: 600;
@@ -302,7 +302,9 @@
       }
 
       &:disabled {
-        opacity: 0.6;
+        opacity: 1;
+        background: var(--theme-surface-secondary);
+        color: var(--theme-text-muted-on-secondary);
         cursor: wait;
       }
     }

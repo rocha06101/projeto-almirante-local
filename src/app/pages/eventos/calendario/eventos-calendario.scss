@@ -18,12 +18,14 @@ app-eventos-calendario {
   .fc .fc-scrollgrid { border-radius: 8px; overflow: hidden; background: var(--theme-surface); }
   .fc a { color: inherit; text-decoration: none; }
   .fc .fc-col-header-cell { background: light-dark(#f6f8f9, var(--theme-surface-secondary)); }
-  .fc .fc-col-header-cell-cushion { padding: 8px 0; font-size: 18px; font-weight: 400; color: light-dark(#777d94, var(--theme-text-muted-on-secondary)); }
+  .fc .fc-col-header-cell-cushion { padding: 8px 0; font-size: 18px; font-weight: 400; color: light-dark(#5b657b, var(--theme-text-muted-on-secondary)); }
   .fc .fc-daygrid-day-frame { min-height: clamp(84px, 10vh, 108px); }
   .fc .fc-daygrid-day-top { flex-direction: row; }
   .fc .fc-daygrid-day-events { margin-bottom: 4px; }
   .fc .fc-daygrid-day-number { padding: 0; }
-  .day-button { border: 0; border-radius: 0; font-size: 13px; padding: 0 8px; color: light-dark(#77819b, var(--theme-text-muted)); background: transparent; text-align: left; }
+  .fc .fc-day-other { background: var(--theme-background); }
+  .fc .fc-day-other .fc-daygrid-day-top { opacity: 1; }
+  .day-button { border: 0; border-radius: 0; font-size: 13px; padding: 0 8px; color: light-dark(#5b657b, var(--theme-text-muted)); background: transparent; text-align: left; }
   .fc .fc-day-today .day-button { color: light-dark(#5005a1, var(--theme-event-text)); font-weight: 700; }
   .fc .selected-day { box-shadow: inset 0 0 0 1.5px #8c6ae6; background: light-dark(#f2eef9, var(--theme-event-surface)); }
   .fc .selected-day .day-button { color: light-dark(#5005a1, var(--theme-event-text)); font-weight: 700; }

@@ -33,13 +33,13 @@ import { LancamentoStatus } from '../../models/lancamento.model';
       .status-badge.pago {
         background: rgba(34, 197, 94, 0.12);
         border-color: rgba(34, 197, 94, 0.4);
-        color: var(--theme-success-text);
+        color: light-dark(#166534, var(--theme-success-text));
       }
 
       .status-badge.pendente {
         background: rgba(245, 158, 11, 0.12);
         border-color: rgba(245, 158, 11, 0.4);
-        color: var(--theme-warning-text);
+        color: light-dark(#92400e, var(--theme-warning-text));
       }
 
       .status-badge.atrasado {

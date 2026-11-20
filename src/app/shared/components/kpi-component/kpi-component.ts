@@ -12,6 +12,6 @@ export class KpiComponent {
   @Input() value = "";
   @Input() description = "";
   @Input() icon = "";
-  @Input() backgroundColor = "#ffffff"
+  @Input() backgroundColor = 'var(--theme-surface)';
 }
 

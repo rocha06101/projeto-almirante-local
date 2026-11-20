@@ -55,7 +55,7 @@
 
   &:focus-within {
     border-color: var(--focus-ring);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+    box-shadow: 0 0 0 2px var(--focus-ring);
   }
 }
 
@@ -85,7 +85,7 @@
   }
 
   &::placeholder {
-    color: var(--theme-text-muted);
+    color: var(--theme-text-muted-on-secondary);
   }
 }
 
@@ -98,7 +98,7 @@
 
   &:focus-within {
     border-color: var(--focus-ring);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+    box-shadow: 0 0 0 2px var(--focus-ring);
   }
 
   span {
@@ -129,7 +129,7 @@
 .primary-button {
   flex: 0 1 auto;
   border: none;
-  background: light-dark(#0f6fff, var(--theme-primary));
+  background: light-dark(#0f64ed, var(--theme-primary));
   color: #fff;
   border-radius: 0.8rem;
   min-height: var(--tap-target);
@@ -212,7 +212,9 @@ tbody tr {
 
 .modal-actions button:disabled,
 .close-button:disabled {
-  opacity: 0.55;
+  opacity: 1;
+  background: var(--theme-surface-secondary);
+  color: var(--theme-text-muted-on-secondary);
   cursor: not-allowed;
 }
 
@@ -228,12 +230,12 @@ tbody tr {
   justify-content: center;
 
   @media (hover: hover) {
-    &:hover {
+    &:hover:not(:disabled) {
       background: rgba(15, 111, 255, 0.08);
       color: light-dark(#0f6fff, var(--theme-link));
     }
 
-    &.danger:hover {
+    &.danger:hover:not(:disabled) {
       background: rgba(239, 68, 68, 0.08);
       color: var(--theme-danger-text);
     }
@@ -304,7 +306,8 @@ tbody tr {
 }
 
 .icon-button:disabled {
-  opacity: 0.35;
+  opacity: 1;
+  color: var(--theme-text-muted-on-secondary);
   cursor: not-allowed;
 }
 
@@ -460,12 +463,14 @@ tbody tr {
 }
 
 .page-button.active {
-  background: light-dark(#0f6fff, var(--theme-primary));
+  background: light-dark(#0f64ed, var(--theme-primary));
   color: #fff;
 }
 
 .page-button:disabled {
-  opacity: 0.5;
+  opacity: 1;
+  background: var(--theme-surface-secondary);
+  color: var(--theme-text-muted-on-secondary);
   cursor: not-allowed;
 }
 

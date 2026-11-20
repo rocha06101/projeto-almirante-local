@@ -34,6 +34,23 @@
     border-radius: 100%;
 }
 
+:host-context([data-theme='dark']) .image-container {
+    position: relative;
+
+    img {
+        visibility: hidden;
+    }
+
+    &::after {
+        content: '';
+        position: absolute;
+        width: 3.3rem;
+        aspect-ratio: 1;
+        background: var(--kpi-icon-color, var(--theme-link));
+        mask: var(--kpi-icon-url, none) center / contain no-repeat;
+    }
+}
+
 .kpi-body {
     min-width: 0;
 

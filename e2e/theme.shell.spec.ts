@@ -34,6 +34,14 @@ for (const viewport of [
       await expect(page.getByRole('heading', { name: 'Lançamentos financeiros' })).toBeVisible();
       expect(await page.evaluate(() => performance.timeOrigin)).toBe(navigation);
       await expect(page.locator('canvas')).toBeVisible();
+      const kpiIcon = page.locator('app-kpi-component .image-container').first();
+      await expect(kpiIcon).toHaveCSS('background-color', 'rgb(34, 55, 98)');
+      const iconStyle = await kpiIcon.evaluate(el => {
+        const icon = getComputedStyle(el, '::after');
+        return { color: icon.backgroundColor, mask: icon.maskImage };
+      });
+      expect(iconStyle.color).toBe('rgb(125, 211, 252)');
+      expect(iconStyle.mask).toContain('/icons/wallet-icon.svg');
       await page.screenshot({ animations: 'disabled', path: test.info().outputPath('tesouraria-dark.png') });
       await page.getByRole('button', { name: 'Novo lançamento' }).click();
       const modal = page.getByRole('dialog');
@@ -55,18 +63,25 @@ for (const viewport of [
       await page.locator('aside.sidebar a[href="/treasury"]').click();
       await page.getByRole('button', { name: 'Novo lançamento' }).click();
       await expect(modal).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+      await expect(kpiIcon).toHaveCSS('background-color', 'rgb(229, 240, 253)');
       await page.screenshot({ animations: 'disabled', path: test.info().outputPath('modal-light.png') });
       await modal.getByRole('button', { name: 'Fechar modal' }).click();
 
       await page.goto('/preferencias');
       await page.locator('input[name=preferences-theme][value=system] + span').click();
+      await page.reload();
+      await expect(page.locator('input[name=preferences-theme][value=system]')).toBeChecked();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
       await page.locator('aside.sidebar a[href="/treasury"]').click();
+      const statusFilter = page.locator('.toolbar label').filter({ has: page.getByText('Status', { exact: true }) }).locator('select');
+      await statusFilter.selectOption('Pago');
       await page.getByRole('button', { name: 'Novo lançamento' }).click();
       const description = modal.locator('input[name=descricao]');
       await description.fill('Rascunho');
       await page.emulateMedia({ colorScheme: 'dark' });
       await expect(modal).toHaveCSS('background-color', 'rgb(31, 41, 55)');
       await expect(description).toHaveValue('Rascunho');
+      await expect(statusFilter).toHaveValue('Pago');
     });
   });
 }

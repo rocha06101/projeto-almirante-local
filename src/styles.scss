@@ -52,7 +52,7 @@
 
   --theme-text: #1F2937;
   --theme-text-muted: #6B7280;
-  --theme-text-muted-on-secondary: var(--theme-text-muted);
+  --theme-text-muted-on-secondary: #4B5563;
 
   --theme-border: #D1D5DB;
   --theme-primary: #2445A5;
@@ -274,6 +274,12 @@ a {
 }
 
 /* Form Elements */
+:root:not([data-theme='dark']) :is(app-primary-input, app-primary-select, app-primary-textarea)
+  :is(input, select, textarea):is(:disabled, [readonly]) {
+  color: var(--theme-text-muted-on-secondary);
+  -webkit-text-fill-color: currentColor;
+}
+
 :root[data-theme='dark'] :is(input, select, textarea) {
   color: var(--theme-text);
 

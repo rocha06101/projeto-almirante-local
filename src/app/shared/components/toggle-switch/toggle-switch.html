@@ -1,5 +1,10 @@
 <label class="toggle-switch" [for]="id">
-  <span class="toggle-label">{{ label }}</span>
+  <span class="toggle-label">
+    <span [id]="id + '-label'">{{ label }}</span>
+    @if (description) {
+      <span class="toggle-description" [id]="id + '-description'">{{ description }}</span>
+    }
+  </span>
   <span class="toggle-control">
     <input
       [id]="id"
@@ -8,6 +13,8 @@
       [checked]="checked()"
       [disabled]="disabled()"
       [attr.aria-checked]="checked()"
+      [attr.aria-labelledby]="id + '-label'"
+      [attr.aria-describedby]="description ? id + '-description' : null"
       (change)="handleChange($event)"
       (keydown)="handleKeydown($event)"
       (blur)="handleBlur()"

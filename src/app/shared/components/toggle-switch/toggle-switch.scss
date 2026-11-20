@@ -7,7 +7,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin: 0.8rem 1rem;
+  margin: var(--toggle-margin, 0.8rem 1rem);
   color: #374151;
   cursor: pointer;
   font-weight: 500;
@@ -41,7 +41,7 @@
   border: 1px solid #9ca3af;
   border-radius: 999px;
   background: #e5e7eb;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color var(--toggle-transition-duration, 0.15s) ease, border-color var(--toggle-transition-duration, 0.15s) ease;
 }
 
 .toggle-thumb {
@@ -50,7 +50,7 @@
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
-  transition: transform 0.15s ease;
+  transition: transform var(--toggle-transition-duration, 0.15s) ease;
 }
 
 input:checked + .toggle-track {
@@ -76,6 +76,19 @@ input:disabled + .toggle-track {
 
 @media (max-width: 575.98px) {
   .toggle-switch {
-    margin-inline: 0.5rem;
+    margin-inline: var(--toggle-margin-inline, 0.5rem);
   }
+}
+
+.toggle-description {
+  display: block;
+  margin-top: 0.2rem;
+  color: #52617a;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.toggle-switch:has(input:disabled) {
+  cursor: default;
 }

@@ -1,63 +1,62 @@
-import { Injectable, signal, effect } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import { DestroyRef, Injectable, computed, effect, inject, signal } from '@angular/core';
 
 export type ThemeMode = 'light' | 'dark';
+export type ThemePreference = ThemeMode | 'system';
 
-@Injectable({
-  providedIn: 'root'
-})
+const THEME_KEY = 'app-theme';
+
+@Injectable({ providedIn: 'root' })
 export class ThemeService {
-  private readonly THEME_KEY = 'app-theme';
-  
-  currentTheme = signal<ThemeMode>(this.getInitialTheme());
+  private readonly document = inject(DOCUMENT);
+  private readonly media = this.document.defaultView?.matchMedia?.('(prefers-color-scheme: dark)');
+  private readonly systemDark = signal(this.media?.matches ?? false);
+  private readonly preferenceState = signal(this.readPreference());
+
+  readonly preference = this.preferenceState.asReadonly();
+  readonly currentTheme = computed<ThemeMode>(() => {
+    const preference = this.preference();
+    return preference === 'system' ? (this.systemDark() ? 'dark' : 'light') : preference;
+  });
 
   constructor() {
-    // Atualizar o tema quando o sinal mudar
+    const updateSystemTheme = (event: MediaQueryListEvent) => this.systemDark.set(event.matches);
+    this.media?.addEventListener('change', updateSystemTheme);
+    inject(DestroyRef).onDestroy(() => this.media?.removeEventListener('change', updateSystemTheme));
+
     effect(() => {
-      this.applyTheme(this.currentTheme());
+      const theme = this.currentTheme();
+      const root = this.document.documentElement;
+      root.setAttribute('data-theme', theme);
+      root.classList.toggle('dark-mode', theme === 'dark');
+      root.classList.toggle('light-mode', theme === 'light');
     });
   }
 
-  private getInitialTheme(): ThemeMode {
-    // Verificar localStorage
-    const savedTheme = localStorage.getItem(this.THEME_KEY) as ThemeMode | null;
-    if (savedTheme) {
-      return savedTheme;
-    }
-
-    // Verificar preferência do sistema
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark';
-    }
-
-    return 'light';
-  }
-
-  private applyTheme(theme: ThemeMode): void {
-    const htmlElement = document.documentElement;
-    
-    if (theme === 'dark') {
-      htmlElement.setAttribute('data-theme', 'dark');
-      htmlElement.classList.add('dark-mode');
-      htmlElement.classList.remove('light-mode');
-    } else {
-      htmlElement.setAttribute('data-theme', 'light');
-      htmlElement.classList.add('light-mode');
-      htmlElement.classList.remove('dark-mode');
-    }
-
-    // Salvar preferência
-    localStorage.setItem(this.THEME_KEY, theme);
-  }
-
   toggleTheme(): void {
-    this.currentTheme.update(theme => theme === 'light' ? 'dark' : 'light');
+    this.setTheme(this.isDark() ? 'light' : 'dark');
   }
 
-  setTheme(theme: ThemeMode): void {
-    this.currentTheme.set(theme);
+  setTheme(theme: ThemePreference): void {
+    this.preferenceState.set(theme);
+
+    try {
+      this.document.defaultView?.localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      // A seleção continua disponível em memória quando o armazenamento é bloqueado.
+    }
   }
 
   isDark(): boolean {
     return this.currentTheme() === 'dark';
+  }
+
+  private readPreference(): ThemePreference {
+    try {
+      const saved = this.document.defaultView?.localStorage.getItem(THEME_KEY);
+      return saved === 'light' || saved === 'dark' ? saved : 'system';
+    } catch {
+      return 'system';
+    }
   }
 }

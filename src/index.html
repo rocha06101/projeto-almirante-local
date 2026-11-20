@@ -2,6 +2,37 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
+
+<script>
+  (() => {
+    const storageKey = 'app-theme';
+    let preference = 'system';
+
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved === 'light' || saved === 'dark') {
+        preference = saved;
+      }
+    } catch {
+      // Se o armazenamento estiver indisponível, usa o tema do sistema.
+    }
+
+    const systemDark = window.matchMedia?.('(prefers-color-scheme: dark)')?.matches ?? false;
+    const theme = preference === 'system'
+      ? (systemDark ? 'dark' : 'light')
+      : preference;
+
+    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.classList.toggle('dark-mode', theme === 'dark');
+    document.documentElement.classList.toggle('light-mode', theme === 'light');
+    document.documentElement.style.colorScheme = theme;
+
+    // Define o fundo inicial antes de carregar os estilos do Angular.
+    document.documentElement.style.backgroundColor =
+      theme === 'dark' ? '#111827' : '#F0F4F7';
+  })();
+</script>
+
   <title>Desbravadores - Almirante Tamandaré</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">

@@ -15,8 +15,8 @@
     text-align: left;
     color: inherit;
     cursor: pointer;
-    background: #FFFFFF;
-    border: 2px solid #E9EAF1;
+    background: var(--theme-surface);
+    border: 2px solid light-dark(#E9EAF1, var(--theme-border));
     border-radius: 7px;
     box-sizing: border-box;
     transition:
@@ -54,7 +54,7 @@
         }
 
         .action-text {
-            color: var(--action-hover-text-color);
+            color: light-dark(var(--action-hover-text-color, currentColor), var(--theme-link));
         }
     }
 }

@@ -10,28 +10,32 @@
                 title="Saldo em caixa"
                 value="R$1000"
                 description="saldo disponível"
-                backgroundColor="#E5F0FD"
+                backgroundColor="light-dark(#E5F0FD, var(--theme-info-surface))"
+                style="--kpi-icon-color: var(--theme-info-text)"
             ></app-kpi-component>
             <app-kpi-component
                 icon="/icons/arrow-icon-green.svg"
                 title="Receita do mês"
                 value="R$200"
                 description="total de entradas"
-                backgroundColor="#E3F9EC"
+                backgroundColor="light-dark(#E3F9EC, var(--theme-success-surface))"
+                style="--kpi-icon-color: var(--theme-success-text)"
             ></app-kpi-component>
             <app-kpi-component
                 icon="/icons/arrow-icon-red.svg"
                 title="Despesas do mês"
                 value="R$150"
                 description="total do saldo"
-                backgroundColor="#FFE2E5"
+                backgroundColor="light-dark(#FFE2E5, var(--theme-danger-surface))"
+                style="--kpi-icon-color: var(--theme-danger-text)"
             ></app-kpi-component>
             <app-kpi-component
                 icon="/icons/calendar-alert-outline.svg"
                 title="Mensalidades pendentes"
                 value="7"
                 description="Em abertos"
-                backgroundColor="#FFEAD4"
+                backgroundColor="light-dark(#FFEAD4, var(--theme-warning-surface))"
+                style="--kpi-icon-color: var(--theme-warning-text)"
             ></app-kpi-component>
         </div>
 
@@ -45,7 +49,7 @@
                 <canvas
                     baseChart
                     [data]="barChartData"
-                    [options]="barChartOptions"
+                    [options]="barChartOptions()"
                     type="bar"
                 >
                 </canvas>

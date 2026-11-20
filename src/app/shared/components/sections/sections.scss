@@ -47,5 +47,5 @@
     font-size: clamp(1.1rem, 1rem + 0.5vw, 1.4rem);
     font-weight: bold;
     text-align: center;
-    color: #1e3a8a;
+    color: light-dark(#1e3a8a, var(--theme-link));
 }

@@ -10,15 +10,15 @@
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    background-color: #fff;
+    background-color: var(--theme-surface);
     width: 100%;
     min-width: 0;
     padding: 12px 3.5rem 12px 4rem;
     border-radius: 5px;
-    border: solid 1px #bbbbbb;
+    border: solid 1px light-dark(#bbbbbb, var(--theme-control-border));
     font-size: 1.05rem;
     min-height: 44px;
-    color: #2C2C54;
+    color: light-dark(#2C2C54, var(--theme-text));
     text-overflow: ellipsis;
 
     // Foco visível: o anel padrão do navegador sobre o fundo azul do formulário.

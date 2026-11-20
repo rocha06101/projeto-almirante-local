@@ -10,7 +10,7 @@
         margin: 0;
         font-size: clamp(1.6rem, 1.3rem + 1vw, 2rem);
         font-weight: 700;
-        color: #111827;
+        color: light-dark(#111827, var(--theme-text));
     }
 }
 
@@ -34,7 +34,7 @@ section {
     height: clamp(18rem, 42vh, 28rem);
     min-width: 0;
     box-sizing: border-box;
-    background-color: #ffffff;
+    background-color: var(--theme-surface);
     border-radius: 1rem;
 
     .chart-text {
@@ -48,7 +48,7 @@ section {
 
         .chart-description {
             font-size: 0.8rem;
-            color: #6b7280;
+            color: var(--theme-text-muted);
         }
     }
 
@@ -74,7 +74,7 @@ section {
     min-width: 0;
     padding: 0.75rem 1rem 1rem;
     box-sizing: border-box;
-    background-color: #ffffff;
+    background-color: var(--theme-surface);
     border-radius: 1rem;
 
     .quick-actions-text {

@@ -1,13 +1,14 @@
 :host {
   display: block;
   container-type: inline-size;
-  --preferences-primary: #2445a5;
-  --preferences-border: #dbe3ef;
-  --preferences-muted: #52617a;
+  --preferences-primary: var(--theme-primary);
+  --preferences-accent: var(--theme-link);
+  --preferences-border: light-dark(#dbe3ef, var(--theme-border));
+  --preferences-muted: light-dark(#52617a, var(--theme-text-muted));
   --primary-button-color: var(--preferences-primary);
   --toggle-margin: 0;
   --toggle-margin-inline: 0;
-  color: #182641;
+  color: light-dark(#182641, var(--theme-text));
 }
 
 .preferences {
@@ -46,7 +47,7 @@ p {
   gap: 1rem;
   min-width: 0;
   padding: clamp(0.9rem, 2cqi, 1.4rem);
-  background: #fff;
+  background: var(--theme-surface);
   border: 1px solid var(--preferences-border);
   border-radius: 0.9rem;
 }
@@ -82,8 +83,8 @@ legend {
   width: 2.25rem;
   aspect-ratio: 1;
   border-radius: 0.55rem;
-  color: var(--preferences-primary);
-  background: #edf2ff;
+  color: var(--preferences-accent);
+  background: light-dark(#edf2ff, var(--theme-info-surface));
 }
 
 svg,
@@ -120,8 +121,9 @@ svg,
 .compact-preview { --preview-row-gap: 3%; }
 
 .notification-master {
+  --theme-text-muted: var(--theme-text-muted-on-secondary);
   padding: 0.65rem;
-  background: #f5f7fc;
+  background: light-dark(#f5f7fc, var(--theme-surface-secondary));
   border: 1px solid var(--preferences-border);
   border-radius: 0.6rem;
 }
@@ -180,12 +182,12 @@ svg,
 }
 
 input:checked + .density-card {
-  border-color: var(--preferences-primary);
-  background: #f2f5ff;
+  border-color: var(--preferences-accent);
+  background: light-dark(#f2f5ff, var(--theme-info-surface));
 
   &::after {
-    border-color: var(--preferences-primary);
-    background: radial-gradient(circle, var(--preferences-primary) 39%, transparent 43%);
+    border-color: var(--preferences-accent);
+    background: radial-gradient(circle, var(--preferences-accent) 39%, transparent 43%);
   }
 }
 
@@ -202,7 +204,7 @@ input:focus-visible + .density-card,
   min-height: 2.65rem;
   padding: 0.35rem;
   border-radius: 0.35rem;
-  background: #edf1f8;
+  background: light-dark(#edf1f8, var(--theme-surface-secondary));
 
   span {
     height: 0.23rem;
@@ -222,7 +224,7 @@ input:focus-visible + .density-card,
   padding: 0.35rem 0;
   border: 0;
   background: transparent;
-  color: var(--preferences-primary);
+  color: var(--preferences-accent);
   font-size: 0.875rem;
   font-weight: 650;
   text-align: start;

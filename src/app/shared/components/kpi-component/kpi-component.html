@@ -1,7 +1,8 @@
 <div class="kpi-component">
 
     <div class="kpi-image">
-        <div class="image-container" [style.background-color]="backgroundColor">
+        <div class="image-container" [style.background-color]="backgroundColor"
+            [style.--kpi-icon-url]="icon ? 'url(' + icon + ')' : null">
             <img [src]="icon" alt="">
         </div>
     </div>

@@ -1,14 +1,14 @@
 :host { display: block; min-width: 0; }
-.events-page { color: #222134; }
+.events-page { color: light-dark(#222134, var(--theme-text)); }
 .page-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
-h1 { color: #09090b; font-size: 30px; font-weight: 700; margin: 0; line-height: 1.2; }
-button { min-height: 44px; border-radius: 6px; border: 1px solid #dddbe5; padding: 8px 14px; font-size: 13px; color: #5005a1; background: white; }
+h1 { color: light-dark(#09090b, var(--theme-text)); font-size: 30px; font-weight: 700; margin: 0; line-height: 1.2; }
+button { min-height: 44px; border-radius: 6px; border: 1px solid light-dark(#dddbe5, var(--theme-border)); padding: 8px 14px; font-size: 13px; color: light-dark(#5005a1, var(--theme-event-text)); background: var(--theme-surface); }
 button:focus-visible { outline: 3px solid #9773d6; outline-offset: 2px; }button:disabled { opacity: .5; cursor: default; }
 .events-grid { display: grid; grid-template-columns: minmax(0, 69fr) minmax(0, 31fr); gap: 20px 28px; align-items: stretch; }
 .calendar-column { min-width: 0; }
 app-proximos-eventos { min-height: 0; }
-.status { margin-top: 12px; padding: 12px 16px; font-size: 13px; background: white; border-radius: 8px; color: #746c84; }
-.status button { display: block; margin-top: 10px; }.error { color: #8a2440; background: #fff0f1; }
+.status { margin-top: 12px; padding: 12px 16px; font-size: 13px; background: var(--theme-surface); border-radius: 8px; color: light-dark(#746c84, var(--theme-text-muted)); }
+.status button { display: block; margin-top: 10px; }.error { color: light-dark(#8a2440, var(--theme-danger-text)); background: light-dark(#fff0f1, var(--theme-danger-surface)); }
 @media (max-width: 1100px) { .events-grid { gap: 20px; grid-template-columns: minmax(0, 65fr) minmax(0, 35fr); } }
 @media (max-width: 991px) { .events-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 575px) { .page-header { gap: 12px; margin-bottom: 20px; } h1 { font-size: 26px; } }

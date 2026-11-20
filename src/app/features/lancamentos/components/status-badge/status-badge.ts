@@ -33,19 +33,19 @@ import { LancamentoStatus } from '../../models/lancamento.model';
       .status-badge.pago {
         background: rgba(34, 197, 94, 0.12);
         border-color: rgba(34, 197, 94, 0.4);
-        color: #15803d;
+        color: light-dark(#166534, var(--theme-success-text));
       }
 
       .status-badge.pendente {
         background: rgba(245, 158, 11, 0.12);
         border-color: rgba(245, 158, 11, 0.4);
-        color: #b45309;
+        color: light-dark(#92400e, var(--theme-warning-text));
       }
 
       .status-badge.atrasado {
         background: rgba(239, 68, 68, 0.12);
         border-color: rgba(239, 68, 68, 0.4);
-        color: #b91c1c;
+        color: light-dark(#b91c1c, var(--theme-danger-text));
       }
     `,
   ],

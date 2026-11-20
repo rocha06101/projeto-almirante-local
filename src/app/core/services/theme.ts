@@ -59,7 +59,7 @@ effect(() => {
   private readPreference(): ThemePreference {
     try {
       const saved = this.document.defaultView?.localStorage.getItem(THEME_KEY);
-      return saved === 'light' || saved === 'dark' ? saved : 'system';
+      return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system';
     } catch {
       return 'system';
     }

@@ -369,6 +369,7 @@ test('seleção em massa, exceções manuais e custos independentes no cadastro'
     await expect(valor).toHaveAttribute('placeholder', '0');
     await expect(valor).toHaveValue('');
     await caixa.check();
+    await expect(valor).toBeEnabled();
     await valor.pressSequentially('150');
     await expect(valor).toHaveValue('150');
     await expect(estimativa).toContainText('150,00');

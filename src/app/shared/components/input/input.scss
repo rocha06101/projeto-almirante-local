@@ -44,18 +44,19 @@
   transition: outline 0.2s ease;
   font-size: 1rem;
   outline: unset;
-  border: 1px solid #bbbbbb;
+  border: 1px solid light-dark(#bbbbbb, var(--theme-control-border));
   padding: 17px 1rem 10px 3.75rem;
   min-height: 44px;
   width: 100%;
   min-width: 0;
-  color: #0B1C2D;
+  color: light-dark(#0B1C2D, var(--theme-text));
+  background-color: var(--theme-surface);
 }
 
 .label-input {
   display: flex;
   transition: all 0.1s ease-in-out;
-  color: #2c2c54;
+  color: light-dark(#2c2c54, var(--theme-text));
   position: absolute;
   top: 23%;
   left: 60px;
@@ -93,7 +94,7 @@
 }
 
 .input-field[aria-invalid='true'] {
-  border-color: #ef4444;
+  border-color: light-dark(#ef4444, var(--theme-danger-text));
 }
 
 .input-suffix {

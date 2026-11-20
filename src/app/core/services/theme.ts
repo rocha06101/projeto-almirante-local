@@ -24,13 +24,18 @@ export class ThemeService {
     this.media?.addEventListener('change', updateSystemTheme);
     inject(DestroyRef).onDestroy(() => this.media?.removeEventListener('change', updateSystemTheme));
 
-    effect(() => {
-      const theme = this.currentTheme();
-      const root = this.document.documentElement;
-      root.setAttribute('data-theme', theme);
-      root.classList.toggle('dark-mode', theme === 'dark');
-      root.classList.toggle('light-mode', theme === 'light');
-    });
+effect(() => {
+  const theme = this.currentTheme();
+  const root = this.document.documentElement;
+
+  root.setAttribute('data-theme', theme);
+  root.classList.toggle('dark-mode', theme === 'dark');
+  root.classList.toggle('light-mode', theme === 'light');
+
+  root.style.colorScheme = theme;
+  root.style.backgroundColor =
+    theme === 'dark' ? '#111827' : '#F0F4F7';
+});
   }
 
   toggleTheme(): void {

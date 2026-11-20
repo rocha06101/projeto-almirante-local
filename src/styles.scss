@@ -37,6 +37,44 @@
   --safe-left: env(safe-area-inset-left, 0px);
 
   --focus-ring: #2563eb;
+
+  // Cores semânticas — tema claro
+  --theme-background: #F0F4F7;
+  --theme-surface: #FFFFFF;
+  --theme-surface-secondary: #F3F4F6;
+
+  --theme-text: #1F2937;
+  --theme-text-muted: #6B7280;
+
+  --theme-border: #D1D5DB;
+  --theme-primary: #2445A5;
+
+  --theme-scrollbar-track: #F1F5F9;
+  --theme-scrollbar-thumb: #CBD5E1;
+  --theme-scrollbar-thumb-hover: #94A3B8;
+}
+
+// Cores semânticas — tema escuro
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --theme-background: #111827;
+  --theme-surface: #1F2937;
+  --theme-surface-secondary: #374151;
+
+  --theme-text: #F9FAFB;
+  --theme-text-muted: #9CA3AF;
+
+  --theme-border: #4B5563;
+  --theme-primary: #2445A5;
+
+  --theme-scrollbar-track: #1F2937;
+  --theme-scrollbar-thumb: #4B5563;
+  --theme-scrollbar-thumb-hover: #6B7280;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
 * {
@@ -57,8 +95,8 @@ html, body {
   font-family: var(--font-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: #1f2937;
-  background: #F0F4F7;
+  color: var(--theme-text);
+  background: var(--theme-background);
 }
 
 body {
@@ -81,15 +119,15 @@ app-root {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: var(--theme-scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--theme-scrollbar-thumb);
   border-radius: 5px;
 
   &:hover {
-    background: #94a3b8;
+    background: var(--theme-scrollbar-thumb-hover);
   }
 }
 

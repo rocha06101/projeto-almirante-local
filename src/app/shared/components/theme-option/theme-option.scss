@@ -48,12 +48,12 @@
   aspect-ratio: 1;
   border: 1px solid #8493ae;
   border-radius: 50%;
-  color: var(--preferences-primary, #2445a5);
+  color: var(--preferences-accent, var(--theme-link));
 }
 
 input:checked + .option-body {
-  border-color: var(--preferences-primary, #2445a5);
-  background: #f2f5ff;
+  border-color: var(--preferences-accent, var(--theme-link));
+  background: light-dark(#f2f5ff, var(--theme-info-surface));
 
   .indicator {
     border-color: currentColor;
@@ -70,7 +70,7 @@ input:checked + .option-body {
 }
 
 input:focus-visible + .option-body {
-  outline: 2px solid var(--preferences-primary, #2445a5);
+  outline: 2px solid light-dark(var(--preferences-primary, #2445a5), var(--focus-ring));
   outline-offset: 2px;
 }
 

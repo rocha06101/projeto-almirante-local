@@ -43,7 +43,7 @@ export const ROUTES = [
   { path: '/perfil', name: 'perfil', ready: 'app-my-profile .container-center' },
   { path: '/preferencias', name: 'preferencias', ready: 'app-preferences .preferences-grid' },
   { path: '/desbravadores', name: 'desbravadores', ready: 'app-desbravadores table' },
-  { path: '/desbravadores/editar', name: 'editar-usuario', ready: 'app-user-edit .container-center' },
+  { path: '/desbravadores/editar', name: 'editar-usuario', ready: 'app-user-edit .user-summary' },
   { path: '/desbravadores/cadastrar', name: 'cadastro-membro', ready: 'app-user-register' },
   { path: '/treasury', name: 'tesouraria', ready: 'app-treasury app-financial-entries-component table' },
 ];

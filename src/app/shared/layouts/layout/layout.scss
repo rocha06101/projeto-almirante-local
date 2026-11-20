@@ -10,7 +10,7 @@
   display: flex;
   min-height: 100vh;
   min-height: 100dvh;
-  background: #F0F4F7;
+  background: var(--theme-background);
 
   &.sidebar-expanded {
     --sidebar-w: calc(var(--sidebar-width) + var(--safe-left));
@@ -60,8 +60,8 @@
   z-index: 2000;
   padding: 0.6rem 1rem;
   border-radius: 8px;
-  background: #fff;
-  color: #1e3a8a;
+  background: var(--theme-surface);
+  color: light-dark(#1e3a8a, var(--theme-link));
   font-weight: 600;
   transform: translateY(-200%);
 

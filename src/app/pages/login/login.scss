@@ -48,7 +48,7 @@
 }
 
 .auth-card {
-  background-color: var(--primary-color);
+  background-color: light-dark(var(--primary-color), var(--theme-surface));
   border-radius: 15px;
   display: flex;
   flex-direction: column;

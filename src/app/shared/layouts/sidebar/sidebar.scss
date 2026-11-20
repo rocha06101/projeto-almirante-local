@@ -9,8 +9,8 @@
   padding-left: var(--safe-left);
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-  color: #fff;
+  background: var(--sidebar-background);
+  color: var(--sidebar-text);
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
   transition: width 0.25s ease;
   overflow: hidden;
@@ -63,7 +63,7 @@
   border: none;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  color: var(--sidebar-text);
   font-size: 1.5rem;
   line-height: 1;
   transition: background-color 0.2s ease;
@@ -122,8 +122,8 @@
     .badge {
       padding: 0.125rem 0.5rem;
       border-radius: 12px;
-      background: #ef4444;
-      color: #fff;
+      background: light-dark(#ef4444, #b91c1c);
+      color: var(--sidebar-text);
       font-size: 0.75rem;
       font-weight: 600;
     }
@@ -131,15 +131,15 @@
     @media (hover: hover) {
       &:hover {
         background: rgba(255, 255, 255, 0.1);
-        color: #fff;
+        color: var(--sidebar-text);
         text-decoration: none;
       }
     }
 
     &.active {
       background: rgba(255, 255, 255, 0.15);
-      border-left-color: #fbbf24;
-      color: #fff;
+      border-left-color: var(--sidebar-active);
+      color: var(--sidebar-text);
     }
   }
 }
@@ -182,7 +182,7 @@
         position: absolute;
         inset: 0 auto 0 0;
         width: 3px;
-        background: #fbbf24;
+        background: var(--sidebar-active);
       }
     }
   }
@@ -245,7 +245,7 @@
       }
 
       &.active {
-        border-top-color: #fbbf24;
+        border-top-color: var(--sidebar-active);
       }
 
       &.active::before {

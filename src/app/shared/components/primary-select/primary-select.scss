@@ -13,7 +13,7 @@
 
     label {
         font-weight: 500;
-        color: #374151;
+        color: light-dark(#374151, var(--theme-text));
     }
 
     select {
@@ -22,12 +22,16 @@
         min-width: 0;
         padding: 0.5rem 2.25rem 0.5rem 0.75rem;
         min-height: var(--tap-target);
-        border: 2px solid #EAEBED;
+        border: 2px solid light-dark(#EAEBED, var(--theme-control-border));
         border-radius: 10px;
         font-size: 1rem;
-        background-color: #fff;
+        background-color: var(--theme-surface);
         // Seta desenhada no próprio fundo: sem ela, appearance:none deixa o campo sem indício de ser um select.
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23374151' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+
+        :host-context([data-theme="dark"]) & {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23F9FAFB' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        }
         background-repeat: no-repeat;
         background-position: right 0.6rem center;
         background-size: 1.25rem;
@@ -42,7 +46,7 @@
 }
 
 :host(.inactive) select {
-    background-color: #D9D9D9;
+    background-color: light-dark(#D9D9D9, var(--theme-surface-secondary));
     cursor: not-allowed;
     opacity: 1;
     pointer-events: none;

@@ -38,7 +38,7 @@
 
   h1 {
     margin: 0.25rem 0 0;
-    color: #111827;
+    color: var(--ink);
     font-size: clamp(1.6rem, 1.3rem + 1vw, 2rem);
     font-weight: 700;
   }
@@ -59,7 +59,7 @@
 }
 
 .eyebrow {
-  color: #2563eb;
+  color: var(--accent);
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -135,8 +135,8 @@
 
 .search-box {
   align-items: center;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--theme-surface);
+  border: 1px solid var(--edge);
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
   display: flex;
@@ -155,7 +155,7 @@
     fill: none;
     flex: none;
     height: 1.15rem;
-    stroke: #64748b;
+    stroke: var(--muted);
     stroke-linecap: round;
     stroke-width: 2;
     width: 1.15rem;
@@ -164,7 +164,7 @@
   input {
     background: transparent;
     border: none;
-    color: #111827;
+    color: var(--ink);
     flex: 1;
     font: inherit;
     // 16px evita o zoom automático do iOS ao focar o campo.
@@ -181,7 +181,7 @@
 
 .users-table-card,
 .state-card {
-  background: #fff;
+  background: var(--theme-surface);
   border-radius: 16px;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
@@ -239,7 +239,7 @@ table {
   }
 
   tbody tr {
-    border-bottom: 1px solid #eef2f7;
+    border-bottom: 1px solid var(--line);
     padding: 0.75rem 1rem;
   }
 
@@ -258,7 +258,7 @@ table {
     }
 
     &[data-label]::before {
-      color: #64748b;
+      color: var(--muted);
       content: attr(data-label);
       flex: none;
       font-size: 0.75rem;
@@ -281,7 +281,7 @@ table {
 
 th,
 td {
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid var(--line);
   padding: 1rem 1.25rem;
   text-align: left;
 
@@ -291,7 +291,7 @@ td {
 }
 
 th {
-  color: #64748b;
+  color: var(--muted);
   font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -299,7 +299,7 @@ th {
 }
 
 td {
-  color: #334155;
+  color: var(--detail);
   vertical-align: middle;
 }
 
@@ -308,7 +308,7 @@ tbody tr {
 
   @media (hover: hover) {
     &:hover {
-      background: #f8fafc;
+      background: var(--hover);
     }
   }
 
@@ -324,7 +324,7 @@ tbody tr {
   min-width: 0;
 
   strong {
-    color: #111827;
+    color: var(--ink);
     display: block;
     font-size: 0.95rem;
   }
@@ -332,9 +332,9 @@ tbody tr {
 
 .avatar {
   align-items: center;
-  background: #dbeafe;
+  background: var(--info);
   border-radius: 999px;
-  color: #1d4ed8;
+  color: var(--link);
   display: inline-flex;
   flex: 0 0 42px;
   font-weight: 800;
@@ -356,10 +356,10 @@ tbody tr {
 }
 
 .role-pill {
-  background: #ecfdf5;
-  border: 1px solid #bbf7d0;
+  background: var(--ok);
+  border: 1px solid var(--ok-edge);
   border-radius: 999px;
-  color: #047857;
+  color: var(--ok-ink);
   display: inline-flex;
   font-size: 0.78rem;
   font-weight: 800;
@@ -368,7 +368,7 @@ tbody tr {
 
 .state-card {
   align-items: center;
-  color: #64748b;
+  color: var(--muted);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -378,7 +378,7 @@ tbody tr {
   text-align: center;
 
   h2 {
-    color: #111827;
+    color: var(--ink);
     margin: 0;
   }
 
@@ -387,8 +387,8 @@ tbody tr {
   }
 
   &.error {
-    background: #fff7f7;
-    border: 1px solid #fecaca;
+    background: var(--error-bg);
+    border: 1px solid var(--error-edge);
   }
 
   @media (max-width: 575.98px) {
@@ -400,7 +400,7 @@ tbody tr {
 
 .loader {
   animation: spin 0.8s linear infinite;
-  border: 3px solid #dbeafe;
+  border: 3px solid var(--info);
   border-radius: 999px;
   border-top-color: #2563eb;
   height: 38px;
@@ -417,7 +417,7 @@ tbody tr {
 
 .inactive-toggle {
   align-items: center;
-  color: #334155;
+  color: var(--detail);
   cursor: pointer;
   display: inline-flex;
   font-weight: 600;
@@ -441,9 +441,9 @@ tbody tr {
   padding: 0.75rem 1rem;
 
   &.success {
-    background: #ecfdf5;
-    border: 1px solid #bbf7d0;
-    color: #047857;
+    background: var(--ok);
+    border: 1px solid var(--ok-edge);
+    color: var(--ok-ink);
   }
 }
 
@@ -456,15 +456,15 @@ tbody tr {
   padding: 0.2rem 0.6rem;
 
   &.inactive {
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    color: #64748b;
+    background: var(--subtle);
+    border: 1px solid var(--edge);
+    color: var(--muted);
   }
 }
 
 .inactive-row .avatar {
-  background: #e2e8f0;
-  color: #64748b;
+  background: var(--inactive);
+  color: var(--muted);
 }
 
 .row-actions {
@@ -479,24 +479,24 @@ tbody tr {
 }
 
 .action-button {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: var(--info-bg);
+  border: 1px solid var(--info-edge);
   border-radius: 8px;
-  color: #1d4ed8;
+  color: var(--link);
   cursor: pointer;
   font-weight: 700;
   min-height: var(--tap-target);
   padding: 0.4rem 0.8rem;
 
   &.danger {
-    background: #fff7f7;
-    border-color: #fecaca;
-    color: #b91c1c;
+    background: var(--error-bg);
+    border-color: var(--error-edge);
+    color: var(--error);
   }
 }
 
 .muted {
-  color: #94a3b8;
+  color: var(--faint);
 }
 
 // Modal no mesmo desenho do de Lançamentos.
@@ -515,7 +515,7 @@ tbody tr {
   width: min(100%, 32rem);
   max-height: 100%;
   overflow-y: auto;
-  background: #fff;
+  background: var(--theme-surface);
   border-radius: 1rem;
   padding: 1.25rem;
   box-shadow: 0 22px 54px rgba(15, 23, 42, 0.18);
@@ -532,7 +532,7 @@ tbody tr {
     margin: 0;
     font-size: 1.4rem;
     font-weight: 700;
-    color: #111827;
+    color: var(--ink);
   }
 }
 
@@ -542,20 +542,20 @@ tbody tr {
   height: var(--tap-target);
   border: none;
   background: transparent;
-  color: #374151;
+  color: var(--label);
   font-size: 2rem;
   line-height: 1;
   cursor: pointer;
 }
 
 .delete-text {
-  color: #334155;
+  color: var(--detail);
   margin: 0 0 1rem;
 }
 
 .form-error {
   margin: 0;
-  color: #b91c1c;
+  color: var(--error);
   font-size: 0.9rem;
 }
 
@@ -585,8 +585,8 @@ tbody tr {
 
 .secondary-button {
   border: none;
-  background: #e5e7eb;
-  color: #111827;
+  background: var(--neutral);
+  color: var(--ink);
   border-radius: 0.75rem;
   padding: 0.8rem 1.1rem;
   font-weight: 700;

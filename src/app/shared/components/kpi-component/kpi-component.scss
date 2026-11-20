@@ -12,7 +12,7 @@
     min-height: 7.5rem;
     padding: 1rem clamp(0.75rem, 2vw, 1rem);
     box-sizing: border-box;
-    background-color: #FFFFFF;
+    background-color: var(--theme-surface);
     border-radius: 1rem;
 }
 
@@ -48,7 +48,7 @@
     }
 
     .description {
-        color: #6b7280;
+        color: var(--theme-text-muted);
         font-size: 0.875rem;
     }
 }

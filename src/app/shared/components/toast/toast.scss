@@ -36,10 +36,10 @@
   animation: toast-in 180ms ease-out;
 }
 
-.toast--success { background: #16a34a; }
-.toast--error { background: #dc2626; }
-.toast--warning { background: #d97706; }
-.toast--info { background: #2563eb; }
+.toast--success { background: light-dark(#16a34a, #166534); }
+.toast--error { background: light-dark(#dc2626, #991b1b); }
+.toast--warning { background: light-dark(#d97706, #92400e); }
+.toast--info { background: light-dark(#2563eb, var(--theme-primary)); }
 
 .toast__icon {
   display: inline-flex;

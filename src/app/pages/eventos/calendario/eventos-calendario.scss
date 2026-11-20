@@ -1,42 +1,42 @@
 app-eventos-calendario {
   display: block;
   min-width: 0;
-  color: #343352;
-  --fc-border-color: #e4e9ee;
-  --fc-today-bg-color: #f5f0fc;
-  --fc-neutral-bg-color: #f7f9fa;
-  --fc-page-bg-color: #fff;
-  .calendar-toolbar { display: flex; align-items: center; justify-content: center; position: relative; min-height: 52px; padding: 4px 64px; background: #fafbfc; border-radius: 8px; margin-bottom: 12px; }
+  color: light-dark(#343352, var(--theme-text));
+  --fc-border-color: light-dark(#e4e9ee, var(--theme-border));
+  --fc-today-bg-color: light-dark(#f5f0fc, var(--theme-event-surface));
+  --fc-neutral-bg-color: light-dark(#f7f9fa, var(--theme-surface-secondary));
+  --fc-page-bg-color: var(--theme-surface);
+  .calendar-toolbar { display: flex; align-items: center; justify-content: center; position: relative; min-height: 52px; padding: 4px 64px; background: light-dark(#fafbfc, var(--theme-surface-secondary)); border-radius: 8px; margin-bottom: 12px; }
   .month-navigation { display: flex; align-items: center; gap: 12px; }
   h2 { margin: 0; font-size: 15px; font-weight: 600; text-align: center; }
   h2::first-letter { text-transform: uppercase; }
-  button { border: 1px solid #e4e9ee; border-radius: 6px; color: #484866; background: white; min-width: 44px; min-height: 44px; cursor: pointer; }
-  button:hover { background: #eee8fa; }
-  button:focus-visible, .fc-event:focus-visible { outline: 3px solid #7050bf; outline-offset: -2px; }
+  button { border: 1px solid light-dark(#e4e9ee, var(--theme-border)); border-radius: 6px; color: light-dark(#484866, var(--theme-text)); background: var(--theme-surface); min-width: 44px; min-height: 44px; cursor: pointer; }
+  button:hover { background: light-dark(#eee8fa, var(--theme-event-surface)); }
+  button:focus-visible, .fc-event:focus-visible { outline: 3px solid light-dark(#7050bf, var(--focus-ring)); outline-offset: -2px; }
   .today-button { position: absolute; right: 8px; padding: 0 8px; font-size: 12px; }
   .fc { font-family: inherit; font-size: 13px; }
-  .fc .fc-scrollgrid { border-radius: 8px; overflow: hidden; background: #fff; }
+  .fc .fc-scrollgrid { border-radius: 8px; overflow: hidden; background: var(--theme-surface); }
   .fc a { color: inherit; text-decoration: none; }
-  .fc .fc-col-header-cell { background: #f6f8f9; }
-  .fc .fc-col-header-cell-cushion { padding: 8px 0; font-size: 18px; font-weight: 400; color: #777d94; }
+  .fc .fc-col-header-cell { background: light-dark(#f6f8f9, var(--theme-surface-secondary)); }
+  .fc .fc-col-header-cell-cushion { padding: 8px 0; font-size: 18px; font-weight: 400; color: light-dark(#777d94, var(--theme-text-muted-on-secondary)); }
   .fc .fc-daygrid-day-frame { min-height: clamp(84px, 10vh, 108px); }
   .fc .fc-daygrid-day-top { flex-direction: row; }
   .fc .fc-daygrid-day-events { margin-bottom: 4px; }
   .fc .fc-daygrid-day-number { padding: 0; }
-  .day-button { border: 0; border-radius: 0; font-size: 13px; padding: 0 8px; color: #77819b; background: transparent; text-align: left; }
-  .fc .fc-day-today .day-button { color: #5005a1; font-weight: 700; }
-  .fc .selected-day { box-shadow: inset 0 0 0 1.5px #8c6ae6; background: #f2eef9; }
-  .fc .selected-day .day-button { color: #5005a1; font-weight: 700; }
+  .day-button { border: 0; border-radius: 0; font-size: 13px; padding: 0 8px; color: light-dark(#77819b, var(--theme-text-muted)); background: transparent; text-align: left; }
+  .fc .fc-day-today .day-button { color: light-dark(#5005a1, var(--theme-event-text)); font-weight: 700; }
+  .fc .selected-day { box-shadow: inset 0 0 0 1.5px #8c6ae6; background: light-dark(#f2eef9, var(--theme-event-surface)); }
+  .fc .selected-day .day-button { color: light-dark(#5005a1, var(--theme-event-text)); font-weight: 700; }
   .fc .fc-daygrid-event { margin: 1px 3px 3px; padding: 4px; border: 0; border-left: 3px solid; border-color: var(--cor-evento, currentColor); border-radius: 4px; cursor: pointer; white-space: normal; }
   .calendar-event { display: block; min-width: 0; line-height: 1.3; }
   .fc .fc-event-main { color: inherit; min-width: 0; overflow: hidden; }
   .fc .selected-event { box-shadow: inset 0 0 0 2px var(--cor-evento, currentColor); }
   .calendar-event strong { display: block; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; font-size: 11px; font-weight: 600; overflow-wrap: anywhere; }
-  .fc .evento-roxo { --cor-evento: #5a10ae; background: #e7d6f8; color: #451581; }
-  .fc .evento-azul { --cor-evento: #4662d6; background: #cbdcff; color: #213b87; }
-  .fc .evento-verde { --cor-evento: #008a60; background: #c0ebd9; color: #12553f; }
-  .fc .evento-laranja { --cor-evento: #dc8124; background: #ffe0bb; color: #794214; }
-  .fc .fc-daygrid-more-link { padding: 8px 2px; color: #5a10ae; font-size: 11px; }
+  .fc .evento-roxo { --cor-evento: light-dark(#5a10ae, var(--theme-event-text)); background: light-dark(#e7d6f8, var(--theme-event-surface)); color: light-dark(#451581, var(--theme-event-text)); }
+  .fc .evento-azul { --cor-evento: light-dark(#4662d6, var(--theme-info-text)); background: light-dark(#cbdcff, var(--theme-info-surface)); color: light-dark(#213b87, var(--theme-info-text)); }
+  .fc .evento-verde { --cor-evento: light-dark(#008a60, var(--theme-success-text)); background: light-dark(#c0ebd9, var(--theme-success-surface)); color: light-dark(#12553f, var(--theme-success-text)); }
+  .fc .evento-laranja { --cor-evento: light-dark(#dc8124, var(--theme-warning-text)); background: light-dark(#ffe0bb, var(--theme-warning-surface)); color: light-dark(#794214, var(--theme-warning-text)); }
+  .fc .fc-daygrid-more-link { padding: 8px 2px; color: light-dark(#5a10ae, var(--theme-event-text)); font-size: 11px; }
   .fc .fc-popover { max-width: min(300px, 90vw); }
   @media (max-width: 575px) {
     .calendar-toolbar { padding: 4px; flex-wrap: wrap; gap: 4px; }
@@ -57,7 +57,7 @@ app-eventos-calendario {
   .period-picker { position: relative; }
   .period-picker h2 { white-space: nowrap; }
   .period-picker h2 button { padding: 0 4px; border: 0; background: transparent; font-weight: inherit; color: inherit; }
-  .period-picker h2 button:hover { background: #eee8fa; }
+  .period-picker h2 button:hover { background: light-dark(#eee8fa, var(--theme-event-surface)); }
   .period-popover {
     position: absolute;
     z-index: 10;
@@ -66,8 +66,8 @@ app-eventos-calendario {
     transform: translateX(-50%);
     width: 184px;
     padding: 8px;
-    background: white;
-    border: 1px solid #e4e9ee;
+    background: var(--theme-surface);
+    border: 1px solid light-dark(#e4e9ee, var(--theme-border));
     border-radius: 8px;
     box-shadow: 0 8px 20px #32305026;
   }

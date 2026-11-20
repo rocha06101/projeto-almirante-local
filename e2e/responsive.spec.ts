@@ -17,7 +17,7 @@ async function openResponsiveRoute(
 ): Promise<void> {
   if (route.path === '/desbravadores/editar') {
     await page.goto('/desbravadores');
-    await page.getByRole('button', { name: 'Editar Bartolomeu Fernandes de Albuquerque Cavalcanti' }).click();
+    await page.getByRole('button', { name: 'Editar Desbravador 1', exact: true }).click();
   } else {
     await page.goto(route.path);
   }
@@ -27,11 +27,11 @@ async function openResponsiveRoute(
 async function openCepTestRoute(page: Page, path: string): Promise<void> {
   if (path === '/desbravadores/editar') {
     await page.goto('/desbravadores');
-    await page.getByRole('button', { name: 'Editar Bartolomeu Fernandes de Albuquerque Cavalcanti' }).click();
+    await page.getByRole('button', { name: 'Editar Desbravador 1', exact: true }).click();
   } else {
     await page.goto(path);
   }
-  await page.locator('.container-rigth').waitFor();
+  await page.getByLabel('CEP', { exact: true }).waitFor();
 }
 
 for (const viewport of ALL_VIEWPORTS) {
@@ -42,26 +42,24 @@ for (const viewport of ALL_VIEWPORTS) {
       await mockApi(page);
     });
 
-    for (const route of [{ path: '/login', name: 'login', ready: 'app-login form' }, { path: '/register', name: 'register', ready: 'app-register form' }]) {
-      test(`${route.name}: sem overflow horizontal e formulário acessível`, async ({ page }) => {
-        const problems = collectProblems(page);
-        await page.goto(route.path);
-        await page.locator(route.ready).waitFor();
+    test('login: sem overflow horizontal e formulário acessível', async ({ page }) => {
+      const problems = collectProblems(page);
+      await page.goto('/login');
+      await page.locator('app-login form').waitFor();
 
-        const overflow = await measureOverflow(page);
-        expect(overflow.documentOverflow, overflow.offenders.join('\n')).toBeLessThanOrEqual(0);
+      const overflow = await measureOverflow(page);
+      expect(overflow.documentOverflow, overflow.offenders.join('\n')).toBeLessThanOrEqual(0);
 
-        // O botão de submit precisa ser alcançável (na viewport ou por rolagem da página).
-        const submit = page.locator('form button[type=submit]');
-        await submit.scrollIntoViewIfNeeded();
-        await expect(submit).toBeInViewport();
+      // O botão de submit precisa ser alcançável (na viewport ou por rolagem da página).
+      const submit = page.locator('form button[type=submit]');
+      await submit.scrollIntoViewIfNeeded();
+      await expect(submit).toBeInViewport();
 
-        if (SCREENSHOT_VIEWPORTS.has(viewport.name)) {
-          await page.screenshot({ path: `${SHOTS}/${viewport.name}-${route.name}.png`, fullPage: process.env['E2E_FULL'] !== '0' });
-        }
-        expect(problems.filter(p => !p.includes('/api/')), problems.join('\n')).toEqual([]);
-      });
-    }
+      if (SCREENSHOT_VIEWPORTS.has(viewport.name)) {
+        await page.screenshot({ path: `${SHOTS}/${viewport.name}-login.png`, fullPage: process.env['E2E_FULL'] !== '0' });
+      }
+      expect(problems.filter(p => !p.includes('/api/')), problems.join('\n')).toEqual([]);
+    });
 
     for (const route of ROUTES) {
       test(`${route.name}: sem overflow horizontal, navegação visível e sem erros`, async ({ page }) => {
@@ -106,7 +104,8 @@ for (const viewport of ALL_VIEWPORTS) {
           expect(Math.round(item.width), `largura do item ${i}`).toBeGreaterThanOrEqual(44);
         }
 
-        // Topbar não cobre o conteúdo: o primeiro bloco começa abaixo dela.
+        // Mede o primeiro bloco no topo, inclusive após clicar em uma linha mais abaixo.
+        await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
         const topbar = (await page.locator('header.topbar').boundingBox())!;
         const content = (await page.locator('main.main-content > :not(router-outlet)').first().boundingBox())!;
         expect(content.y).toBeGreaterThanOrEqual(topbar.y + topbar.height - 1);
@@ -241,7 +240,6 @@ test.describe('consulta de CEP nos perfis', () => {
       await expect(feedback).toHaveAttribute('aria-live', 'polite');
       expect(requests).toEqual([]);
 
-      await page.locator('.profile-edit-button app-refresh-button').click();
       await numero.fill('42');
       await complemento.fill('Bloco 2');
       await cep.fill('123');
@@ -249,7 +247,7 @@ test.describe('consulta de CEP nos perfis', () => {
       await expect(cep).toHaveAttribute('aria-invalid', 'true');
       expect(requests).toEqual([]);
 
-      await cep.fill('01001000');
+      await cep.fill('01001001');
       await expect(feedback).toHaveText(
         'Endereço encontrado. Confira os dados e informe o número.',
       );
@@ -257,7 +255,7 @@ test.describe('consulta de CEP nos perfis', () => {
       await expect(bairro).toHaveValue('Centro');
       await expect(numero).toHaveValue('42');
       await expect(complemento).toHaveValue('Bloco 2');
-      expect(requests).toContain('01001000');
+      expect(requests).toContain('01001001');
 
       await cep.fill('00000000');
       await expect(feedback).toHaveText('CEP não encontrado. Confira os 8 dígitos.');

@@ -4,7 +4,7 @@
 }
 
 .financial-entries {
-  background: #fff;
+  background: var(--theme-surface);
   border-radius: 1.25rem;
   padding: 1.25rem 1rem 0.5rem;
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
@@ -24,7 +24,7 @@
   margin: 0;
   font-size: clamp(1.4rem, 1.1rem + 1vw, 2rem);
   font-weight: 700;
-  color: #111827;
+  color: light-dark(#111827, var(--theme-text));
 }
 
 // A toolbar quebra em linhas conforme o espaço: cada controle tem uma base e cresce/encolhe.
@@ -42,8 +42,8 @@
 .filter-control {
   display: flex;
   align-items: center;
-  border: 1.5px solid #d1d5db;
-  background: #f5f5f5;
+  border: 1.5px solid light-dark(var(--theme-border), var(--theme-control-border));
+  background: light-dark(#f5f5f5, var(--theme-surface-secondary));
   border-radius: 0.8rem;
   min-height: var(--tap-target);
   min-width: 0;
@@ -63,7 +63,7 @@
   width: 1.4rem;
   height: 1.4rem;
   fill: none;
-  stroke: #111827;
+  stroke: light-dark(#111827, var(--theme-text));
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -77,7 +77,7 @@
   border: none;
   background: transparent;
   font-size: 1rem;
-  color: #111827;
+  color: light-dark(#111827, var(--theme-text));
   padding: 0.75rem 0.5rem;
 
   &:focus-visible {
@@ -85,7 +85,7 @@
   }
 
   &::placeholder {
-    color: #6b7280;
+    color: var(--theme-text-muted);
   }
 }
 
@@ -93,7 +93,7 @@
   flex: 1 1 9rem;
   gap: 0.5rem;
   padding: 0 0.8rem;
-  color: #111827;
+  color: light-dark(#111827, var(--theme-text));
   font-weight: 600;
 
   &:focus-within {
@@ -112,7 +112,7 @@
     min-height: var(--tap-target);
     border: none;
     background: transparent;
-    color: #111827;
+    color: light-dark(#111827, var(--theme-text));
     font: inherit;
     font-weight: 600;
 
@@ -129,7 +129,7 @@
 .primary-button {
   flex: 0 1 auto;
   border: none;
-  background: #0f6fff;
+  background: light-dark(#0f6fff, var(--theme-primary));
   color: #fff;
   border-radius: 0.8rem;
   min-height: var(--tap-target);
@@ -143,14 +143,14 @@
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: 1rem;
-  border: 1px solid #ececec;
+  border: 1px solid light-dark(#ececec, var(--theme-border));
 }
 
 table {
   width: 100%;
   min-width: 46rem; // abaixo disso o wrapper rola na horizontal; no celular vira lista de cards
   border-collapse: collapse;
-  background: #fff;
+  background: var(--theme-surface);
 
   @media (max-width: 575.98px) {
     min-width: 0;
@@ -161,19 +161,19 @@ th,
 td {
   padding: 0.9rem 0.9rem;
   text-align: left;
-  border-bottom: 1px solid #edf1f5;
+  border-bottom: 1px solid light-dark(#edf1f5, var(--theme-border));
 }
 
 th {
   font-size: 1rem;
   font-weight: 700;
-  color: #111827;
+  color: light-dark(#111827, var(--theme-text));
   white-space: nowrap;
 }
 
 td {
   font-size: 1rem;
-  color: #1f2937;
+  color: var(--theme-text);
 }
 
 td.cell-title {
@@ -183,7 +183,7 @@ td.cell-title {
 tbody tr {
   @media (hover: hover) {
     &:hover {
-      background: #fafafa;
+      background: light-dark(#fafafa, var(--theme-surface-secondary));
     }
   }
 }
@@ -219,7 +219,7 @@ tbody tr {
 .icon-button {
   border: none;
   background: transparent;
-  color: #111827;
+  color: light-dark(#111827, var(--theme-text));
   width: var(--tap-target);
   height: var(--tap-target);
   border-radius: 0.5rem;
@@ -230,12 +230,12 @@ tbody tr {
   @media (hover: hover) {
     &:hover {
       background: rgba(15, 111, 255, 0.08);
-      color: #0f6fff;
+      color: light-dark(#0f6fff, var(--theme-link));
     }
 
     &.danger:hover {
       background: rgba(239, 68, 68, 0.08);
-      color: #dc2626;
+      color: var(--theme-danger-text);
     }
   }
 
@@ -248,7 +248,7 @@ tbody tr {
 
 .state-block.error-state {
   gap: 0.75rem;
-  color: #b91c1c;
+  color: light-dark(#b91c1c, var(--theme-danger-text));
   text-align: center;
 }
 
@@ -263,7 +263,7 @@ tbody tr {
 
 .form-error {
   margin: 0;
-  color: #b91c1c;
+  color: light-dark(#b91c1c, var(--theme-danger-text));
   font-size: 0.9rem;
 }
 
@@ -276,7 +276,7 @@ tbody tr {
   flex-direction: column;
   gap: 0.25rem;
   margin: 0;
-  color: #111827;
+  color: light-dark(#111827, var(--theme-text));
   font-weight: 600;
 
   strong {
@@ -291,7 +291,7 @@ tbody tr {
   margin: 0;
 
   dt {
-    color: #6b7280;
+    color: var(--theme-text-muted);
     font-size: 0.8rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -312,7 +312,7 @@ tbody tr {
   display: grid;
   place-items: center;
   min-height: 7rem;
-  color: #374151;
+  color: light-dark(#374151, var(--theme-text));
   font-size: 1rem;
   padding: 1rem 0;
 }
@@ -332,7 +332,7 @@ tbody tr {
   width: min(100%, 42rem);
   max-height: 100%;
   overflow-y: auto;
-  background: #fff;
+  background: var(--theme-surface);
   border-radius: 1rem;
   padding: 1.25rem;
   box-shadow: 0 22px 54px rgba(15, 23, 42, 0.18);
@@ -350,7 +350,7 @@ tbody tr {
   margin: 0;
   font-size: 1.4rem;
   font-weight: 700;
-  color: #111827;
+  color: light-dark(#111827, var(--theme-text));
 }
 
 .close-button {
@@ -359,7 +359,7 @@ tbody tr {
   height: var(--tap-target);
   border: none;
   background: transparent;
-  color: #374151;
+  color: light-dark(#374151, var(--theme-text));
   font-size: 2rem;
   line-height: 1;
   cursor: pointer;
@@ -381,7 +381,7 @@ tbody tr {
   flex-direction: column;
   gap: 0.45rem;
   min-width: 0;
-  color: #111827;
+  color: light-dark(#111827, var(--theme-text));
   font-weight: 600;
 }
 
@@ -389,12 +389,12 @@ tbody tr {
 .form-field select {
   width: 100%;
   min-width: 0;
-  border: 1px solid #d1d5db;
+  border: 1px solid light-dark(var(--theme-border), var(--theme-control-border));
   border-radius: 0.75rem;
-  background: #fff;
+  background: var(--theme-surface);
   min-height: var(--tap-target);
   padding: 0.7rem 0.8rem;
-  color: #111827;
+  color: light-dark(#111827, var(--theme-text));
   font: inherit;
 }
 
@@ -419,8 +419,8 @@ tbody tr {
 
 .secondary-button {
   border: none;
-  background: #e5e7eb;
-  color: #111827;
+  background: light-dark(#e5e7eb, var(--theme-surface-secondary));
+  color: light-dark(#111827, var(--theme-text));
   border-radius: 0.75rem;
   padding: 0.8rem 1.1rem;
   font-weight: 700;
@@ -433,12 +433,12 @@ tbody tr {
   gap: 0.75rem 1rem;
   margin-top: 1rem;
   padding: 0.75rem 0.5rem 0.25rem;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid light-dark(#e5e7eb, var(--theme-border));
   flex-wrap: wrap;
 }
 
 .pagination-summary {
-  color: #475569;
+  color: light-dark(#475569, var(--theme-text-muted));
   font-size: 0.95rem;
 }
 
@@ -454,13 +454,13 @@ tbody tr {
   height: var(--tap-target);
   border: none;
   border-radius: 0.55rem;
-  background: #f3f4f6;
-  color: #1f2937;
+  background: var(--theme-surface-secondary);
+  color: var(--theme-text);
   font-weight: 700;
 }
 
 .page-button.active {
-  background: #0f6fff;
+  background: light-dark(#0f6fff, var(--theme-primary));
   color: #fff;
 }
 

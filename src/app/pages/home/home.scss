@@ -24,13 +24,13 @@
     h1 {
       margin: 0;
       font-size: 2rem;
-      color: #111827;
+      color: light-dark(#111827, var(--theme-text));
       font-weight: 700;
     }
 
     p {
       margin: 0.5rem 0 0;
-      color: #6b7280;
+      color: var(--theme-text-muted);
       font-size: 1rem;
     }
   }
@@ -59,7 +59,7 @@
 }
 
 .dashboard-card {
-  background: white;
+  background: var(--theme-surface);
   border-radius: 12px;
   padding: 1.5rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -105,7 +105,7 @@
       margin: 0;
       min-width: 0;
       font-size: 0.95rem;
-      color: #6b7280;
+      color: var(--theme-text-muted);
       font-weight: 500;
     }
   }
@@ -117,14 +117,14 @@
     .card-value {
       font-size: 2rem;
       font-weight: 700;
-      color: #111827;
+      color: light-dark(#111827, var(--theme-text));
       margin-bottom: 0.5rem;
     }
 
     .card-description {
       margin: 0;
       font-size: 0.85rem;
-      color: #9ca3af;
+      color: light-dark(#9ca3af, var(--theme-text-muted));
     }
   }
 
@@ -150,7 +150,7 @@
 }
 
 .content-card {
-  background: white;
+  background: var(--theme-surface);
   border-radius: 12px;
   min-width: 0;
   padding: clamp(1rem, 2.5vw, 1.75rem);
@@ -169,12 +169,12 @@
     align-items: center;
     margin-bottom: 1.5rem;
     padding-bottom: 1rem;
-    border-bottom: 2px solid #f3f4f6;
+    border-bottom: 2px solid light-dark(#f3f4f6, var(--theme-border));
 
     h2 {
       margin: 0;
       font-size: 1.25rem;
-      color: #111827;
+      color: light-dark(#111827, var(--theme-text));
       font-weight: 600;
     }
 
@@ -182,14 +182,14 @@
       display: inline-flex;
       align-items: center;
       min-height: var(--tap-target);
-      color: #1d4ed8;
+      color: light-dark(#1d4ed8, var(--theme-link));
       text-decoration: none;
       font-size: 0.9rem;
       font-weight: 500;
       transition: color 0.2s;
 
       &:hover {
-        color: #2563eb;
+        color: light-dark(#2563eb, var(--theme-link));
         text-decoration: underline;
       }
     }
@@ -220,7 +220,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 1rem;
-    background: #F0F4F7;
+    background: var(--theme-background);
     border-radius: 8px;
     transition: all 0.2s ease;
 
@@ -232,7 +232,7 @@
 
       h4 {
         margin: 0;
-        color: #111827;
+        color: light-dark(#111827, var(--theme-text));
         font-size: 0.95rem;
         font-weight: 600;
       }
@@ -240,7 +240,7 @@
       .activity-date {
         display: block;
         margin-top: 0.25rem;
-        color: #9ca3af;
+        color: light-dark(#9ca3af, var(--theme-text-muted));
         font-size: 0.85rem;
       }
     }
@@ -253,18 +253,18 @@
       white-space: nowrap;
 
       &.concluída {
-        background: #d1fae5;
-        color: #065f46;
+        background: light-dark(#d1fae5, var(--theme-success-surface));
+        color: light-dark(#065f46, var(--theme-success-text));
       }
 
       &.em-progresso {
-        background: #fef3c7;
-        color: #92400e;
+        background: light-dark(#fef3c7, var(--theme-warning-surface));
+        color: light-dark(#92400e, var(--theme-warning-text));
       }
 
       &.pendente {
-        background: #fee2e2;
-        color: #7f1d1d;
+        background: light-dark(#fee2e2, var(--theme-danger-surface));
+        color: light-dark(#7f1d1d, var(--theme-danger-text));
       }
     }
 
@@ -283,7 +283,7 @@
   margin-top: clamp(2rem, 6vw, 4rem);
   padding: 2rem 1rem;
   text-align: center;
-  border-top: 2px solid #f3f4f6;
+  border-top: 2px solid light-dark(#f3f4f6, var(--theme-border));
 
   img {
     width: 50px;
@@ -293,13 +293,13 @@
 
   p {
     margin: 0;
-    color: #6b7280;
+    color: var(--theme-text-muted);
     font-size: 0.95rem;
   }
 
   .version {
     display: block;
-    color: #9ca3af;
+    color: light-dark(#9ca3af, var(--theme-text-muted));
     font-size: 0.8rem;
     margin-top: 0.5rem;
   }

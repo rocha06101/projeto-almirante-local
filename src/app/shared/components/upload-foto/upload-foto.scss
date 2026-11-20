@@ -13,7 +13,7 @@
   justify-content: center;
   padding: clamp(1rem, 3vw, 2rem);
   min-height: 15rem;
-  background: #ffffff;
+  background: var(--theme-surface);
   border-radius: 24px;
   cursor: pointer;
   text-align: center;
@@ -52,7 +52,7 @@
   margin: 0;
   font-size: 1rem;
   line-height: 1.4;
-  color: #4a90e2;
+  color: light-dark(#4a90e2, var(--theme-link));
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -62,24 +62,24 @@
 }
 
 .upload-foto-action {
-  color: #4a90e2;
+  color: light-dark(#4a90e2, var(--theme-link));
   font-weight: 700;
 }
 
 .upload-foto-or {
-  color: #6b7280;
+  color: var(--theme-text-muted);
   font-weight: 600;
 }
 
 .upload-foto-help {
   margin: 0;
-  color: #6b7280;
+  color: var(--theme-text-muted);
   font-size: 0.9rem;
 }
 
 .upload-foto-error {
   margin: 0;
-  color: #dc2626;
+  color: var(--theme-danger-text);
   font-size: 0.9rem;
   text-align: center;
 }

@@ -40,6 +40,12 @@ export const routes: Routes = [
             .then(m => m.MyProfile),
       },
       {
+        path: 'preferencias',
+        loadComponent: () =>
+          import('./pages/preferences/preferences')
+            .then(m => m.Preferences),
+      },
+      {
         path: 'desbravadores',
         canActivate: [permissaoGuard],
         data: { permissoes: ['usuarios.consultar', 'membros.consultar'] },

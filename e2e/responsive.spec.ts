@@ -271,3 +271,48 @@ test.describe('consulta de CEP nos perfis', () => {
     });
   }
 });
+
+test('preferencias: colunas adaptáveis, teclado e movimento do sistema', async ({ page }) => {
+  await mockApi(page);
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await page.goto('/preferencias');
+
+  const columns = () => page.locator('.preferences-grid').evaluate(
+    (grid) => getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+  );
+  expect(await columns()).toBe(3);
+  await page.setViewportSize({ width: 820, height: 900 });
+  await page.reload();
+  await expect.poll(columns).toBe(2);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(columns).toBe(1);
+
+  const system = page.getByRole('radio', { name: 'Automático' });
+  const dark = page.getByRole('radio', { name: 'Escuro' });
+  const preview = page.locator('.large-preview');
+  await expect(system).toBeChecked();
+  await expect(preview).toHaveAttribute('data-theme-preview', 'light');
+
+  await system.press('ArrowLeft');
+  await expect(dark).toBeChecked();
+  await expect(preview).toHaveAttribute('data-theme-preview', 'dark');
+
+  const comfortable = page.getByRole('radio', { name: 'Confortável' });
+  await comfortable.press('ArrowRight');
+  await expect(page.getByRole('radio', { name: 'Compacta' })).toBeChecked();
+  await expect(preview).toHaveClass(/compact-preview/);
+
+  await page.getByRole('button', { name: 'Restaurar preferências padrão' }).click();
+  await expect(comfortable).toBeChecked();
+  await expect(system).toBeChecked();
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(preview).toHaveAttribute('data-theme-preview', 'dark');
+
+  const track = page.locator('app-preferences .toggle-track').first();
+  expect(await track.evaluate((element) => parseFloat(getComputedStyle(element).transitionDuration)))
+    .toBeLessThan(0.001);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.getByRole('switch', { name: 'Reduzir animações' }).press('Space');
+  await expect(track).toHaveCSS('transition-duration', '0s, 0s');
+});

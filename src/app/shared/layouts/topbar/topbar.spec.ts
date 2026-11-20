@@ -81,6 +81,21 @@ describe('TopbarComponent', () => {
     expect(page.querySelector<HTMLImageElement>('.large-avatar')?.getAttribute('src')).toBe('blob:shared-avatar');
     expect(http.match('/api/Me/foto')).toHaveLength(0);
   });
+
+  it('navega para preferencias ao clicar no item do menu', () => {
+    http.expectOne('/api/Me/foto').flush(new Blob());
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    fixture.componentInstance.toggleProfile();
+    fixture.detectChanges();
+
+    const preferencesButton = (fixture.nativeElement as HTMLElement)
+      .querySelectorAll<HTMLButtonElement>('.profile-menu .menu-item')[2];
+    preferencesButton.click();
+
+    expect(navigate).toHaveBeenCalledExactlyOnceWith(['/preferencias']);
+    expect(fixture.componentInstance.profileOpen()).toBe(false);
+  });
+
   it('não chama o serviço quando não há pendências', () => {
     http.expectOne('/api/Me/foto').flush(new Blob());
     fixture.componentInstance.clearNotifications();

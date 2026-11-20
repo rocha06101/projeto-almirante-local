@@ -1,0 +1,133 @@
+<div class="preferences" [class.reduce-motion]="reduceMotion.value">
+  <header class="page-heading">
+    <h1>Preferências</h1>
+    <p>Personalize a aparência, as notificações e sua experiência no sistema.</p>
+  </header>
+
+  <div class="preferences-grid">
+    <section class="panel" aria-labelledby="appearance-heading">
+      <header class="panel-heading">
+        <span class="icon-tile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+            <circle cx="12" cy="12" r="8" />
+            <path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" />
+          </svg>
+        </span>
+        <h2 id="appearance-heading">Aparência</h2>
+      </header>
+
+      <fieldset>
+        <legend>Tema da aplicação</legend>
+        <p>Escolha como o Almirante será exibido</p>
+        <div class="theme-options">
+          @for (option of themes; track option.value) {
+            <app-theme-option
+              [theme]="option.value"
+              [label]="option.label"
+              [selected]="theme.preference() === option.value"
+              group="preferences-theme"
+              (selectionChange)="theme.setTheme($event)"
+            />
+          }
+        </div>
+      </fieldset>
+
+      <div class="subsection">
+        <h3>Prévia</h3>
+        <p aria-live="polite">{{ previewDescriptions[theme.preference()] }}</p>
+        <app-theme-option
+          class="large-preview"
+          [class.compact-preview]="density.value === 'compact'"
+          [theme]="theme.currentTheme()"
+          [previewOnly]="true"
+        />
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="notifications-heading">
+      <header class="panel-heading">
+        <span class="icon-tile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+        </span>
+        <h2 id="notifications-heading">Notificações</h2>
+      </header>
+      <p>Escolha quais avisos deseja receber dentro da plataforma.</p>
+
+      <div class="notification-master">
+        <app-toggle-switch
+          label="Notificações no sistema"
+          description="Receba avisos e atualizações no Almirante"
+          [formControl]="notifications"
+        />
+      </div>
+
+      <div class="subsection">
+        <h3>Categorias</h3>
+        <ul class="categories" [class.categories-disabled]="!notifications.value">
+          @for (category of categories; track category.icon) {
+            <li class="category">
+              <span class="icon-tile category-icon" aria-hidden="true">
+                <span class="asset-icon" [style.--icon]="'url(icons/' + category.icon + '.svg)'"></span>
+              </span>
+              <app-toggle-switch
+                [label]="category.label"
+                [description]="category.description"
+                [formControl]="category.control"
+              />
+            </li>
+          }
+        </ul>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="experience-heading">
+      <header class="panel-heading">
+        <span class="icon-tile" aria-hidden="true">
+          <span class="asset-icon gear-icon"></span>
+        </span>
+        <h2 id="experience-heading">Experiência da aplicação</h2>
+      </header>
+
+      <fieldset>
+        <legend>Densidade da interface</legend>
+        <p>Defina o espaçamento entre os elementos da interface.</p>
+
+        <div class="density-options">
+          <label>
+            <input class="visually-hidden" type="radio" name="preferences-density" value="comfortable" [formControl]="density" />
+            <span class="density-card">
+              <span class="density-sample" aria-hidden="true"><span></span><span></span><span></span></span>
+              Confortável
+            </span>
+          </label>
+          <label>
+            <input class="visually-hidden" type="radio" name="preferences-density" value="compact" [formControl]="density" />
+            <span class="density-card">
+              <span class="density-sample compact-sample" aria-hidden="true"><span></span><span></span><span></span></span>
+              Compacta
+            </span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="subsection">
+        <app-toggle-switch
+          label="Reduzir animações"
+          description="Reduza movimentos para uma navegação mais confortável."
+          [formControl]="reduceMotion"
+        />
+      </div>
+
+      <div class="subsection">
+        <button class="restore-button" type="button" (click)="restoreDefaults()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 12a9 9 0 1 1 2.6 6.4M3 5v7h7" />
+          </svg>
+          Restaurar preferências padrão
+        </button>
+      </div>
+    </section>
+  </div>
+</div>

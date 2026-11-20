@@ -41,6 +41,7 @@ export const SCREENSHOT_VIEWPORTS = new Set([
 export const ROUTES = [
   { path: '/', name: 'home', ready: 'app-home' },
   { path: '/perfil', name: 'perfil', ready: 'app-my-profile .container-center' },
+  { path: '/preferencias', name: 'preferencias', ready: 'app-preferences .preferences-grid' },
   { path: '/desbravadores', name: 'desbravadores', ready: 'app-desbravadores table' },
   { path: '/desbravadores/editar', name: 'editar-usuario', ready: 'app-user-edit .container-center' },
   { path: '/desbravadores/cadastrar', name: 'cadastro-membro', ready: 'app-user-register' },
@@ -51,11 +52,25 @@ const json = (route: Route, body: unknown, status = 200) =>
   route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
 /**
- * Intercepta somente a API (`/api/**`) com respostas fixas, para exercitar layout sem
+ * Intercepta a API e o hub de notificações com respostas fixas, para exercitar layout sem
  * depender de dados/credenciais reais. Os testes de contrato real ficam em auth.real.spec.ts.
  */
 export async function mockApi(page: Page) {
   const expires = () => new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+  await page.route('**/hubs/notificacoes/negotiate?*', (route) => json(route, {
+    negotiateVersion: 1,
+    connectionId: 'layout',
+    connectionToken: 'layout',
+    availableTransports: [{ transport: 'WebSockets', transferFormats: ['Text'] }],
+  }));
+  await page.routeWebSocket(/\/hubs\/notificacoes\?/, (socket) => {
+    socket.onMessage((message) => {
+      if (typeof message === 'string' && message.includes('"protocol"')) {
+        socket.send('{}\u001e');
+      }
+    });
+  });
 
   await page.route('**/api/**', route => {
     const url = new URL(route.request().url());
@@ -209,7 +224,10 @@ export function collectProblems(page: Page): string[] {
     if (message.type() === 'error') problems.push(`console.error: ${message.text()}`);
   });
   page.on('requestfailed', request => {
-    problems.push(`requestfailed: ${request.method()} ${request.url()} (${request.failure()?.errorText})`);
+    const error = request.failure()?.errorText;
+    // O navegador pode cancelar uma imagem substituída durante a renderização.
+    if (request.resourceType() === 'image' && error === 'net::ERR_ABORTED') return;
+    problems.push(`requestfailed: ${request.method()} ${request.url()} (${error})`);
   });
   page.on('response', response => {
     if (response.status() >= 400 && !response.url().includes('/api/')) {

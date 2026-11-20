@@ -100,6 +100,11 @@ export class TopbarComponent {
     this.profileOpen.set(false);
   }
 
+  viewPreferences() {
+    this.router.navigate(['/preferencias']);
+    this.profileOpen.set(false);
+  }
+
   logout() {
     this.profileOpen.set(false);
     this.auth.logout().subscribe(() => this.router.navigate(['/login']));

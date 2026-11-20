@@ -18,6 +18,7 @@ let nextToggleSwitchId = 0;
 })
 export class ToggleSwitch implements ControlValueAccessor {
   @Input() label = '';
+  @Input() description = '';
   @Input() id = `toggle-switch-${nextToggleSwitchId++}`;
 
   readonly checked = signal(false);

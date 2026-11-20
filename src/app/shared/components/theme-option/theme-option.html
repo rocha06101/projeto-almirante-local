@@ -1,0 +1,35 @@
+<ng-template #thumbnail>
+  <span class="thumbnail" aria-hidden="true">
+    <span class="mini-sidebar">
+      <span></span><span></span><span></span><span></span>
+    </span>
+    <span class="mini-main">
+      <span class="mini-header"><span></span><span></span></span>
+      <span class="mini-content">
+        <span class="mini-title"></span>
+        <span class="mini-cards"><span></span><span></span></span>
+        <span class="mini-panel"></span>
+      </span>
+    </span>
+  </span>
+</ng-template>
+
+@if (previewOnly()) {
+  <ng-container [ngTemplateOutlet]="thumbnail" />
+} @else {
+  <label class="option">
+    <input
+      class="visually-hidden"
+      type="radio"
+      [name]="group()"
+      [value]="theme()"
+      [checked]="selected()"
+      (change)="selectionChange.emit(theme())"
+    />
+    <span class="option-body">
+      <span class="indicator" aria-hidden="true"></span>
+      <ng-container [ngTemplateOutlet]="thumbnail" />
+      <span class="label">{{ label() }}</span>
+    </span>
+  </label>
+}

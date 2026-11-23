@@ -1,5 +1,5 @@
 import { Component, ElementRef, Input, OnChanges, QueryList, SimpleChanges, ViewChildren, afterEveryRender, output } from '@angular/core';
-import { EventoDto } from '../../../core/models/evento.model';
+import { EventoCalendarioItem } from '../../../core/models/evento.model';
 import { corEvento, dataCivil, grupoEvento, nomeEvento, rotuloData } from '../eventos.utils';
 
 @Component({
@@ -19,7 +19,9 @@ import { corEvento, dataCivil, grupoEvento, nomeEvento, rotuloData } from '../ev
               <span class="date-badge" [class.today]="evento.dataEvento === hoje">{{ rotuloData(evento.dataEvento, hoje) }}</span>
               <strong>{{ nomeEvento(evento) }}</strong>
               <span class="meta"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>{{ evento.local }}</span>
-              <span class="meta"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 22v-3a7 7 0 0 1 14 0v3M17 4a4 4 0 0 1 0 8m1 3a6 6 0 0 1 4 6"/></svg>{{ evento.quantidadeMembros }} participantes</span>
+              @if (evento.quantidadeMembros != null) {
+                <span class="meta"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 22v-3a7 7 0 0 1 14 0v3M17 4a4 4 0 0 1 0 8m1 3a6 6 0 0 1 4 6"/></svg>{{ evento.quantidadeMembros }} participantes</span>
+              }
               @if (grupoEvento(evento, eventos)) { <small>{{ grupoEvento(evento, eventos) }} · mesmo passeio</small> }
             </button>
           } @empty { <p class="empty">Nenhum evento nos próximos 366 dias.</p> }
@@ -37,7 +39,7 @@ import { corEvento, dataCivil, grupoEvento, nomeEvento, rotuloData } from '../ev
   styleUrl: './proximos-eventos.scss',
 })
 export class ProximosEventos implements OnChanges {
-  @Input() eventos: EventoDto[] = [];
+  @Input() eventos: EventoCalendarioItem[] = [];
   @Input() selectedEventId: string | null = null;
   @Input() pedidoDeRolagem = 0;
   @ViewChildren('card') cards!: QueryList<ElementRef<HTMLButtonElement>>;

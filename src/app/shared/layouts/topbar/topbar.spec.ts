@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { Subject, throwError } from 'rxjs';
-import { MarcarTodasLeiturasResponse } from '../../../core/models/notificacao.model';
+import { MarcarTodasLeiturasResponse, Notificacao } from '../../../core/models/notificacao.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { signal } from '@angular/core';
 import { AuthService } from '../../../core/services/auth';
@@ -16,7 +16,7 @@ describe('TopbarComponent', () => {
   let http: HttpTestingController;
   const clear = vi.fn();
   const unreadCount = signal(0);
-  const notifications = signal<{ id: string }[]>([]);
+  const notifications = signal<Notificacao[]>([]);
 
   beforeEach(() => {
     clear.mockReset();
@@ -82,18 +82,30 @@ describe('TopbarComponent', () => {
     expect(http.match('/api/Me/foto')).toHaveLength(0);
   });
 
-  it('navega para preferencias ao clicar no item do menu', () => {
+  it('navega para Preferências ao clicar no item do menu', () => {
     http.expectOne('/api/Me/foto').flush(new Blob());
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     fixture.componentInstance.toggleProfile();
     fixture.detectChanges();
 
-    const preferencesButton = (fixture.nativeElement as HTMLElement)
-      .querySelectorAll<HTMLButtonElement>('.profile-menu .menu-item')[2];
-    preferencesButton.click();
+    const buttons = (fixture.nativeElement as HTMLElement)
+      .querySelectorAll<HTMLButtonElement>('.profile-menu .menu-item');
+    [...buttons].find(button => button.textContent.trim() === 'Preferências')!.click();
 
     expect(navigate).toHaveBeenCalledExactlyOnceWith(['/preferencias']);
     expect(fixture.componentInstance.profileOpen()).toBe(false);
+  });
+
+  it('exibe a mensagem de devolução exatamente como recebida', () => {
+    http.expectOne('/api/Me/foto').flush(new Blob());
+    const mensagem = 'Seu valor de R$\u00a020,00 referente ao evento Trilha será devolvido.';
+    notifications.set([{ id: 'devolucao-1', tipo: 'DevolucaoEvento', mensagem }]);
+    unreadCount.set(1);
+    fixture.componentInstance.toggleNotifications();
+    fixture.detectChanges();
+
+    const page = fixture.nativeElement as HTMLElement;
+    expect(page.querySelector('.notif-message')?.textContent).toBe(mensagem);
   });
 
   it('não chama o serviço quando não há pendências', () => {

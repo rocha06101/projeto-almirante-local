@@ -1,7 +1,7 @@
-import { Component, DestroyRef, OnInit, ViewChild, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, catchError, finalize, of, map, startWith, switchMap } from 'rxjs';
-import { EventoDto, PeriodoEventos } from '../../core/models/evento.model';
+import { EventoDto, EventoParticipante, PeriodoEventos } from '../../core/models/evento.model';
 import { EventosService } from '../../core/services/eventos';
 import { PermissoesService } from '../../core/services/permissoes';
 import { EventosCalendario } from './calendario/eventos-calendario';
@@ -20,11 +20,21 @@ export class Eventos implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly periodos = new Subject<PeriodoEventos>();
   private readonly atualizarProximos = new Subject<void>();
-  private periodoAtual: PeriodoEventos | null = null;
+  private readonly periodoAtual = signal<PeriodoEventos | null>(null);
+  private readonly eventosPessoais = signal<EventoParticipante[]>([]);
   readonly hoje = dataCivil(new Date());
+  private readonly limiteProximos = somarDias(this.hoje, 365);
   readonly selecionada = signal(this.hoje);
   readonly eventos = signal<EventoDto[]>([]);
   readonly proximos = signal<EventoDto[]>([]);
+  readonly consultaGeral = computed(() => this.acesso.tem('eventos.consultar'));
+  readonly eventosDoCalendario = computed(() => {
+    if (this.consultaGeral()) return this.eventos();
+    const periodo = this.periodoAtual();
+    return this.eventosPessoais().filter(e => periodo && e.dataEvento >= periodo.dataInicial && e.dataEvento <= periodo.dataFinal);
+  });
+  readonly eventosProximos = computed(() => this.consultaGeral() ? this.proximos() :
+    this.eventosPessoais().filter(e => e.dataEvento >= this.hoje && e.dataEvento <= this.limiteProximos));
   readonly carregando = signal(false);
   readonly carregandoProximos = signal(false);
   readonly erro = signal('');
@@ -38,43 +48,55 @@ export class Eventos implements OnInit {
 
   ngOnInit(): void {
     this.periodos.pipe(switchMap(periodo => {
+      if (!this.consultaGeral()) return of(null);
       this.carregando.set(true); this.erro.set('');
       return this.api.listar(periodo).pipe(catchError(e => { this.erro.set(erroEvento(e)); return of(null); }), finalize(() => this.carregando.set(false)), map(resposta => ({ resposta, periodo })));
-    }), takeUntilDestroyed(this.destroyRef)).subscribe(({ resposta: r, periodo }) => {
-      if (r) { this.validarSelecao(r.items, periodo); this.eventos.set(r.items); this.dataMinima.set(r.dataMinimaCadastro); }
+    }), takeUntilDestroyed(this.destroyRef)).subscribe(resultado => {
+      if (resultado?.resposta) {
+        const { resposta: r, periodo } = resultado;
+        this.validarSelecao(r.items, periodo); this.eventos.set(r.items); this.dataMinima.set(r.dataMinimaCadastro);
+      }
     });
     this.atualizarProximos.pipe(startWith(undefined), switchMap(() => {
-      if (!this.acesso.tem('eventos.consultar')) return of(null);
+      if (!this.consultaGeral()) {
+        this.carregandoProximos.set(true); this.erroProximos.set('');
+        return this.api.listarMeusEventos().pipe(
+          map(r => { this.eventosPessoais.set(r.items); return null; }),
+          catchError(e => { this.erroProximos.set(erroEvento(e)); return of(null); }),
+          finalize(() => this.carregandoProximos.set(false)),
+        );
+      }
       this.carregandoProximos.set(true); this.erroProximos.set('');
-      return this.api.listar({ dataInicial: this.hoje, dataFinal: somarDias(this.hoje, 365) }).pipe(
+      return this.api.listar({ dataInicial: this.hoje, dataFinal: this.limiteProximos }).pipe(
         catchError(e => { this.erroProximos.set(erroEvento(e)); return of(null); }), finalize(() => this.carregandoProximos.set(false)),
       );
     }), takeUntilDestroyed(this.destroyRef)).subscribe(r => {
       if (r) {
-        this.validarSelecao(r.items, { dataInicial: this.hoje, dataFinal: somarDias(this.hoje, 365) }, this.eventos());
+        this.validarSelecao(r.items, { dataInicial: this.hoje, dataFinal: this.limiteProximos }, this.eventos());
         this.proximos.set(r.items.filter(e => e.dataEvento >= this.hoje).sort((a, b) => a.dataEvento.localeCompare(b.dataEvento) || a.id.localeCompare(b.id)));
         this.dataMinima.set(r.dataMinimaCadastro);
       }
     });
   }
   mudarPeriodo(periodo: PeriodoEventos): void {
-    if (!this.acesso.tem('eventos.consultar') || (this.periodoAtual?.dataInicial === periodo.dataInicial && this.periodoAtual?.dataFinal === periodo.dataFinal)) return;
-    this.periodoAtual = periodo;
+    const atual = this.periodoAtual();
+    if (atual?.dataInicial === periodo.dataInicial && atual.dataFinal === periodo.dataFinal) return;
+    this.periodoAtual.set(periodo);
     if (this.selecionada() < periodo.dataInicial || this.selecionada() > periodo.dataFinal) {
       this.limparSelecao();
       this.selecionada.set('');
     }
-    this.periodos.next(periodo);
+    if (this.consultaGeral()) this.periodos.next(periodo);
   }
   recarregar(): void {
-    if (!this.acesso.tem('eventos.consultar')) return;
-    if (this.periodoAtual) this.periodos.next(this.periodoAtual);
+    const periodo = this.periodoAtual();
+    if (periodo && this.consultaGeral()) this.periodos.next(periodo);
     this.atualizarProximos.next();
   }
-  recarregarProximos(): void { if (this.acesso.tem('eventos.consultar')) this.atualizarProximos.next(); }
+  recarregarProximos(): void { this.atualizarProximos.next(); }
   selecionarEvento(id: string, noCalendario = false): void {
-    if (!this.acesso.tem('eventos.consultar') || this.modal()) return;
-    const evento = this.eventos().find(e => e.id === id) ?? this.proximos().find(e => e.id === id);
+    if (this.modal()) return;
+    const evento = this.eventosDoCalendario().find(e => e.id === id) ?? this.eventosProximos().find(e => e.id === id);
     if (!evento) return;
     if (this.selectedEventId() === id) this.modal.set({ id, data: '' });
     this.selectedEventId.set(id);
@@ -97,12 +119,12 @@ export class Eventos implements OnInit {
   }
   voltarHoje(data: string): void { this.limparSelecao(); this.selecionada.set(data); }
   selecionarDia(data: string): void {
-    if (!this.acesso.tem('eventos.consultar') || this.modal()) return;
+    if (this.modal()) return;
     const repetirSelecao = this.diaSelecionadoPorClique && this.selecionada() === data;
     this.limparSelecao();
     this.selecionada.set(data);
     this.diaSelecionadoPorClique = true;
-    if (repetirSelecao && this.acesso.tem('eventos.criar')) {
+    if (repetirSelecao && this.consultaGeral() && this.acesso.tem('eventos.criar')) {
       this.modal.set({ id: null, data });
     }
   }

@@ -82,8 +82,6 @@ export const routes: Routes = [
       },
       {
         path: 'eventos',
-        canActivate: [permissaoGuard],
-        data: { permissao: 'eventos.consultar' },
         loadComponent: () => import('./pages/eventos/eventos').then(m => m.Eventos),
       },
       {

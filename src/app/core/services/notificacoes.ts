@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { DestroyRef, Injectable, effect, inject, signal } from '@angular/core';
-import { HubConnection, HubConnectionBuilder, HubConnectionState } from '@microsoft/signalr';
-import { catchError, defer, EMPTY, filter, finalize, firstValueFrom, Observable, of, retry, tap, throwError } from 'rxjs';
+import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
+import { catchError, defer, EMPTY, filter, finalize, firstValueFrom, Observable, of, retry, Subject, tap, throwError } from 'rxjs';
 import { resolveApiBaseUrl } from '../config/api-base';
 import {
   MarcarLeituraResponse,
@@ -34,6 +34,7 @@ export class NotificacoesService {
   private readonly destroyRef = inject(DestroyRef);
   private connection?: HubConnection;
   private startPromise?: Promise<void>;
+  private stopPromise?: Promise<void>;
   private pendingSync?: Promise<void>;
   private syncAgain = false;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
@@ -41,6 +42,8 @@ export class NotificacoesService {
   private realtimeRevision = 0;
   private readonly readNotificationIds = new Set<string>();
   private readonly liveNotifications = new Map<string, Notificacao>();
+  private readonly devolucoesNotificadas = new Set<string>();
+  private readonly eventosAlterados = new Subject<string | null>();
   private eventRevision = 0;
   private sessionRevision = 0;
   private sessionUserId?: string;
@@ -51,6 +54,7 @@ export class NotificacoesService {
   readonly isLoading = signal(false);
   readonly isEmpty = signal(true);
   readonly loadError = signal<string | null>(null);
+  readonly eventosAlterados$ = this.eventosAlterados.asObservable();
 
   constructor() {
     effect(() => {
@@ -207,8 +211,12 @@ export class NotificacoesService {
     this.startPromise = undefined;
     this.reconnectAttempt = 0;
     if (connection && connection.state !== HubConnectionState.Disconnected) {
-      await connection.stop();
+      const stopping = connection.stop().finally(() => {
+        if (this.stopPromise === stopping) this.stopPromise = undefined;
+      });
+      this.stopPromise = stopping;
     }
+    await this.stopPromise;
   }
 
   private async startRealtime(): Promise<void> {
@@ -233,16 +241,16 @@ export class NotificacoesService {
         }
 
         if (isCurrentConnection()) {
+          const recuperouConexao = this.reconnectAttempt > 0;
           this.reconnectAttempt = 0;
-          await this.syncPendentes();
+          if (recuperouConexao) this.eventosAlterados.next(null);
+          void this.syncPendentes();
         }
       } catch {
         if (isCurrentConnection()) {
           console.error('Não foi possível conectar às notificações em tempo real; nova tentativa agendada.');
-          await this.syncPendentes();
-          if (isCurrentConnection()) {
-            this.scheduleReconnect();
-          }
+          void this.syncPendentes();
+          this.scheduleReconnect();
         }
       }
     })().finally(() => {
@@ -260,6 +268,8 @@ export class NotificacoesService {
       .withUrl(resolveHubUrl(resolveApiBaseUrl()), {
         accessTokenFactory: () => this.auth.accessTokenForSignalR(),
       })
+      // O transporte pode incluir a URL do WebSocket com o bearer nos logs.
+      .configureLogging(LogLevel.None)
       .withAutomaticReconnect()
       .build();
 
@@ -269,8 +279,10 @@ export class NotificacoesService {
 
     connection.on('NotificacaoCriada', (event: NotificacaoCriadaEvent) => {
       const notification = event?.notificacao;
-      if (!isCurrentConnection() || !notification?.id ||
-          this.readNotificationIds.has(notification.id) || this.liveNotifications.has(notification.id) ||
+      if (!isCurrentConnection() || !notification?.id) return;
+
+      this.avisarDevolucao(notification);
+      if (this.readNotificationIds.has(notification.id) || this.liveNotifications.has(notification.id) ||
           this.notifications().some(item => item.id === notification.id)) {
         return;
       }
@@ -299,6 +311,7 @@ export class NotificacoesService {
       }
 
       this.reconnectAttempt = 0;
+      this.eventosAlterados.next(null);
       void this.syncPendentes();
     });
 
@@ -375,6 +388,9 @@ export class NotificacoesService {
         this.unreadCount.set(response.naoLidas);
         this.isEmpty.set(items.length === 0);
         this.loadError.set(null);
+        for (const notification of items) {
+          this.avisarDevolucao(notification);
+        }
       })
       .catch(() => {
         if (!isCurrent()) {
@@ -405,6 +421,16 @@ export class NotificacoesService {
     return syncPromise;
   }
 
+  private avisarDevolucao(notification: Notificacao): void {
+    if (!notification.id || notification.tipo !== 'DevolucaoEvento' ||
+        this.devolucoesNotificadas.has(notification.id)) {
+      return;
+    }
+
+    this.devolucoesNotificadas.add(notification.id);
+    this.eventosAlterados.next(notification.eventoId ?? null);
+  }
+
   private mergeNotification(notification: Notificacao): void {
     if (this.readNotificationIds.has(notification.id)) {
       return;
@@ -431,6 +457,7 @@ export class NotificacoesService {
   private resetState(): void {
     this.readNotificationIds.clear();
     this.liveNotifications.clear();
+    this.devolucoesNotificadas.clear();
     this.eventRevision++;
     this.sessionRevision++;
     this.pendingSync = undefined;

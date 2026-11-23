@@ -28,7 +28,7 @@
           @else if (conflito()) { <p>Recarregue os dados atuais antes de tentar novamente.</p> }
           <button type="button" [disabled]="ocupado()" (click)="carregar()">Recarregar dados atuais</button>
         }
-        @if (evento(); as e) {
+        @if (acesso.tem('eventos.consultar') ? evento() : null; as e) {
           @if (modo === 'estornar' && alvoEstorno; as alvo) {
             <form (ngSubmit)="estornar()">
               <p>Solicitar estorno para <strong>{{ nomeMembro(alvo.membroId) }}</strong> no evento <strong>{{ nomeEvento(e) }}</strong> em {{ formatarData(e.dataEvento) }}?</p>
@@ -59,6 +59,7 @@
               <div><dt>Seguro por participante</dt><dd>{{ e.seguroObrigatorio > 0 ? (e.seguroObrigatorio | currency:'BRL':'symbol':'1.2-2':'pt-BR') : 'Sem custo de seguro' }}</dd></div>
               <div><dt>Custo por participante</dt><dd>{{ e.valorPorMembro | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</dd></div>
             </dl>
+            <ng-container [ngTemplateOutlet]="situacaoFinanceira" />
             <p class="total">Total deste cadastro <strong>{{ e.total | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</strong></p>
             <h4>Participantes e lançamentos</h4>
             <ul class="participants">
@@ -95,9 +96,88 @@
               @if (acesso.tem('eventos.editar')) { <button type="button" class="primary" [disabled]="!!erroGrupo() || ocupado() || conflito() || incerto()" (click)="editar()">Editar evento</button> }
             </footer>
           }
+        } @else if (!acesso.tem('eventos.consultar') && modo === 'detalhes') {
+          @let pessoal = financeiro();
+          @if (pessoal.estado === 'pronta') {
+            <h3>{{ nomeEvento(pessoal.evento) }}</h3>
+            <p class="date">{{ formatarData(pessoal.evento.dataEvento) }}</p>
+            @if (pessoal.evento.descricao?.trim()) {
+              <p class="event-description">{{ pessoal.evento.descricao }}</p>
+            }
+            <dl class="facts">
+              <div><dt>Local</dt><dd>{{ pessoal.evento.local }}</dd></div>
+              <div><dt>Custo por participante</dt><dd>{{ pessoal.evento.valorPorMembro | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</dd></div>
+            </dl>
+          } @else if (pessoal.estado === 'indisponivel') {
+            <p role="status">Evento indisponível para consulta.</p>
+          }
+          <ng-container [ngTemplateOutlet]="situacaoFinanceira" />
         }
       }
       </div>
     </div>
   </section>
 </div>
+
+<ng-template #situacaoFinanceira>
+  @let pessoal = financeiro();
+  @if (pessoal.estado === 'carregando') {
+    <p role="status">Consultando sua situação financeira…</p>
+  } @else if (pessoal.estado === 'erro') {
+    <p class="feedback" role="alert">Não foi possível consultar sua situação financeira.</p>
+    <button type="button" (click)="recarregarFinanceiro()">Tentar novamente a consulta financeira</button>
+  } @else if (pessoal.estado === 'pronta') {
+    <section class="situacao-financeira" aria-labelledby="situacao-financeira-titulo">
+      <h4 id="situacao-financeira-titulo">Minha situação financeira</h4>
+      @if (pessoal.evento.minhaCobranca; as cobranca) {
+        <h5>Minha cobrança</h5>
+        <dl class="financeiro-dados">
+          <div><dt>Valor da cobrança</dt><dd>{{ cobranca.valor | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</dd></div>
+          <div><dt>Status</dt><dd><span class="financeiro-estado" [class.pago]="cobranca.status === 'Pago'">{{ cobranca.status }}</span></dd></div>
+          @if (cobranca.vencimento) {
+            <div><dt>Vencimento</dt><dd><time [attr.datetime]="cobranca.vencimento">{{ formatarData(cobranca.vencimento) }}</time></dd></div>
+          }
+        </dl>
+      }
+      @if (pessoal.evento.minhasDevolucoes?.length) {
+        <h5>Minhas devoluções</h5>
+        <ul class="minhas-devolucoes">
+          @for (devolucao of pessoal.evento.minhasDevolucoes; track $index) {
+            <li>
+              <span class="financeiro-estado" [class.pago]="devolucao.status === 'Pago'">
+                {{ statusDevolucao[devolucao.status] || 'Status indisponível' }}
+              </span>
+              <dl class="financeiro-dados">
+                @if (devolucao.valor != null) {
+                  <div><dt>Valor esperado</dt><dd>{{ devolucao.valor | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</dd></div>
+                }
+                @if (devolucao.vencimento) {
+                  <div><dt>Vencimento</dt><dd><time [attr.datetime]="devolucao.vencimento">{{ formatarData(devolucao.vencimento) }}</time></dd></div>
+                }
+                @if (devolucao.status === 'Pago') {
+                  @if (devolucao.valorDevolvido != null) {
+                    <div><dt>Valor devolvido</dt><dd>{{ devolucao.valorDevolvido | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</dd></div>
+                  }
+                  @if (devolucao.dataDevolucao) {
+                    <div><dt>Data da devolução</dt><dd><time [attr.datetime]="devolucao.dataDevolucao">{{ formatarData(devolucao.dataDevolucao) }}</time></dd></div>
+                  }
+                  @if (devolucao.justificativa) {
+                    <div><dt>Justificativa</dt><dd>{{ devolucao.justificativa }}</dd></div>
+                  }
+                }
+              </dl>
+            </li>
+          }
+        </ul>
+      }
+      @if (pessoal.evento.minhasDevolucoes == null) {
+        @if (!pessoal.evento.minhaCobranca) {
+          <p>Você não tem cobrança para este evento.</p>
+        }
+        <p>Informações sobre devoluções indisponíveis.</p>
+      } @else if (!pessoal.evento.minhaCobranca && !pessoal.evento.minhasDevolucoes.length) {
+        <p>Você não tem cobranças ou devoluções para este evento.</p>
+      }
+    </section>
+  }
+</ng-template>

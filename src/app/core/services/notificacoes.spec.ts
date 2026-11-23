@@ -2,7 +2,7 @@ import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { WritableSignal, signal } from '@angular/core';
-import { HubConnectionState } from '@microsoft/signalr';
+import { HubConnectionState, LogLevel } from '@microsoft/signalr';
 import { firstValueFrom, of, Subject, throwError } from 'rxjs';
 import { MarcarTodasLeiturasResponse, NotificacoesPendentesResponse } from '../models/notificacao.model';
 import { ApiService } from './api';
@@ -24,11 +24,13 @@ const signalrMocks = vi.hoisted(() => {
       stop: vi.fn(),
     },
     withUrl: vi.fn(),
+    configureLogging: vi.fn(),
   };
 });
 
 vi.mock('@microsoft/signalr', () => ({
   HubConnectionState: { Disconnected: 'Disconnected' },
+  LogLevel: { None: 6 },
   HubConnectionBuilder: class {
     withUrl = vi.fn((url: string, options: unknown) => {
       signalrMocks.withUrl(url, options);
@@ -36,6 +38,11 @@ vi.mock('@microsoft/signalr', () => ({
     });
 
     withAutomaticReconnect = vi.fn(() => this);
+
+    configureLogging(level: number) {
+      signalrMocks.configureLogging(level);
+      return this;
+    }
 
     build() {
       return signalrMocks.connection;
@@ -64,6 +71,7 @@ describe('NotificacoesService realtime', () => {
       signalrMocks.connection.state = HubConnectionState.Disconnected;
     });
     signalrMocks.withUrl.mockClear();
+    signalrMocks.configureLogging.mockClear();
 
     loggedIn = signal(true);
     auth = {
@@ -109,6 +117,7 @@ describe('NotificacoesService realtime', () => {
       '/hubs/notificacoes',
       expect.objectContaining({ accessTokenFactory: expect.any(Function) }),
     );
+    expect(signalrMocks.configureLogging).toHaveBeenCalledExactlyOnceWith(LogLevel.None);
 
     const options = signalrMocks.withUrl.mock.calls[0][1] as {
       accessTokenFactory: () => Promise<string>;
@@ -117,11 +126,18 @@ describe('NotificacoesService realtime', () => {
     expect(auth.accessTokenForSignalR).toHaveBeenCalledOnce();
   });
 
-  it('adiciona NotificacaoCriada e deduplica pelo ID sem perder o contador atualizado', async () => {
-    await vi.waitFor(() => expect(signalrMocks.connection.start).toHaveBeenCalledOnce());
+  it('recebe DevolucaoEvento pelo SignalR, deduplica e atualiza o contador após a leitura individual', async () => {
+    await vi.waitFor(() => expect(api.get).toHaveBeenCalledOnce());
+    const alterados = vi.fn();
+    service.eventosAlterados$.subscribe(alterados);
     const notify = signalrMocks.connection.handlers.get('NotificacaoCriada');
     const payload = {
-      notificacao: { id: 'n-1', titulo: 'Novo evento' },
+      notificacao: {
+        id: 'n-1',
+        tipo: 'DevolucaoEvento',
+        titulo: 'Devolução do evento',
+        mensagem: 'Seu valor de R$ 20,00 referente ao evento Trilha será devolvido.',
+      },
       naoLidas: 1,
     };
 
@@ -131,7 +147,17 @@ describe('NotificacoesService realtime', () => {
     await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
 
     expect(service.notifications()).toEqual([payload.notificacao]);
-    expect(service.unreadCount()).toBe(1);
+    expect(alterados).toHaveBeenCalledExactlyOnceWith(null);
+
+    const notificacao = { ...payload.notificacao, lidaEmUtc: '2026-11-23T12:00:00Z' };
+    response = { ...response, items: [], naoLidas: 0 };
+    const leitura = firstValueFrom(service.marcarComoLida(notificacao.id));
+    http.expectOne({ url: '/api/Notificacoes/n-1/Leitura', method: 'POST' })
+      .flush({ notificacao, naoLidas: 0 });
+    await expect(leitura).resolves.toEqual({ notificacao, naoLidas: 0 });
+    notify?.(payload);
+    expect(service.notifications()).toEqual([]);
+    expect(service.unreadCount()).toBe(0);
   });
 
   it('remove NotificacaoLida e ignora uma criação posterior do mesmo ID', async () => {
@@ -148,6 +174,37 @@ describe('NotificacoesService realtime', () => {
     expect(service.isEmpty()).toBe(true);
   });
 
+  it('avisa ao receber pelo REST e deduplica entre SignalR e consultas sucessivas', async () => {
+    const notificacao = { id: 'devolucao-existente', tipo: 'DevolucaoEvento', eventoId: 'trilha' };
+    const alterados = vi.fn();
+    service.eventosAlterados$.subscribe(alterados);
+    response = { ...response, items: [notificacao], naoLidas: 1 };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
+    expect(alterados).toHaveBeenCalledExactlyOnceWith('trilha');
+
+    const created = signalrMocks.connection.handlers.get('NotificacaoCriada');
+    created?.({ notificacao, naoLidas: 1 });
+    expect(alterados).toHaveBeenCalledExactlyOnceWith('trilha');
+    expect(service.notifications()).toEqual([notificacao]);
+    expect(service.unreadCount()).toBe(1);
+
+    const outroTipo = { id: 'outro', tipo: 'DebitoCadastrado' };
+    response = { ...response, items: [notificacao, outroTipo], naoLidas: 2 };
+    created?.({ notificacao: outroTipo, naoLidas: 2 });
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(2));
+    expect(alterados).toHaveBeenCalledExactlyOnceWith('trilha');
+    expect(service.notifications()).toEqual(response.items);
+
+    const segundaDevolucao = { ...notificacao, id: 'devolucao-nova' };
+    response = { ...response, items: [notificacao, outroTipo, segundaDevolucao], naoLidas: 3 };
+    const terceiraNotificacao = { id: 'lida-em-outra-aba' };
+    const read = signalrMocks.connection.handlers.get('NotificacaoLida');
+    read?.({ notificacaoId: terceiraNotificacao.id, lidaEmUtc: '2026-11-23T12:00:00Z', naoLidas: 3 });
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(3));
+    expect(service.notifications()).toEqual(response.items);
+    expect(alterados.mock.calls).toEqual([['trilha'], ['trilha']]);
+  });
+
   it('consulta novamente a API depois da reconexão', async () => {
     await vi.waitFor(() => expect(api.get).toHaveBeenCalledOnce());
     response = {
@@ -158,11 +215,15 @@ describe('NotificacoesService realtime', () => {
     };
 
     const reconnected = signalrMocks.connection.onreconnected.mock.calls[0][0] as () => void;
+    const alterados = vi.fn();
+    const inscricao = service.eventosAlterados$.subscribe(alterados);
     reconnected();
     await vi.waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(service.notifications()).toEqual(response.items));
 
     expect(service.unreadCount()).toBe(1);
+    expect(alterados).toHaveBeenCalledExactlyOnceWith(null);
+    inscricao.unsubscribe();
   });
 
   it('mantém a conexão e as pendências quando o perfil do mesmo usuário é atualizado', async () => {
@@ -177,6 +238,29 @@ describe('NotificacoesService realtime', () => {
     expect(api.get).toHaveBeenCalledOnce();
     expect(service.notifications()).toEqual(response.items);
     expect(service.unreadCount()).toBe(3);
+  });
+
+  it('aguarda o encerramento do hub anterior mesmo quando a sessão muda novamente', async () => {
+    await vi.waitFor(() => expect(api.get).toHaveBeenCalledOnce());
+    let encerrar!: () => void;
+    signalrMocks.connection.stop.mockImplementationOnce(() => new Promise<void>(resolve => {
+      encerrar = () => {
+        signalrMocks.connection.state = 'Disconnected';
+        resolve();
+      };
+    }));
+
+    loggedIn.set(false);
+    TestBed.tick();
+    auth.user.set({ id: 'user-2' });
+    loggedIn.set(true);
+    TestBed.tick();
+    await Promise.resolve();
+    expect(signalrMocks.connection.start).toHaveBeenCalledOnce();
+
+    encerrar();
+    await vi.waitFor(() => expect(signalrMocks.connection.start).toHaveBeenCalledTimes(2));
+    expect(signalrMocks.connection.stop).toHaveBeenCalledOnce();
   });
 
   it.each([0, 1, 20, 25])('aceita a resposta de um único POST sem corpo para %i pendências', async total => {
@@ -445,7 +529,10 @@ describe('NotificacoesService realtime', () => {
 
     oldCreated?.({ notificacao: { id: 'old-event' }, naoLidas: 50 });
     oldRead?.({ notificacaoId: 'other-user', lidaEmUtc: '2026-11-18T13:00:00Z', naoLidas: 0 });
-    oldList.next({ ...response, items: [{ id: 'old-rest' }], naoLidas: 99 });
+    const alterados = vi.fn();
+    service.eventosAlterados$.subscribe(alterados);
+    const devolucaoAntiga = { id: 'old-rest', tipo: 'DevolucaoEvento', eventoId: 'evento-antigo' };
+    oldList.next({ ...response, items: [devolucaoAntiga], naoLidas: 99 });
     batch.next({ marcadas: 2, naoLidas: 0, limiteUtc: '2026-11-18T13:00:00Z' });
     batch.complete();
     await Promise.resolve();
@@ -455,6 +542,14 @@ describe('NotificacoesService realtime', () => {
     expect(api.get).toHaveBeenCalledTimes(3);
     expect(service.notifications()).toEqual(response.items);
     expect(service.unreadCount()).toBe(1);
+    expect(alterados).not.toHaveBeenCalled();
+
+    const devolucaoAtual = { ...devolucaoAntiga, eventoId: 'evento-atual' };
+    response = { ...response, items: [...response.items, devolucaoAtual], naoLidas: 2 };
+    const read = signalrMocks.connection.handlers.get('NotificacaoLida');
+    read?.({ notificacaoId: 'lida', naoLidas: 2 });
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(2));
+    expect(alterados).toHaveBeenCalledExactlyOnceWith('evento-atual');
   });
 
 });

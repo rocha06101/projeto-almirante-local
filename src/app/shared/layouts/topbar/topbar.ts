@@ -105,6 +105,11 @@ export class TopbarComponent {
     this.profileOpen.set(false);
   }
 
+  viewMyEvents(): void {
+    this.router.navigate(['/meus-eventos']);
+    this.profileOpen.set(false);
+  }
+
   logout() {
     this.profileOpen.set(false);
     this.auth.logout().subscribe(() => this.router.navigate(['/login']));

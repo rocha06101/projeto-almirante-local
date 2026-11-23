@@ -1,0 +1,61 @@
+<header class="page-header">
+  <h1>Meus eventos</h1>
+  <button type="button" (click)="recarregar()" [disabled]="consulta().estado === 'carregando'">
+    Atualizar
+  </button>
+</header>
+
+@let resultado = consulta();
+@if (resultado.estado === 'carregando') {
+  <p class="status" role="status">Carregando seus eventos…</p>
+} @else if (resultado.estado === 'erro') {
+  <p class="status error" role="alert">Não foi possível carregar seus eventos. Tente atualizar.</p>
+} @else if (resultado.estado === 'pronta') {
+  <div class="eventos">
+    @for (evento of resultado.eventos; track evento.id) {
+      <article class="evento">
+        <h2>{{ evento.titulo }}</h2>
+        <p><time [attr.datetime]="evento.dataEvento">{{ formatarData(evento.dataEvento) }}</time> · {{ evento.local }}</p>
+        @if (evento.descricao) { <p>{{ evento.descricao }}</p> }
+        <p>Valor por membro <strong>{{ evento.valorPorMembro | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</strong></p>
+        @if (evento.minhaCobranca; as cobranca) {
+          <p>Minha cobrança <strong>{{ cobranca.valor | currency:'BRL':'symbol':'1.2-2':'pt-BR' }} · {{ cobranca.status }}</strong></p>
+        }
+
+        @if (evento.minhasDevolucoes?.length) {
+          <h3>Devoluções</h3>
+          <ul class="devolucoes">
+            @for (devolucao of evento.minhasDevolucoes; track $index) {
+              <li>
+                <span class="estado" [class.paga]="devolucao.status === 'Pago'">
+                  {{ statusDevolucao[devolucao.status] || 'Status indisponível' }}
+                </span>
+                <dl>
+                  @if (devolucao.valor != null) {
+                    <div><dt>Valor esperado</dt><dd>{{ devolucao.valor | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</dd></div>
+                  }
+                  @if (devolucao.vencimento) {
+                    <div><dt>Vencimento</dt><dd><time [attr.datetime]="devolucao.vencimento">{{ formatarData(devolucao.vencimento) }}</time></dd></div>
+                  }
+                  @if (devolucao.status === 'Pago') {
+                    @if (devolucao.valorDevolvido != null) {
+                      <div><dt>Valor devolvido</dt><dd>{{ devolucao.valorDevolvido | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</dd></div>
+                    }
+                    @if (devolucao.dataDevolucao) {
+                      <div><dt>Data da devolução</dt><dd><time [attr.datetime]="devolucao.dataDevolucao">{{ formatarData(devolucao.dataDevolucao) }}</time></dd></div>
+                    }
+                    @if (devolucao.justificativa) {
+                      <div><dt>Justificativa</dt><dd>{{ devolucao.justificativa }}</dd></div>
+                    }
+                  }
+                </dl>
+              </li>
+            }
+          </ul>
+        }
+      </article>
+    } @empty {
+      <p class="status" role="status">Você ainda não participa de nenhum evento.</p>
+    }
+  </div>
+}

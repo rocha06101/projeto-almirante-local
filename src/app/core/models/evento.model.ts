@@ -66,3 +66,25 @@ export interface EventosResponse extends PeriodoEventos {
   items: EventoDto[];
   dataMinimaCadastro: string;
 }
+
+/** Autoatendimento (AutoatendimentoDtos.cs). Datas civis no formato YYYY-MM-DD. */
+export interface MinhaDevolucao {
+  valor: number;
+  vencimento: string;
+  status: EventoLancamento['status'];
+  valorDevolvido?: number | null;
+  dataDevolucao?: string | null;
+  justificativa?: string | null;
+}
+
+export interface EventoParticipante extends Pick<EventoConteudo,
+  'dataEvento' | 'local' | 'transporte' | 'alimentacao' | 'seguroObrigatorio'> {
+  id: string;
+  titulo: string;
+  descricao: string | null;
+  valorPorMembro: number;
+  minhaCobranca: Pick<MinhaDevolucao, 'valor' | 'vencimento' | 'status'> | null;
+  minhasDevolucoes?: MinhaDevolucao[] | null;
+}
+
+export interface MeusEventosResponse { items: EventoParticipante[] }

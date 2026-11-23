@@ -117,11 +117,16 @@ describe('NotificacoesService realtime', () => {
     expect(auth.accessTokenForSignalR).toHaveBeenCalledOnce();
   });
 
-  it('adiciona NotificacaoCriada e deduplica pelo ID sem perder o contador atualizado', async () => {
+  it('recebe DevolucaoEvento pelo SignalR, deduplica e atualiza o contador após a leitura individual', async () => {
     await vi.waitFor(() => expect(signalrMocks.connection.start).toHaveBeenCalledOnce());
     const notify = signalrMocks.connection.handlers.get('NotificacaoCriada');
     const payload = {
-      notificacao: { id: 'n-1', titulo: 'Novo evento' },
+      notificacao: {
+        id: 'n-1',
+        tipo: 'DevolucaoEvento',
+        titulo: 'Devolução do evento',
+        mensagem: 'Seu valor de R$ 20,00 referente ao evento Trilha será devolvido.',
+      },
       naoLidas: 1,
     };
 
@@ -131,7 +136,16 @@ describe('NotificacoesService realtime', () => {
     await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
 
     expect(service.notifications()).toEqual([payload.notificacao]);
-    expect(service.unreadCount()).toBe(1);
+
+    const notificacao = { ...payload.notificacao, lidaEmUtc: '2026-11-23T12:00:00Z' };
+    response = { ...response, items: [], naoLidas: 0 };
+    const leitura = firstValueFrom(service.marcarComoLida(notificacao.id));
+    http.expectOne({ url: '/api/Notificacoes/n-1/Leitura', method: 'POST' })
+      .flush({ notificacao, naoLidas: 0 });
+    await expect(leitura).resolves.toEqual({ notificacao, naoLidas: 0 });
+    notify?.(payload);
+    expect(service.notifications()).toEqual([]);
+    expect(service.unreadCount()).toBe(0);
   });
 
   it('remove NotificacaoLida e ignora uma criação posterior do mesmo ID', async () => {

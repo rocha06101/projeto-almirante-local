@@ -1,7 +1,10 @@
-import { provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
-import { EventoDto } from '../../../core/models/evento.model';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { EMPTY, Subject, throwError } from 'rxjs';
+import { EventoDto, EventoParticipante, MinhaDevolucao } from '../../../core/models/evento.model';
+import { EventosService } from '../../../core/services/eventos';
+import { NotificacoesService } from '../../../core/services/notificacoes';
 import { PermissoesService } from '../../../core/services/permissoes';
 import { ToastService } from '../../../core/services/toast.service';
 import { EventoDetalhes } from './evento-detalhes';
@@ -18,8 +21,11 @@ describe('Detalhes: exclusão e carregamento atual', () => {
   beforeEach(() => {
     acesso.tem.mockReturnValue(true);
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(),
-      { provide: PermissoesService, useValue: acesso }, { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn() } }] });
+      { provide: PermissoesService, useValue: acesso }, { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn() } },
+      { provide: NotificacoesService, useValue: { eventosAlterados$: EMPTY } }] });
     http = TestBed.inject(HttpTestingController);
+    vi.spyOn(TestBed.inject(EventosService), 'obterMeuEvento')
+      .mockReturnValue(throwError(() => new HttpErrorResponse({ status: 404 })));
   });
   afterEach(() => http.verify());
   function detalhes() {
@@ -208,4 +214,150 @@ describe('Detalhes: exclusão e carregamento atual', () => {
     http.expectNone(r => r.method === 'DELETE');
   });
 
+});
+
+describe('Detalhes: minha situação financeira', () => {
+  const pessoal: EventoParticipante = {
+    id: evento.id, local: evento.local, dataEvento: evento.dataEvento,
+    transporte: evento.transporte, alimentacao: evento.alimentacao,
+    seguroObrigatorio: evento.seguroObrigatorio, valorPorMembro: evento.valorPorMembro,
+    minhaCobranca: null,
+  };
+  const pendente: MinhaDevolucao = { valor: 20, vencimento: '2026-11-20', status: 'Pendente' };
+  let http: HttpTestingController;
+  let fixture: ComponentFixture<EventoDetalhes>;
+  let avisos: Subject<string | null>;
+  let acessoGeral: boolean;
+  const secao = () => (fixture.nativeElement as HTMLElement).querySelector('.situacao-financeira');
+  const texto = (el: Element | null) => el?.textContent.replace(/\s+/g, ' ').trim();
+  const pedido = (id = evento.id) => http.expectOne({ url: `/api/Me/Eventos/${id}`, method: 'GET' });
+  const responder = (dados: EventoParticipante) => { pedido(dados.id).flush(dados); fixture.detectChanges(); };
+
+  beforeEach(() => {
+    acessoGeral = false;
+    avisos = new Subject<string | null>();
+    TestBed.configureTestingModule({ providers: [
+      provideHttpClient(), provideHttpClientTesting(),
+      { provide: PermissoesService, useValue: { tem: (chave: string) => chave === 'eventos.consultar' && acessoGeral } },
+      { provide: NotificacoesService, useValue: { eventosAlterados$: avisos } },
+    ] });
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(EventoDetalhes);
+  });
+  afterEach(() => {
+    http.expectNone(req => req.method !== 'GET');
+    http.verify();
+  });
+
+  function abrir(): void {
+    fixture.componentRef.setInput('id', evento.id);
+    fixture.detectChanges();
+  }
+
+  it.each(['Pendente', 'Pago', 'Atrasado'] as const)('mostra cobrança %s no modal existente', status => {
+    abrir();
+    const dialogo = (fixture.nativeElement as HTMLElement).querySelector('[role="dialog"]');
+    expect(texto(dialogo)).toContain('Consultando sua situação financeira');
+    responder({ ...pessoal, minhaCobranca: { status, valor: 35.5, vencimento: '2026-11-17' } });
+
+    expect(texto(dialogo)).toContain('Evento — Igreja');
+    expect(texto(secao())).toContain('Minha situação financeira');
+    expect(texto(secao())).toContain('Minha cobrança');
+    expect(texto(secao())).toContain('R$ 35,50');
+    expect(texto(secao()?.querySelector('.financeiro-estado') ?? null)).toBe(status);
+    expect(texto(secao())).toContain('17 de novembro de 2026');
+    expect(texto(secao())).not.toContain('Minhas devoluções');
+    expect(texto(dialogo)).not.toMatch(/Participantes e lançamentos|Editar evento|Excluir evento|Solicitar estorno/);
+    http.expectNone(req => /^\/api\/(Eventos|Membros)(\/|$)/.test(req.url));
+  });
+
+  it('mostra múltiplos registros e distingue valor esperado, devolvido e status oficial', () => {
+    abrir();
+    responder({ ...pessoal, minhasDevolucoes: [
+      pendente,
+      { ...pendente, status: 'Pago', valorDevolvido: 20 },
+      { ...pendente, status: 'Pago', valorDevolvido: 12.5, dataDevolucao: '2026-11-19', justificativa: 'Valor acordado.' },
+    ] });
+    const registros = [...secao()!.querySelectorAll('.minhas-devolucoes li')];
+    expect(registros).toHaveLength(3);
+    expect(texto(registros[0])).toContain('Pendente');
+    expect(texto(registros[0])).toContain('R$ 20,00');
+    expect(texto(registros[0])).not.toContain('Valor devolvido');
+    expect(texto(registros[1])).toContain('Valor devolvidoR$ 20,00');
+    expect(texto(registros[2])).toContain('Paga');
+    expect(texto(registros[2])).toContain('Valor esperadoR$ 20,00');
+    expect(texto(registros[2])).toContain('Valor devolvidoR$ 12,50');
+    expect(texto(registros[2])).toContain('19 de novembro de 2026');
+    expect(texto(registros[2])).toContain('Valor acordado.');
+  });
+
+  it('oculta a situação pessoal para não participantes e mantém o detalhe autorizado', () => {
+    acessoGeral = true;
+    abrir();
+    pedido().flush(null, { status: 404, statusText: 'Not Found' });
+    http.expectOne('/api/Eventos/e1').flush(evento);
+    http.expectOne(req => req.url === '/api/Eventos').flush({ items: [evento], dataMinimaCadastro: '2026-11-01' });
+    fixture.detectChanges();
+    expect(secao()).toBeNull();
+    expect(texto(fixture.nativeElement)).toContain('Participantes e lançamentos');
+    expect(texto(fixture.nativeElement)).not.toContain('Não foi possível consultar sua situação financeira');
+  });
+
+  it('usa a cobrança de autoatendimento quando o participante também pode consultar lançamentos gerais', () => {
+    acessoGeral = true;
+    abrir();
+    http.expectOne('/api/Eventos/e1').flush({
+      ...evento,
+      lancamentos: [{ id: 'terceiro', membroId: 'm2', valor: 99, status: 'Pago' }],
+    });
+    http.expectOne(req => req.url === '/api/Eventos').flush({ items: [evento], dataMinimaCadastro: '2026-11-01' });
+    responder({ ...pessoal, minhaCobranca: { valor: 25, status: 'Pendente', vencimento: pessoal.dataEvento } });
+    expect(texto(secao())).toContain('R$ 25,00');
+    expect(texto(secao())).not.toContain('R$ 99,00');
+    expect(texto(fixture.nativeElement)).toContain('R$ 99,00');
+  });
+
+  it('permite repetir uma consulta financeira que falhou e renderiza dados vazios', () => {
+    abrir();
+    pedido().flush(null, { status: 503, statusText: 'Indisponível' });
+    fixture.detectChanges();
+    expect(secao()).toBeNull();
+    const page = fixture.nativeElement as HTMLElement;
+    expect(texto(page.querySelector('[role="alert"]'))).toContain('Não foi possível consultar sua situação financeira');
+    [...page.querySelectorAll('button')].find(b => texto(b)?.includes('Tentar novamente'))!.click();
+    responder(pessoal);
+    expect(texto(secao())).toContain('Você não tem cobranças ou devoluções para este evento.');
+  });
+
+  it('atualiza apenas o evento aberto após aviso e ignora avisos após fechar o modal', async () => {
+    abrir();
+    responder(pessoal);
+    avisos.next('outro-evento');
+    expect(fixture.componentInstance.financeiro().estado).toBe('pronta');
+    avisos.next(evento.id);
+    avisos.next(evento.id);
+    await vi.waitFor(() => expect(fixture.componentInstance.financeiro().estado).toBe('carregando'));
+    responder({ ...pessoal, minhasDevolucoes: [pendente] });
+    expect(texto(secao())).toContain('Minhas devoluções');
+
+    avisos.next(null);
+    await vi.waitFor(() => expect(fixture.componentInstance.financeiro().estado).toBe('carregando'));
+    const emAndamento = pedido();
+    const fechar = vi.fn(() => fixture.destroy());
+    fixture.componentInstance.fechar.subscribe(fechar);
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[aria-label="Fechar detalhes"]')!.click();
+    expect(fechar).toHaveBeenCalledOnce();
+    expect(emAndamento.cancelled).toBe(true);
+    expect(avisos.observed).toBe(false);
+  });
+
+  it('cancela a consulta financeira do evento anterior ao mudar de evento', () => {
+    abrir();
+    const anterior = pedido();
+    fixture.componentRef.setInput('id', 'e2');
+    fixture.detectChanges();
+    expect(anterior.cancelled).toBe(true);
+    responder({ ...pessoal, id: 'e2', titulo: 'Outro evento' });
+    expect(texto(fixture.nativeElement)).toContain('Outro evento');
+  });
 });

@@ -24,3 +24,28 @@ label { display: flex; flex-direction: column; gap: 8px; font-size: 13px; margin
 }
 .participants .notice { display: flex; flex-direction: column; gap: 4px; }
 .participants button { align-self: flex-start; margin-top: 8px; }
+
+.situacao-financeira {
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+}
+.financeiro-cabecalho { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 12px; }
+.financeiro-cabecalho h4 { margin: 0; }
+.financeiro-cabecalho button { color: var(--theme-link); border-color: var(--theme-border); }
+.situacao-financeira h5 { color: var(--theme-link); font-size: 14px; font-weight: 600; }
+.financeiro-dados { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 8px 0 12px; }
+.financeiro-dados > div { min-width: 0; max-width: 100%; }
+.financeiro-estado {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--theme-warning-text);
+  background: var(--theme-warning-surface);
+}
+.financeiro-estado.pago { color: var(--theme-success-text); background: var(--theme-success-surface); }
+.minhas-devolucoes { padding: 0; margin: 0; list-style: none; }
+.minhas-devolucoes li { border-top: 1px solid var(--theme-border); padding-top: 8px; }

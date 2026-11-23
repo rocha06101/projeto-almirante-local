@@ -81,13 +81,7 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/admin/cargos/cargos').then(m => m.Cargos),
       },
       {
-        path: 'meus-eventos',
-        loadComponent: () => import('./pages/eventos/meus-eventos/meus-eventos').then(m => m.MeusEventos),
-      },
-      {
         path: 'eventos',
-        canActivate: [permissaoGuard],
-        data: { permissao: 'eventos.consultar' },
         loadComponent: () => import('./pages/eventos/eventos').then(m => m.Eventos),
       },
       {

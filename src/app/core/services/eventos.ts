@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { ApiService } from './api';
-import { CriarEvento, EditarEvento, EstornarParticipante, EventoDto, EventosResponse, MeusEventosResponse, PeriodoEventos } from '../models/evento.model';
+import { CriarEvento, EditarEvento, EstornarParticipante, EventoDto, EventoParticipante, EventosResponse, MeusEventosResponse, PeriodoEventos } from '../models/evento.model';
 
 @Injectable({ providedIn: 'root' })
 export class EventosService {
@@ -13,6 +13,9 @@ export class EventosService {
   }
   listarMeusEventos() {
     return this.api.get<MeusEventosResponse>('/Me/Eventos');
+  }
+  obterMeuEvento(id: string) {
+    return this.api.get<EventoParticipante>(`/Me/Eventos/${encodeURIComponent(id)}`);
   }
   obter(id: string) {
     return this.api.get<EventoDto>(`/Eventos/${encodeURIComponent(id)}`);

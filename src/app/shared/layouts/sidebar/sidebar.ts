@@ -7,7 +7,7 @@ interface MenuItem {
   label: string;
   icon: string;
   route: string;
-  permissoes: string[];
+  permissoes?: string[];
   badge?: number;
 }
 
@@ -49,7 +49,6 @@ export class SidebarComponent {
       label: 'Eventos',
       icon: 'clipboard',
       route: '/eventos',
-      permissoes: ['eventos.consultar'],
     },
     {
       label: 'Cargos e permissões',
@@ -60,7 +59,7 @@ export class SidebarComponent {
   ];
 
   readonly menuItems = computed(() =>
-    this.todosOsItens.filter(item => item.permissoes.some(chave => this.permissoes.tem(chave))),
+    this.todosOsItens.filter(item => !item.permissoes || item.permissoes.some(chave => this.permissoes.tem(chave))),
   );
 
   toggleSidebar() {

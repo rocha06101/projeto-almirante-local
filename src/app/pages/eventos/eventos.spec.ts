@@ -92,9 +92,11 @@ describe('Eventos: HTTP, consultas e concorrência de navegação', () => {
     p.recarregar(); const reqs = http.match(r => r.url.endsWith('/Eventos')); expect(reqs).toHaveLength(2);
     reqs.forEach(r => r.flush(resposta())); expect(p.erro()).toBe(''); expect(p.eventos()).toEqual([]);
   });
-  it('não consulta nem abre ações sem permissão dinâmica', () => {
+  it('consulta somente os próprios eventos e não abre ações administrativas sem permissão', () => {
     acesso.tem.mockReturnValue(false); const p = pagina();
+    http.expectOne('/api/Me/Eventos').flush({ items: [] });
     p.mudarPeriodo({ dataInicial: '2026-11-01', dataFinal: '2026-11-30' }); p.recarregar(); p.selecionarDia('2026-11-19'); p.selecionarEvento('e1');
+    http.expectOne('/api/Me/Eventos').flush({ items: [] });
     http.expectNone(r => r.url.endsWith('/Eventos')); expect(p.modal()).toBeNull();
   });
   it('seleciona pelo ID, abre no segundo clique e não confunde títulos iguais', () => {

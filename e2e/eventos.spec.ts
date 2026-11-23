@@ -1,6 +1,6 @@
 import { expect, Page, test } from '@playwright/test';
 import { mockApi, measureOverflow } from './support';
-import type { EventoDto } from '../src/app/core/models/evento.model';
+import type { EventoDto, EventoParticipante } from '../src/app/core/models/evento.model';
 
 const hoje = '2026-11-17';
 const m1 = '10000000-0000-4000-8000-000000000001';
@@ -28,6 +28,7 @@ async function preparar(page: Page, permissoesAtuais = permissoes) {
     socket.onMessage(message => { if (String(message).includes('"protocol"')) socket.send('{}\u001e'); });
   });
   await page.route('**/api/Me/Permissoes', r => r.fulfill({ json: { permissoes: permissoesAtuais, versaoAutorizacao: 1, permissoesPorDesignacao: [] } }));
+  await page.route('**/api/Me/Eventos/*', r => r.fulfill({ status: 404, json: { title: 'Evento não encontrado.' } }));
   await page.route('**/api/Membros', r => r.fulfill({ json: [
     { id: m1, nome: 'Ana Silva', cargo: 'Desbravador', role: 'DS' },
     { id: m2, nome: 'Bruno Santos', cargo: 'Tesoureiro', role: 'TES' },
@@ -437,12 +438,46 @@ test('evento do calendário abre por teclado e devolve foco ao fechar', async ({
   await expect(page.getByRole('dialog')).toBeHidden(); await expect(evento).toBeFocused();
 });
 
-test('rota nega acesso sem eventos.consultar antes de consultar a API', async ({ page }) => {
-  const estado = await preparar(page, ['membros.consultar']);
-  await page.goto('/eventos');
-  await expect(page).toHaveURL(/\/perfil$/);
+test('membro abre seus dados financeiros no modal sem chamadas administrativas', async ({ page }) => {
+  const estado = await preparar(page);
+  await page.route('**/api/Me/Permissoes', r => r.fulfill({ json: {
+    permissoes: ['membros.consultar'], versaoAutorizacao: 1, permissoesPorDesignacao: [],
+  } }));
+  const { id, dataEvento, local, transporte, alimentacao, seguroObrigatorio, valorPorMembro } = estado.eventos[0];
+  const pessoal: EventoParticipante = {
+    id, dataEvento, local, transporte, alimentacao, seguroObrigatorio, valorPorMembro,
+    minhaCobranca: { valor: 25, status: 'Pago', vencimento: dataEvento },
+    minhasDevolucoes: [{ valor: 20, status: 'Pago', vencimento: dataEvento, valorDevolvido: 12.5, dataDevolucao: dataEvento }],
+  };
+  let listas = 0;
+  let consultas = 0;
+  let membros = 0;
+  page.on('request', req => { if (new URL(req.url()).pathname === '/api/Membros') membros++; });
+  await page.route('**/api/Me/Eventos', r => {
+    listas++;
+    return r.fulfill({ json: { items: [pessoal] } });
+  });
+  await page.route(`**/api/Me/Eventos/${id}`, r => {
+    consultas++;
+    return r.fulfill({ json: pessoal });
+  });
+
+  await page.goto('/perfil');
+  await page.getByRole('link', { name: 'Eventos', exact: true }).click();
+  await expect(page).toHaveURL(/\/eventos$/);
+  await detalhes(page);
+  const dialogo = page.getByRole('dialog');
+  const financeiro = dialogo.getByRole('region', { name: 'Minha situação financeira' });
+  await expect(financeiro.getByRole('heading', { name: 'Minha cobrança' })).toBeVisible();
+  await expect(financeiro.getByRole('heading', { name: 'Minhas devoluções' })).toBeVisible();
+  await expect(financeiro.getByText('R$ 12,50')).toBeVisible();
+  await expect(dialogo.getByText('Participantes e lançamentos')).toHaveCount(0);
+  await dialogo.getByRole('button', { name: 'Fechar detalhes' }).click();
+  await expect(dialogo).toHaveCount(0);
+  expect(listas).toBe(1);
+  expect(consultas).toBe(1);
   expect(estado.chamadas).toHaveLength(0);
-  await expect(page.locator('app-eventos')).toHaveCount(0);
+  expect(membros).toBe(0);
 });
 
 test('erro, carregamento e vazio são estados diferentes; detalhes tratam 404', async ({ page }) => {

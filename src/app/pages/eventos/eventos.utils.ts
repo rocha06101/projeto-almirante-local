@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { registerLocaleData } from '@angular/common';
 import pt from '@angular/common/locales/pt';
 import { EventInput } from '@fullcalendar/core';
-import { EventoDto, PeriodoEventos } from '../../core/models/evento.model';
+import { EventoCalendarioItem, EventoDto, PeriodoEventos } from '../../core/models/evento.model';
 import { cabeEmWindows1252 } from '../../shared/validators/texto-varchar';
 
 registerLocaleData(pt, 'pt-BR');
@@ -32,18 +32,19 @@ export function formatarData(data: string, curta = false): string {
 export function rotuloData(data: string, hoje = dataCivil(new Date())): string {
   return data === hoje ? 'Hoje' : data === somarDias(hoje, 1) ? 'Amanhã' : formatarData(data, true);
 }
-export function nomeEvento(evento: EventoDto): string {
+export function nomeEvento(evento: Pick<EventoCalendarioItem, 'titulo' | 'local'>): string {
   return evento.titulo?.trim() || `Evento — ${evento.local}`;
 }
-export function corEvento(evento: EventoDto): string {
+export function corEvento(evento: EventoCalendarioItem): string {
   const hash = [...(evento.eventoGrupoId || evento.id)].reduce((n, c) => (n * 31 + c.charCodeAt(0)) | 0, 0);
   return ['roxo', 'azul', 'verde', 'laranja'][Math.abs(hash) % 4];
 }
-export function grupoEvento(evento: EventoDto, eventos: EventoDto[]): string {
+export function grupoEvento(evento: EventoCalendarioItem, eventos: EventoCalendarioItem[]): string {
+  if (!evento.eventoGrupoId) return '';
   const grupo = eventos.filter(e => e.eventoGrupoId === evento.eventoGrupoId).sort((a, b) => a.id.localeCompare(b.id));
   return grupo.length > 1 ? `Grupo ${grupo.findIndex(e => e.id === evento.id) + 1} de ${grupo.length}` : '';
 }
-export function mapearEventos(eventos: EventoDto[]): EventInput[] {
+export function mapearEventos(eventos: EventoCalendarioItem[]): EventInput[] {
   return eventos.map(evento => ({
     id: evento.id, title: nomeEvento(evento), start: evento.dataEvento, allDay: true,
     classNames: [`evento-${corEvento(evento)}`],

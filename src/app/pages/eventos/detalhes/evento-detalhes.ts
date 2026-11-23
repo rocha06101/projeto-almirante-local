@@ -1,12 +1,13 @@
 import { A11yModule, CdkTrapFocus } from '@angular/cdk/a11y';
-import { CurrencyPipe } from '@angular/common';
+import { CurrencyPipe, NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, ElementRef, HostListener, Injector, Input, OnInit, ViewChild, afterNextRender, computed, inject, output, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, HostListener, Injector, Input, OnChanges, OnInit, SimpleChanges, ViewChild, afterNextRender, computed, inject, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { Subject, catchError, finalize, of, switchMap } from 'rxjs';
-import { EventoDto } from '../../../core/models/evento.model';
+import { Subject, auditTime, catchError, filter, finalize, map, merge, of, switchMap } from 'rxjs';
+import { EventoDto, EventoParticipante, MinhaDevolucao } from '../../../core/models/evento.model';
 import { EventosService } from '../../../core/services/eventos';
+import { NotificacoesService } from '../../../core/services/notificacoes';
 import { PermissoesService } from '../../../core/services/permissoes';
 import { ToastService } from '../../../core/services/toast.service';
 import { User } from '../../../core/services/user';
@@ -15,12 +16,15 @@ import { erroEvento, formatarData, liquidacaoConfirmavel, motivoValido, nomeEven
 
 type DestinoSaida = 'fechar' | 'voltar' | 'estorno';
 type OperacaoFinanceira = 'edicao' | 'estorno' | 'exclusao';
+type SituacaoFinanceira =
+  | { estado: 'carregando' | 'indisponivel' | 'erro' }
+  | { estado: 'pronta'; evento: EventoParticipante };
 
 @Component({
-  selector: 'app-evento-detalhes', imports: [A11yModule, FormsModule, CurrencyPipe, EventoFormulario],
+  selector: 'app-evento-detalhes', imports: [A11yModule, FormsModule, CurrencyPipe, NgTemplateOutlet, EventoFormulario],
   templateUrl: './evento-detalhes.html', styleUrl: './evento-detalhes.scss',
 })
-export class EventoDetalhes implements OnInit {
+export class EventoDetalhes implements OnInit, OnChanges {
   @Input() id: string | null = null;
   @Input() data = '';
   @Input() dataMinima = '';
@@ -29,6 +33,7 @@ export class EventoDetalhes implements OnInit {
   readonly api = inject(EventosService);
   readonly acesso = inject(PermissoesService);
   private readonly usuarios = inject(User);
+  private readonly notificacoes = inject(NotificacoesService);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
@@ -37,6 +42,13 @@ export class EventoDetalhes implements OnInit {
   @ViewChild('continuarEdicao') continuarEdicao?: ElementRef<HTMLButtonElement>;
   @ViewChild('dialogBody') corpo!: ElementRef<HTMLElement>;
   private readonly consulta = new Subject<string>();
+  private readonly consultaFinanceira = new Subject<string>();
+  readonly financeiro = signal<SituacaoFinanceira>({ estado: 'indisponivel' });
+  readonly statusDevolucao: Record<MinhaDevolucao['status'], string> = {
+    Pendente: 'Pendente',
+    Pago: 'Paga',
+    Atrasado: 'Atrasada',
+  };
   readonly evento = signal<EventoDto | null>(null);
   readonly relacionados = signal<EventoDto[]>([]);
   readonly nomes = signal<Record<string, string>>({});
@@ -60,12 +72,37 @@ export class EventoDetalhes implements OnInit {
   alvoEstorno: { eventoId: string; membroId: string; versao: string } | null = null;
   private focoAntesEstorno: HTMLElement | null = null;
 
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['id'] && !changes['id'].firstChange && this.id) this.carregar(this.id);
+  }
+
   ngOnInit(): void {
+    merge(
+      this.consultaFinanceira,
+      this.notificacoes.eventosAlterados$.pipe(
+        map(eventoId => ({ eventoId, aberto: this.id })),
+        filter(({ eventoId, aberto }) => !!aberto && (eventoId === null || eventoId === aberto)),
+        auditTime(0),
+        map(({ aberto }) => aberto),
+        filter((id): id is string => id !== null && id === this.id),
+      ),
+    ).pipe(switchMap(id => {
+      this.financeiro.set({ estado: 'carregando' });
+      return this.api.obterMeuEvento(id).pipe(
+        map((evento): SituacaoFinanceira => ({ estado: 'pronta', evento })),
+        catchError((erro: unknown) => of<SituacaoFinanceira>({
+          estado: erro instanceof HttpErrorResponse && erro.status === 404 ? 'indisponivel' : 'erro',
+        })),
+      );
+    }), takeUntilDestroyed(this.destroyRef)).subscribe(situacao => this.financeiro.set(situacao));
+
     this.consulta.pipe(switchMap(id => {
       const reconciliando = this.incerto() || this.conflito();
-      this.carregando.set(true); this.evento.set(null); this.relacionados.set([]);
+      this.evento.set(null); this.relacionados.set([]);
       this.erro.set(''); this.erroGrupo.set(''); this.modo = 'detalhes';
       this.alvoEstorno = null; this.motivo = ''; this.confirmaExclusao = false; this.confirmaEstorno = false;
+      if (!this.acesso.tem('eventos.consultar')) return of(null);
+      this.carregando.set(true);
       return this.api.obter(id).pipe(switchMap(evento => {
         this.evento.set(evento);
         this.conflito.set(false);
@@ -89,7 +126,7 @@ export class EventoDetalhes implements OnInit {
       }
     });
     if (this.id) this.carregar(this.id); else this.modo = 'criar';
-    if (this.acesso.tem('membros.consultar') && this.id) this.usuarios.listarMembros().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    if (this.acesso.tem('eventos.consultar') && this.acesso.tem('membros.consultar') && this.id) this.usuarios.listarMembros().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: m => this.nomes.set(Object.fromEntries(m.map(v => [v.id, v.nome]))),
       // O detalhe continua legível pelos IDs reais quando a consulta de nomes falha.
       error: () => {},
@@ -100,7 +137,11 @@ export class EventoDetalhes implements OnInit {
     if ((this.incerto() || this.conflito()) && (id !== this.id || this.carregando())) return;
     this.id = id;
     this.consulta.next(id);
+    this.consultaFinanceira.next(id);
     this.focarInicio();
+  }
+  recarregarFinanceiro(): void {
+    if (this.id && this.financeiro().estado !== 'carregando') this.consultaFinanceira.next(this.id);
   }
   editar(): void {
     if (this.acesso.tem('eventos.editar') && this.evento() && !this.ocupado() && !this.incerto() && !this.conflito() && !this.carregando() && !this.erroGrupo()) { this.modo = 'editar'; this.focarInicio(); }

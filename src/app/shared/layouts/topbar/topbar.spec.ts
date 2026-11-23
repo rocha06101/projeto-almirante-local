@@ -82,21 +82,19 @@ describe('TopbarComponent', () => {
     expect(http.match('/api/Me/foto')).toHaveLength(0);
   });
 
-  it.each([['Preferências', '/preferencias'], ['Meus eventos', '/meus-eventos']])(
-    'navega para %s ao clicar no item do menu', (label, route) => {
-      http.expectOne('/api/Me/foto').flush(new Blob());
-      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
-      fixture.componentInstance.toggleProfile();
-      fixture.detectChanges();
+  it('navega para Preferências ao clicar no item do menu', () => {
+    http.expectOne('/api/Me/foto').flush(new Blob());
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    fixture.componentInstance.toggleProfile();
+    fixture.detectChanges();
 
-      const buttons = (fixture.nativeElement as HTMLElement)
-        .querySelectorAll<HTMLButtonElement>('.profile-menu .menu-item');
-      [...buttons].find(button => button.textContent.trim() === label)!.click();
+    const buttons = (fixture.nativeElement as HTMLElement)
+      .querySelectorAll<HTMLButtonElement>('.profile-menu .menu-item');
+    [...buttons].find(button => button.textContent.trim() === 'Preferências')!.click();
 
-      expect(navigate).toHaveBeenCalledExactlyOnceWith([route]);
-      expect(fixture.componentInstance.profileOpen()).toBe(false);
-    },
-  );
+    expect(navigate).toHaveBeenCalledExactlyOnceWith(['/preferencias']);
+    expect(fixture.componentInstance.profileOpen()).toBe(false);
+  });
 
   it('exibe a mensagem de devolução exatamente como recebida', () => {
     http.expectOne('/api/Me/foto').flush(new Blob());

@@ -4,7 +4,7 @@ import { CalendarOptions } from '@fullcalendar/core';
 import ptBr from '@fullcalendar/core/locales/pt-br';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { EventoDto, PeriodoEventos } from '../../../core/models/evento.model';
+import { EventoCalendarioItem, PeriodoEventos } from '../../../core/models/evento.model';
 import { dataCivil, formatarData, mapearEventos, periodoInclusivo } from '../eventos.utils';
 
 @Component({
@@ -68,7 +68,7 @@ import { dataCivil, formatarData, mapearEventos, periodoInclusivo } from '../eve
   encapsulation: ViewEncapsulation.None,
 })
 export class EventosCalendario implements OnChanges {
-  @Input() eventos: EventoDto[] = [];
+  @Input() eventos: EventoCalendarioItem[] = [];
   @Input() selecionada = '';
   @Input() selectedEventId: string | null = null;
   @ViewChild('calendar') calendar!: FullCalendarComponent;

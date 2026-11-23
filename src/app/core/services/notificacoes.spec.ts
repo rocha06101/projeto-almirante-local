@@ -2,7 +2,7 @@ import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { WritableSignal, signal } from '@angular/core';
-import { HubConnectionState } from '@microsoft/signalr';
+import { HubConnectionState, LogLevel } from '@microsoft/signalr';
 import { firstValueFrom, of, Subject, throwError } from 'rxjs';
 import { MarcarTodasLeiturasResponse, NotificacoesPendentesResponse } from '../models/notificacao.model';
 import { ApiService } from './api';
@@ -24,11 +24,13 @@ const signalrMocks = vi.hoisted(() => {
       stop: vi.fn(),
     },
     withUrl: vi.fn(),
+    configureLogging: vi.fn(),
   };
 });
 
 vi.mock('@microsoft/signalr', () => ({
   HubConnectionState: { Disconnected: 'Disconnected' },
+  LogLevel: { None: 6 },
   HubConnectionBuilder: class {
     withUrl = vi.fn((url: string, options: unknown) => {
       signalrMocks.withUrl(url, options);
@@ -36,6 +38,11 @@ vi.mock('@microsoft/signalr', () => ({
     });
 
     withAutomaticReconnect = vi.fn(() => this);
+
+    configureLogging(level: number) {
+      signalrMocks.configureLogging(level);
+      return this;
+    }
 
     build() {
       return signalrMocks.connection;
@@ -64,6 +71,7 @@ describe('NotificacoesService realtime', () => {
       signalrMocks.connection.state = HubConnectionState.Disconnected;
     });
     signalrMocks.withUrl.mockClear();
+    signalrMocks.configureLogging.mockClear();
 
     loggedIn = signal(true);
     auth = {
@@ -109,6 +117,7 @@ describe('NotificacoesService realtime', () => {
       '/hubs/notificacoes',
       expect.objectContaining({ accessTokenFactory: expect.any(Function) }),
     );
+    expect(signalrMocks.configureLogging).toHaveBeenCalledExactlyOnceWith(LogLevel.None);
 
     const options = signalrMocks.withUrl.mock.calls[0][1] as {
       accessTokenFactory: () => Promise<string>;
@@ -162,6 +171,23 @@ describe('NotificacoesService realtime', () => {
     expect(service.isEmpty()).toBe(true);
   });
 
+  it('invalida eventos uma vez mesmo quando o REST já trouxe a devolução', async () => {
+    const notificacao = { id: 'devolucao-existente', tipo: 'DevolucaoEvento', eventoId: 'trilha' };
+    response = { ...response, items: [notificacao], naoLidas: 1 };
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
+
+    const alterados = vi.fn();
+    const inscricao = service.eventosAlterados$.subscribe(alterados);
+    const created = signalrMocks.connection.handlers.get('NotificacaoCriada');
+    created?.({ notificacao: { id: 'outro', tipo: 'DebitoCadastrado' }, naoLidas: 2 });
+    expect(alterados).not.toHaveBeenCalled();
+    created?.({ notificacao, naoLidas: 2 });
+    created?.({ notificacao, naoLidas: 2 });
+    expect(alterados).toHaveBeenCalledExactlyOnceWith('trilha');
+    expect(service.notifications().filter(item => item.id === notificacao.id)).toHaveLength(1);
+    inscricao.unsubscribe();
+  });
+
   it('consulta novamente a API depois da reconexão', async () => {
     await vi.waitFor(() => expect(api.get).toHaveBeenCalledOnce());
     response = {
@@ -172,11 +198,15 @@ describe('NotificacoesService realtime', () => {
     };
 
     const reconnected = signalrMocks.connection.onreconnected.mock.calls[0][0] as () => void;
+    const alterados = vi.fn();
+    const inscricao = service.eventosAlterados$.subscribe(alterados);
     reconnected();
     await vi.waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(service.notifications()).toEqual(response.items));
 
     expect(service.unreadCount()).toBe(1);
+    expect(alterados).toHaveBeenCalledExactlyOnceWith(null);
+    inscricao.unsubscribe();
   });
 
   it('mantém a conexão e as pendências quando o perfil do mesmo usuário é atualizado', async () => {
@@ -191,6 +221,29 @@ describe('NotificacoesService realtime', () => {
     expect(api.get).toHaveBeenCalledOnce();
     expect(service.notifications()).toEqual(response.items);
     expect(service.unreadCount()).toBe(3);
+  });
+
+  it('aguarda o encerramento do hub anterior mesmo quando a sessão muda novamente', async () => {
+    await vi.waitFor(() => expect(api.get).toHaveBeenCalledOnce());
+    let encerrar!: () => void;
+    signalrMocks.connection.stop.mockImplementationOnce(() => new Promise<void>(resolve => {
+      encerrar = () => {
+        signalrMocks.connection.state = 'Disconnected';
+        resolve();
+      };
+    }));
+
+    loggedIn.set(false);
+    TestBed.tick();
+    auth.user.set({ id: 'user-2' });
+    loggedIn.set(true);
+    TestBed.tick();
+    await Promise.resolve();
+    expect(signalrMocks.connection.start).toHaveBeenCalledOnce();
+
+    encerrar();
+    await vi.waitFor(() => expect(signalrMocks.connection.start).toHaveBeenCalledTimes(2));
+    expect(signalrMocks.connection.stop).toHaveBeenCalledOnce();
   });
 
   it.each([0, 1, 20, 25])('aceita a resposta de um único POST sem corpo para %i pendências', async total => {

@@ -80,11 +80,15 @@ export interface MinhaDevolucao {
 export interface EventoParticipante extends Pick<EventoConteudo,
   'dataEvento' | 'local' | 'transporte' | 'alimentacao' | 'seguroObrigatorio'> {
   id: string;
-  titulo: string;
-  descricao: string | null;
+  /** Ausentes na API anterior aos títulos de eventos. */
+  titulo?: string | null;
+  descricao?: string | null;
   valorPorMembro: number;
   minhaCobranca: Pick<MinhaDevolucao, 'valor' | 'vencimento' | 'status'> | null;
   minhasDevolucoes?: MinhaDevolucao[] | null;
 }
 
 export interface MeusEventosResponse { items: EventoParticipante[] }
+
+export type EventoCalendarioItem = Pick<EventoParticipante, 'id' | 'titulo' | 'local' | 'dataEvento'> &
+  Partial<Pick<EventoDto, 'eventoGrupoId' | 'quantidadeMembros'>>;

@@ -9,16 +9,30 @@ import { of } from 'rxjs';
 
 import { routes } from '../../app.routes';
 import { AuthService } from '../../core/services/auth';
+import { TesourariaService } from '../../core/services/tesouraria';
 import { Treasury } from './treasury';
 
 describe('Treasury', () => {
   let component: Treasury;
   let fixture: ComponentFixture<Treasury>;
+  const competencias = [
+    { ano: 2026, mes: 1, entradas: 120, saidas: 80 },
+    { ano: 2026, mes: 2, entradas: 150, saidas: 90 },
+  ];
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [Treasury],
-      providers: [{ provide: PermissoesService, useValue: { tem: () => false } }]
+      providers: [
+        {
+          provide: PermissoesService,
+          useValue: { tem: (permissao: string) => permissao === 'financeiro.tesouraria.consultar' },
+        },
+        {
+          provide: TesourariaService,
+          useValue: { obterResumo: () => of({ receitasDespesas: competencias }) },
+        },
+      ],
     })
     .compileComponents();
 
@@ -29,6 +43,12 @@ describe('Treasury', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('updates chart labels and values from treasury competencies', () => {
+    expect(component.barChartData.labels).toEqual(['Jan/2026', 'Fev/2026']);
+    expect(component.barChartData.datasets[0].data).toEqual([120, 150]);
+    expect(component.barChartData.datasets[1].data).toEqual([80, 90]);
   });
 });
 

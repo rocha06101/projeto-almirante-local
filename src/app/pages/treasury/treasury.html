@@ -5,38 +5,18 @@
     <section>
         @if (permissoes.tem('financeiro.tesouraria.consultar')) {
         <div class="kpi-components">
-            <app-kpi-component
-                icon="/icons/wallet-icon.svg"
-                title="Saldo em caixa"
-                value="R$1000"
-                description="saldo disponível"
-                backgroundColor="light-dark(#E5F0FD, var(--theme-info-surface))"
-                style="--kpi-icon-color: var(--theme-info-text)"
-            ></app-kpi-component>
-            <app-kpi-component
-                icon="/icons/arrow-icon-green.svg"
-                title="Receita do mês"
-                value="R$200"
-                description="total de entradas"
-                backgroundColor="light-dark(#E3F9EC, var(--theme-success-surface))"
-                style="--kpi-icon-color: var(--theme-success-text)"
-            ></app-kpi-component>
-            <app-kpi-component
-                icon="/icons/arrow-icon-red.svg"
-                title="Despesas do mês"
-                value="R$150"
-                description="total do saldo"
-                backgroundColor="light-dark(#FFE2E5, var(--theme-danger-surface))"
-                style="--kpi-icon-color: var(--theme-danger-text)"
-            ></app-kpi-component>
-            <app-kpi-component
-                icon="/icons/calendar-alert-outline.svg"
-                title="Mensalidades pendentes"
-                value="7"
-                description="Em abertos"
-                backgroundColor="light-dark(#FFEAD4, var(--theme-warning-surface))"
-                style="--kpi-icon-color: var(--theme-warning-text)"
-            ></app-kpi-component>
+            <app-kpi-component icon="/icons/wallet-icon.svg" title="Saldo em caixa" value="R$1000"
+                description="saldo disponível" backgroundColor="light-dark(#E5F0FD, var(--theme-info-surface))"
+                style="--kpi-icon-color: var(--theme-info-text)"></app-kpi-component>
+            <app-kpi-component icon="/icons/arrow-icon-green.svg" title="Receita do mês" value="R$200"
+                description="total de entradas" backgroundColor="light-dark(#E3F9EC, var(--theme-success-surface))"
+                style="--kpi-icon-color: var(--theme-success-text)"></app-kpi-component>
+            <app-kpi-component icon="/icons/arrow-icon-red.svg" title="Despesas do mês" value="R$150"
+                description="total do saldo" backgroundColor="light-dark(#FFE2E5, var(--theme-danger-surface))"
+                style="--kpi-icon-color: var(--theme-danger-text)"></app-kpi-component>
+            <app-kpi-component icon="/icons/calendar-alert-outline.svg" title="Mensalidades pendentes" value="7"
+                description="Em abertos" backgroundColor="light-dark(#FFEAD4, var(--theme-warning-surface))"
+                style="--kpi-icon-color: var(--theme-warning-text)"></app-kpi-component>
         </div>
 
         <div class="chart-container">
@@ -45,15 +25,30 @@
                 <span class="chart-description">Últimos 6 meses</span>
             </div>
 
+
             <div class="chart-canvas-wrapper">
-                <canvas
-                    baseChart
-                    [data]="barChartData"
-                    [options]="barChartOptions()"
-                    type="bar"
-                >
+                @if (carregandoGrafico()) {
+                <p role="status">
+                    Carregando dados financeiros...
+                </p>
+                } @else if (acessoNegadoGrafico()) {
+                <p role="alert">
+                    Você não possui permissão para consultar o resumo da tesouraria.
+                </p>
+                } @else if (erroGrafico()) {
+                <p role="alert">
+                    {{ erroGrafico() }}
+                </p>
+                } @else if (!barChartData.labels?.length) {
+                <p role="status">
+                    Nenhum dado financeiro disponível para o período.
+                </p>
+                } @else {
+                <canvas baseChart [data]="barChartData" [options]="barChartOptions()" type="bar">
                 </canvas>
+                }
             </div>
+
         </div>
         }
         @if (permissoes.tem('financeiro.lancamentos.consultar')) {

@@ -1,8 +1,11 @@
 import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HubConnection, HubConnectionBuilder, HubConnectionState } from '@microsoft/signalr';
 import { EMPTY, Subject, throwError } from 'rxjs';
 import { EventoDto, EventoParticipante, MinhaDevolucao } from '../../../core/models/evento.model';
+import { AuthService } from '../../../core/services/auth';
 import { EventosService } from '../../../core/services/eventos';
 import { NotificacoesService } from '../../../core/services/notificacoes';
 import { PermissoesService } from '../../../core/services/permissoes';
@@ -216,14 +219,15 @@ describe('Detalhes: exclusão e carregamento atual', () => {
 
 });
 
-describe('Detalhes: minha situação financeira', () => {
-  const pessoal: EventoParticipante = {
+const pessoal: EventoParticipante = {
     id: evento.id, local: evento.local, dataEvento: evento.dataEvento,
     transporte: evento.transporte, alimentacao: evento.alimentacao,
     seguroObrigatorio: evento.seguroObrigatorio, valorPorMembro: evento.valorPorMembro,
     minhaCobranca: null, minhasDevolucoes: [],
-  };
-  const pendente: MinhaDevolucao = { valor: 20, vencimento: '2026-11-20', status: 'Pendente' };
+};
+const pendente: MinhaDevolucao = { valor: 20, vencimento: '2026-11-20', status: 'Pendente' };
+
+describe('Detalhes: minha situação financeira', () => {
   let http: HttpTestingController;
   let fixture: ComponentFixture<EventoDetalhes>;
   let avisos: Subject<string | null>;
@@ -391,5 +395,63 @@ describe('Detalhes: minha situação financeira', () => {
     expect(anterior.cancelled).toBe(true);
     responder({ ...pessoal, id: 'e2', titulo: 'Outro evento' });
     expect(texto(fixture.nativeElement)).toContain('Outro evento');
+  });
+});
+
+describe('Detalhes: sincronização financeira por notificações REST', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each([
+    { eventoId: evento.id, atualiza: true },
+    { eventoId: 'outro-evento', atualiza: false },
+    { eventoId: undefined, atualiza: true },
+  ])('processa devoluções recebidas somente por REST (evento: $eventoId)', async ({ eventoId, atualiza }) => {
+    vi.spyOn(HubConnectionBuilder.prototype, 'build').mockReturnValue({
+      state: HubConnectionState.Disconnected,
+      start: async () => {},
+      on: () => {},
+      onreconnected: () => {},
+      onclose: () => {},
+    } as unknown as HubConnection);
+    const isLoggedIn = signal(false);
+    TestBed.configureTestingModule({ providers: [
+      provideHttpClient(), provideHttpClientTesting(),
+      { provide: AuthService, useValue: { isLoggedIn, user: signal({ id: 'm1' }) } },
+      { provide: PermissoesService, useValue: { tem: () => false } },
+    ] });
+    const http = TestBed.inject(HttpTestingController);
+    const notificacoes = TestBed.inject(NotificacoesService);
+    const fixture = TestBed.createComponent(EventoDetalhes);
+    fixture.componentRef.setInput('id', evento.id);
+    fixture.detectChanges();
+    const urlPessoal = `/api/Me/Eventos/${evento.id}`;
+    http.expectOne({ url: urlPessoal, method: 'GET' }).flush(pessoal);
+    fixture.detectChanges();
+    const devolucoes = () => (fixture.nativeElement as HTMLElement).querySelectorAll('.minhas-devolucoes li');
+    expect(devolucoes()).toHaveLength(0);
+
+    isLoggedIn.set(true);
+    TestBed.tick();
+    const pendencias = { url: '/api/Notificacoes/Pendentes?pageSize=20', method: 'GET' };
+    const novas = ['n1', 'n2'].map(id => ({ id, eventoId, tipo: 'DevolucaoEvento' }));
+    await vi.waitFor(() => expect(notificacoes.isLoading()).toBe(true));
+    http.expectOne(pendencias).flush({ items: novas, naoLidas: 2, pageSize: 20, proximoCursor: null });
+    await vi.waitFor(() => expect(notificacoes.unreadCount()).toBe(2));
+    expect(notificacoes.notifications()).toEqual(novas);
+
+    if (atualiza) {
+      await vi.waitFor(() => expect(fixture.componentInstance.financeiro().estado).toBe('carregando'));
+      http.expectOne({ url: urlPessoal, method: 'GET' }).flush({
+        ...pessoal,
+        minhasDevolucoes: [pendente, { ...pendente, valor: 15 }],
+      });
+      fixture.detectChanges();
+      expect(devolucoes()).toHaveLength(2);
+      expect(devolucoes()[0].textContent).toMatch(/R\$\s*20,00/);
+    } else {
+      expect(fixture.componentInstance.financeiro().estado).toBe('pronta');
+      expect(devolucoes()).toHaveLength(0);
+    }
+    http.verify();
   });
 });

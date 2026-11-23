@@ -281,11 +281,7 @@ export class NotificacoesService {
       const notification = event?.notificacao;
       if (!isCurrentConnection() || !notification?.id) return;
 
-      // O REST pode ter listado a notificação antes de o publicador enviar o aviso.
-      if (notification.tipo === 'DevolucaoEvento' && !this.devolucoesNotificadas.has(notification.id)) {
-        this.devolucoesNotificadas.add(notification.id);
-        this.eventosAlterados.next(notification.eventoId ?? null);
-      }
+      this.avisarDevolucao(notification);
       if (this.readNotificationIds.has(notification.id) || this.liveNotifications.has(notification.id) ||
           this.notifications().some(item => item.id === notification.id)) {
         return;
@@ -392,6 +388,9 @@ export class NotificacoesService {
         this.unreadCount.set(response.naoLidas);
         this.isEmpty.set(items.length === 0);
         this.loadError.set(null);
+        for (const notification of items) {
+          this.avisarDevolucao(notification);
+        }
       })
       .catch(() => {
         if (!isCurrent()) {
@@ -420,6 +419,16 @@ export class NotificacoesService {
 
     this.pendingSync = syncPromise;
     return syncPromise;
+  }
+
+  private avisarDevolucao(notification: Notificacao): void {
+    if (!notification.id || notification.tipo !== 'DevolucaoEvento' ||
+        this.devolucoesNotificadas.has(notification.id)) {
+      return;
+    }
+
+    this.devolucoesNotificadas.add(notification.id);
+    this.eventosAlterados.next(notification.eventoId ?? null);
   }
 
   private mergeNotification(notification: Notificacao): void {

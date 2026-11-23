@@ -127,7 +127,9 @@ describe('NotificacoesService realtime', () => {
   });
 
   it('recebe DevolucaoEvento pelo SignalR, deduplica e atualiza o contador após a leitura individual', async () => {
-    await vi.waitFor(() => expect(signalrMocks.connection.start).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(api.get).toHaveBeenCalledOnce());
+    const alterados = vi.fn();
+    service.eventosAlterados$.subscribe(alterados);
     const notify = signalrMocks.connection.handlers.get('NotificacaoCriada');
     const payload = {
       notificacao: {
@@ -145,6 +147,7 @@ describe('NotificacoesService realtime', () => {
     await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
 
     expect(service.notifications()).toEqual([payload.notificacao]);
+    expect(alterados).toHaveBeenCalledExactlyOnceWith(null);
 
     const notificacao = { ...payload.notificacao, lidaEmUtc: '2026-11-23T12:00:00Z' };
     response = { ...response, items: [], naoLidas: 0 };
@@ -171,21 +174,35 @@ describe('NotificacoesService realtime', () => {
     expect(service.isEmpty()).toBe(true);
   });
 
-  it('invalida eventos uma vez mesmo quando o REST já trouxe a devolução', async () => {
+  it('avisa ao receber pelo REST e deduplica entre SignalR e consultas sucessivas', async () => {
     const notificacao = { id: 'devolucao-existente', tipo: 'DevolucaoEvento', eventoId: 'trilha' };
+    const alterados = vi.fn();
+    service.eventosAlterados$.subscribe(alterados);
     response = { ...response, items: [notificacao], naoLidas: 1 };
     await vi.waitFor(() => expect(service.unreadCount()).toBe(1));
-
-    const alterados = vi.fn();
-    const inscricao = service.eventosAlterados$.subscribe(alterados);
-    const created = signalrMocks.connection.handlers.get('NotificacaoCriada');
-    created?.({ notificacao: { id: 'outro', tipo: 'DebitoCadastrado' }, naoLidas: 2 });
-    expect(alterados).not.toHaveBeenCalled();
-    created?.({ notificacao, naoLidas: 2 });
-    created?.({ notificacao, naoLidas: 2 });
     expect(alterados).toHaveBeenCalledExactlyOnceWith('trilha');
-    expect(service.notifications().filter(item => item.id === notificacao.id)).toHaveLength(1);
-    inscricao.unsubscribe();
+
+    const created = signalrMocks.connection.handlers.get('NotificacaoCriada');
+    created?.({ notificacao, naoLidas: 1 });
+    expect(alterados).toHaveBeenCalledExactlyOnceWith('trilha');
+    expect(service.notifications()).toEqual([notificacao]);
+    expect(service.unreadCount()).toBe(1);
+
+    const outroTipo = { id: 'outro', tipo: 'DebitoCadastrado' };
+    response = { ...response, items: [notificacao, outroTipo], naoLidas: 2 };
+    created?.({ notificacao: outroTipo, naoLidas: 2 });
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(2));
+    expect(alterados).toHaveBeenCalledExactlyOnceWith('trilha');
+    expect(service.notifications()).toEqual(response.items);
+
+    const segundaDevolucao = { ...notificacao, id: 'devolucao-nova' };
+    response = { ...response, items: [notificacao, outroTipo, segundaDevolucao], naoLidas: 3 };
+    const terceiraNotificacao = { id: 'lida-em-outra-aba' };
+    const read = signalrMocks.connection.handlers.get('NotificacaoLida');
+    read?.({ notificacaoId: terceiraNotificacao.id, lidaEmUtc: '2026-11-23T12:00:00Z', naoLidas: 3 });
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(3));
+    expect(service.notifications()).toEqual(response.items);
+    expect(alterados.mock.calls).toEqual([['trilha'], ['trilha']]);
   });
 
   it('consulta novamente a API depois da reconexão', async () => {
@@ -512,7 +529,10 @@ describe('NotificacoesService realtime', () => {
 
     oldCreated?.({ notificacao: { id: 'old-event' }, naoLidas: 50 });
     oldRead?.({ notificacaoId: 'other-user', lidaEmUtc: '2026-11-18T13:00:00Z', naoLidas: 0 });
-    oldList.next({ ...response, items: [{ id: 'old-rest' }], naoLidas: 99 });
+    const alterados = vi.fn();
+    service.eventosAlterados$.subscribe(alterados);
+    const devolucaoAntiga = { id: 'old-rest', tipo: 'DevolucaoEvento', eventoId: 'evento-antigo' };
+    oldList.next({ ...response, items: [devolucaoAntiga], naoLidas: 99 });
     batch.next({ marcadas: 2, naoLidas: 0, limiteUtc: '2026-11-18T13:00:00Z' });
     batch.complete();
     await Promise.resolve();
@@ -522,6 +542,14 @@ describe('NotificacoesService realtime', () => {
     expect(api.get).toHaveBeenCalledTimes(3);
     expect(service.notifications()).toEqual(response.items);
     expect(service.unreadCount()).toBe(1);
+    expect(alterados).not.toHaveBeenCalled();
+
+    const devolucaoAtual = { ...devolucaoAntiga, eventoId: 'evento-atual' };
+    response = { ...response, items: [...response.items, devolucaoAtual], naoLidas: 2 };
+    const read = signalrMocks.connection.handlers.get('NotificacaoLida');
+    read?.({ notificacaoId: 'lida', naoLidas: 2 });
+    await vi.waitFor(() => expect(service.unreadCount()).toBe(2));
+    expect(alterados).toHaveBeenCalledExactlyOnceWith('evento-atual');
   });
 
 });

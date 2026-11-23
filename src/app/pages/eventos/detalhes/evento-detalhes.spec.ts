@@ -267,6 +267,7 @@ describe('Detalhes: minha situação financeira', () => {
     expect(texto(secao()?.querySelector('.financeiro-estado') ?? null)).toBe(status);
     expect(texto(secao())).toContain('17 de novembro de 2026');
     expect(texto(secao())).not.toContain('Minhas devoluções');
+    expect(secao()?.querySelector('button')).toBeNull();
     expect(texto(dialogo)).not.toMatch(/Participantes e lançamentos|Editar evento|Excluir evento|Solicitar estorno/);
     http.expectNone(req => /^\/api\/(Eventos|Membros)(\/|$)/.test(req.url));
   });
@@ -324,7 +325,7 @@ describe('Detalhes: minha situação financeira', () => {
     expect(secao()).toBeNull();
     const page = fixture.nativeElement as HTMLElement;
     expect(texto(page.querySelector('[role="alert"]'))).toContain('Não foi possível consultar sua situação financeira');
-    [...page.querySelectorAll('button')].find(b => texto(b)?.includes('Tentar novamente'))!.click();
+    [...page.querySelectorAll('button')].find(b => texto(b) === 'Tentar novamente a consulta financeira')!.click();
     responder(pessoal);
     expect(texto(secao())).toContain('Você não tem cobranças ou devoluções para este evento.');
   });
@@ -339,6 +340,7 @@ describe('Detalhes: minha situação financeira', () => {
     await vi.waitFor(() => expect(fixture.componentInstance.financeiro().estado).toBe('carregando'));
     responder({ ...pessoal, minhasDevolucoes: [pendente] });
     expect(texto(secao())).toContain('Minhas devoluções');
+    expect(secao()?.querySelector('button')).toBeNull();
 
     avisos.next(null);
     await vi.waitFor(() => expect(fixture.componentInstance.financeiro().estado).toBe('carregando'));

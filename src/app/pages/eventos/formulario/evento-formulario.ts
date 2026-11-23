@@ -58,7 +58,6 @@ export class EventoFormulario implements OnInit {
     }
     return { desbravadores, diretoria, todos: [...desbravadores, ...diretoria] };
   });
-  private readonly membrosExibidos = new Set<string>();
   readonly carregandoMembros = signal(false);
   readonly erroMembros = signal('');
   readonly feedbackSelecao = signal('');
@@ -98,7 +97,6 @@ export class EventoFormulario implements OnInit {
     this.seguroAtivo = (this.modelo.seguroObrigatorio ?? 0) > 0;
     this.estadoInicial = this.estadoEditavel();
     if (pendente) this.estadoRevisado = this.estadoEditavel();
-    for (const id of this.modelo.membros) this.membrosExibidos.add(id);
     if (pendente) { this.confirmando = true; this.erro.set('Um cadastro aguarda confirmação. Reenvie a mesma operação para consultar o resultado com segurança.'); }
     this.carregarMembros();
     this.datas.pipe(distinctUntilChanged(), switchMap(data => {
@@ -134,8 +132,9 @@ export class EventoFormulario implements OnInit {
     return this.referencias().filter(e => normalizar(e.local) === normalizar(this.modelo.local));
   }
   membrosVisiveis(): MembroResumo[] {
-    const ids = new Set([...this.membrosExibidos, ...this.modelo.membros]);
-    const conhecidos = this.membros().filter(m => ids.delete(m.id));
+    const conhecidos = this.membros();
+    const ids = new Set([...(this.evento?.membros ?? []), ...this.modelo.membros]);
+    for (const membro of conhecidos) ids.delete(membro.id);
     const ausentes = [...ids].map(id => ({ id, nome: `Participante ${id}`, cargo: '', role: '' }));
     const busca = this.busca.trim().toLocaleLowerCase('pt-BR');
     return [...conhecidos, ...ausentes].filter(m => m.nome.toLocaleLowerCase('pt-BR').includes(busca));
@@ -169,10 +168,8 @@ export class EventoFormulario implements OnInit {
         continue;
       }
       if (marcado) {
-        this.membrosExibidos.add(id);
         selecionados.add(id);
       } else {
-        if (!this.evento?.membros.includes(id)) this.membrosExibidos.delete(id);
         selecionados.delete(id);
       }
     }
@@ -197,7 +194,6 @@ export class EventoFormulario implements OnInit {
       return;
     }
     this.feedbackSelecao.set('');
-    this.membrosExibidos.add(id);
     this.modelo.membros = marcado ? [...new Set([...this.modelo.membros, id])] : this.modelo.membros.filter(m => m !== id);
   }
   podeSelecionarMembros(): boolean {

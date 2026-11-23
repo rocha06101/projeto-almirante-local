@@ -140,7 +140,9 @@ for (const width of [320, 768, 1280, 1440]) {
     await expect(page.getByLabel('Data', { exact: true })).toHaveValue('2026-11-19');
     await expect(page.getByLabel('Título', { exact: true })).toBeVisible();
     await expect(page.getByLabel('Descrição', { exact: true })).toBeVisible();
-    await expect(page.locator('.member-list input')).toHaveCount(0);
+    await expect(page.getByLabel('Buscar participante')).toBeVisible();
+    await expect(page.locator('.member-list input')).toHaveCount(3);
+    await expect(page.locator('.member-list input:checked')).toHaveCount(0);
     await page.getByLabel('Todos', { exact: true }).check();
     await expect(page.locator('.member-list input:checked')).toHaveCount(3);
     expect(await page.locator('.dialog-body').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
@@ -151,10 +153,21 @@ for (const width of [320, 768, 1280, 1440]) {
     const periodos = estado.chamadas.filter(c => c.method === 'GET' && c.url.pathname === '/api/Eventos' && c.url.searchParams.get('dataInicial') !== c.url.searchParams.get('dataFinal'));
     expect(periodos).toHaveLength(2);
     expect(periodos.map(c => c.url.search)).toEqual(expect.arrayContaining(['?dataInicial=2026-10-26&dataFinal=2026-12-06', '?dataInicial=2026-11-17&dataFinal=2027-11-17']));
+    const { id, titulo, dataEvento, local, transporte, alimentacao, seguroObrigatorio, valorPorMembro } = estado.eventos[0];
+    const pessoal: EventoParticipante = {
+      id, titulo, dataEvento, local, transporte, alimentacao, seguroObrigatorio, valorPorMembro,
+      minhaCobranca: { valor: valorPorMembro, vencimento: dataEvento, status: 'Pendente' },
+    };
+    await page.route(`**/api/Me/Eventos/${id}`, r => r.fulfill({ json: pessoal }));
     await detalhes(page);
+    await expect(page.getByRole('region', { name: 'Minha situação financeira' })).toBeVisible();
+    const atualizarFinanceiro = page.getByRole('button', { name: 'Atualizar situação financeira' });
+    await expect(atualizarFinanceiro).toHaveCount(0);
     expect((await measureOverflow(page)).documentOverflow).toBeLessThanOrEqual(1);
     await page.getByRole('button', { name: 'Editar evento' }).click();
     await expect(page.getByLabel('Local', { exact: true })).toHaveValue('Igreja');
+    await expect(atualizarFinanceiro).toHaveCount(0);
+    await expect(page.getByLabel('Buscar participante')).toBeEnabled();
     await expect.poll(() => page.getByRole('dialog').evaluate(el => el.contains(document.activeElement))).toBe(true);
     await page.keyboard.press('Shift+Tab');
     await expect.poll(() => page.getByRole('dialog').evaluate(el => el.contains(document.activeElement))).toBe(true);
@@ -271,7 +284,8 @@ test('edição mantém versão, exige motivo ao remover membro e recarrega após
   await expect(page.getByLabel('Transporte (R$)', { exact: true })).toHaveValue('12.5');
   await expect(page.getByLabel('Alimentação (R$)', { exact: true })).toHaveValue('0');
   await expect(page.getByLabel('Seguro (R$)', { exact: true })).toHaveValue('2.5');
-  await expect(page.getByLabel('Caio Lima', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Buscar participante')).toBeEnabled();
+  await expect(page.getByLabel('Caio Lima', { exact: true })).not.toBeChecked();
   await page.getByLabel('Bruno Santos', { exact: true }).uncheck();
   await expect(page.getByRole('button', { name: 'Revisar evento' })).toBeDisabled();
   await page.getByLabel('Motivo da remoção de participantes').fill('Participante cancelou');
@@ -347,15 +361,23 @@ test('seleção em massa, exceções manuais e custos independentes no cadastro'
   const desbravadores = page.getByLabel('Desbravadores', { exact: true });
   const ana = page.getByLabel('Ana Silva', { exact: true });
   const bruno = page.getByLabel('Bruno Santos', { exact: true });
-  await expect(ana).toHaveCount(0);
+  const busca = page.getByLabel('Buscar participante');
+  await busca.fill('Sem resultado');
+  await expect(page.getByText('Nenhum participante encontrado.')).toBeVisible();
+  await expect(busca).toBeEnabled();
+  await busca.fill('ana');
+  await expect(page.locator('.member-list input')).toHaveCount(1);
   await expect(todos).not.toBeChecked();
+  await ana.check();
+  await expect(todos).toHaveJSProperty('indeterminate', true);
+  await busca.clear();
   await todos.check();
   await expect(diretoria).toBeChecked();
   await expect(desbravadores).toBeChecked();
   await ana.uncheck();
   await expect(todos).toHaveJSProperty('indeterminate', true);
   await diretoria.uncheck();
-  await expect(bruno).toHaveCount(0);
+  await expect(bruno).not.toBeChecked();
   await diretoria.check();
   await expect(bruno).toBeChecked();
   await expect(ana).not.toBeChecked();
@@ -469,6 +491,7 @@ test('membro abre seus dados financeiros no modal sem chamadas administrativas',
   const dialogo = page.getByRole('dialog');
   const financeiro = dialogo.getByRole('region', { name: 'Minha situação financeira' });
   await expect(financeiro.getByRole('heading', { name: 'Minha cobrança' })).toBeVisible();
+  await expect(financeiro.getByRole('button', { name: 'Atualizar situação financeira' })).toHaveCount(0);
   await expect(financeiro.getByRole('heading', { name: 'Minhas devoluções' })).toBeVisible();
   await expect(financeiro.getByText('R$ 12,50')).toBeVisible();
   await expect(dialogo.getByText('Participantes e lançamentos')).toHaveCount(0);
@@ -891,6 +914,8 @@ test('seleção parcial preserva pagante e anuncia as alterações bloqueadas no
   const grupo = page.getByLabel('Todos', { exact: true });
   const ana = page.getByLabel('Ana Silva', { exact: true });
   const bruno = page.getByLabel('Bruno Santos', { exact: true });
+  await expect(page.getByLabel('Buscar participante')).toBeEnabled();
+  await expect(page.getByLabel('Caio Lima', { exact: true })).toBeDisabled();
   await expect(grupo).toHaveJSProperty('indeterminate', true);
   await expect(ana).toBeDisabled();
   await expect(ana).toHaveAccessibleDescription('A remoção antes do evento exige que a tesouraria conclua o estorno.');

@@ -136,9 +136,10 @@ describe('Formulário de eventos: efeitos financeiros e confirmação', () => {
     expect(c.erro()).toContain('caracteres não suportados');
     expect(c.confirmando).toBe(false);
   });
-  it('inicia vazio e preserva exclusões individuais ao alternar grupos', () => {
+  it('inicia sem seleção e preserva exclusões individuais ao alternar grupos', () => {
     const { c } = formulario();
-    expect(c.membrosVisiveis()).toEqual([]);
+    expect(c.modelo.membros).toEqual([]);
+    expect(c.membrosVisiveis()).toEqual(membros);
     expect(c.grupos.map(g => c.estadoGrupo(g.id))).toEqual(['vazio', 'vazio', 'vazio']);
     c.selecionarGrupo('desbravadores', true);
     expect(c.modelo.membros).toEqual(['m1', 'm3']);
@@ -149,8 +150,75 @@ describe('Formulário de eventos: efeitos financeiros e confirmação', () => {
     expect(c.grupos.map(g => c.estadoGrupo(g.id))).toEqual(['parcial', 'completo', 'parcial']);
     c.selecionarGrupo('diretoria', false);
     expect(c.modelo.membros).toEqual(['m1']);
-    expect(c.membrosVisiveis().map(m => m.id)).toEqual(['m1', 'm3']);
+    expect(c.membrosVisiveis()).toEqual(membros);
     http.expectNone('/api/Membros');
+  });
+
+  it.each([0, 1, 2, membros.length])('mantém a busca acessível com %i participantes no catálogo', async quantidade => {
+    const fixture = TestBed.createComponent(EventoFormulario);
+    const c = fixture.componentInstance;
+    const selecionarGrupo = vi.spyOn(c, 'selecionarGrupo');
+    fixture.detectChanges();
+    http.expectOne('/api/Membros').flush(membros.slice(0, quantidade));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const tela = fixture.nativeElement as HTMLElement;
+    const busca = tela.querySelector<HTMLInputElement>('input[name="busca"]')!;
+    const opcoes = () => tela.querySelectorAll<HTMLInputElement>('.member-list input');
+    const buscar = (nome: string) => {
+      busca.value = nome;
+      busca.dispatchEvent(new Event('input', { bubbles: true }));
+      fixture.detectChanges();
+    };
+
+    expect(busca.matches(':disabled')).toBe(false);
+    expect(opcoes()).toHaveLength(quantidade);
+    expect(c.modelo.membros).toEqual([]);
+    if (quantidade === 0) expect(tela.textContent).toContain('Nenhum participante encontrado');
+
+    buscar('Sem resultado');
+    expect(tela.querySelector('input[name="busca"]')).toBe(busca);
+    expect(busca.matches(':disabled')).toBe(false);
+    expect(tela.textContent).toContain('Nenhum participante encontrado');
+    expect(opcoes()).toHaveLength(0);
+
+    const escolhidos = membros.slice(0, Math.min(2, quantidade));
+    for (const membro of escolhidos) {
+      buscar(`  ${membro.nome.toUpperCase()}  `);
+      expect(opcoes()).toHaveLength(1);
+      opcoes()[0].click();
+      fixture.detectChanges();
+      expect(opcoes()[0].checked).toBe(true);
+    }
+    buscar('');
+    expect(opcoes()).toHaveLength(quantidade);
+    expect(c.modelo.membros).toEqual(escolhidos.map(membro => membro.id));
+    expect(selecionarGrupo).not.toHaveBeenCalled();
+  });
+
+  it('mantém a busca habilitada na edição com pagamento e desabilita alterações bloqueadas', async () => {
+    const fixture = TestBed.createComponent(EventoFormulario);
+    fixture.componentRef.setInput('evento', {
+      ...evento, dataEvento: '2099-01-01',
+      lancamentos: [{ id: 'l1', membroId: 'm1', valor: 5, status: 'Pago' }],
+    } satisfies EventoDto);
+    fixture.detectChanges();
+    http.expectOne('/api/Membros').flush(membros);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const tela = fixture.nativeElement as HTMLElement;
+    const busca = tela.querySelector<HTMLInputElement>('input[name="busca"]')!;
+    expect(busca.matches(':disabled')).toBe(false);
+    const opcoes = tela.querySelectorAll<HTMLInputElement>('.member-list input');
+    expect(opcoes[0].checked).toBe(true);
+    expect(opcoes[0].disabled).toBe(true);
+    expect(opcoes[2].disabled).toBe(true);
+    expect(opcoes[1].disabled).toBe(false);
+    opcoes[1].click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.modelo.membros).toEqual(['m1']);
   });
   it('seleciona todos sem duplicar IDs e envia somente os que permanecem marcados', () => {
     const { c } = formulario();
@@ -174,7 +242,7 @@ describe('Formulário de eventos: efeitos financeiros e confirmação', () => {
   it.each([false, true])('preserva participantes da edição com falha de catálogo: %s', falha => {
     const { c } = formulario(true, falha);
     expect(c.modelo).toMatchObject({ titulo: evento.titulo, descricao: evento.descricao, membros: ['m1', 'm2'] });
-    expect(c.membrosVisiveis().map(m => m.id)).toEqual(['m1', 'm2']);
+    expect(c.membrosVisiveis().map(m => m.id)).toEqual(falha ? ['m1', 'm2'] : membros.map(m => m.id));
     expect(c.seguroAtivo).toBe(true);
     if (!falha) expect(c.estadoGrupo('todos')).toBe('parcial');
     else {

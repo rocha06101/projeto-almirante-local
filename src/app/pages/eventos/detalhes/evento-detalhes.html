@@ -128,10 +128,7 @@
     <button type="button" (click)="recarregarFinanceiro()">Tentar novamente a consulta financeira</button>
   } @else if (pessoal.estado === 'pronta') {
     <section class="situacao-financeira" aria-labelledby="situacao-financeira-titulo">
-      <div class="financeiro-cabecalho">
-        <h4 id="situacao-financeira-titulo">Minha situação financeira</h4>
-        <button type="button" (click)="recarregarFinanceiro()">Atualizar situação financeira</button>
-      </div>
+      <h4 id="situacao-financeira-titulo">Minha situação financeira</h4>
       @if (pessoal.evento.minhaCobranca; as cobranca) {
         <h5>Minha cobrança</h5>
         <dl class="financeiro-dados">

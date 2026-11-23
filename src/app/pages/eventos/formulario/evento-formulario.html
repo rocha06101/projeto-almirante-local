@@ -48,24 +48,21 @@
         <div role="status" aria-live="polite" aria-atomic="true">
           @if (feedbackSelecao()) { <p class="feedback-selecao">{{ feedbackSelecao() }}</p> }
         </div>
-        @let visiveis = membrosVisiveis();
-        @if (visiveis.length || busca) {
-          <label class="search-label">Buscar participante<input type="search" name="busca" [(ngModel)]="busca" placeholder="Nome do participante"></label>
-          <div class="member-list">
-            @for (m of visiveis; track m.id) {
-              @let selecionado = modelo.membros.includes(m.id);
-              @let bloqueio = motivoBloqueioMembro(m.id, !selecionado);
-              <div class="member-option">
-                <label class="check"><input #caixaMembro type="checkbox" [checked]="selecionado" [disabled]="!!bloqueio"
-                  [attr.aria-describedby]="bloqueio ? 'participante-bloqueio-' + m.id : null"
-                  (change)="mudarSelecaoMembro(m.id, caixaMembro)">{{ m.nome }}</label>
-                @if (bloqueio) { <small class="feedback-membro" [id]="'participante-bloqueio-' + m.id">{{ bloqueio }}</small> }
-              </div>
-            } @empty { <p>Nenhum participante encontrado.</p> }
-          </div>
-        } @else if (!carregandoMembros() && !erroMembros()) {
-          <p>{{ idsPorGrupo().todos.length ? 'Selecione um grupo para ver seus participantes.' : 'Nenhum participante elegível disponível.' }}</p>
-        }
+        <label class="search-label">Buscar participante<input type="search" name="busca" [(ngModel)]="busca" placeholder="Nome do participante"></label>
+        <div class="member-list">
+          @for (m of membrosVisiveis(); track m.id) {
+            @let selecionado = modelo.membros.includes(m.id);
+            @let bloqueio = motivoBloqueioMembro(m.id, !selecionado);
+            <div class="member-option">
+              <label class="check"><input #caixaMembro type="checkbox" [checked]="selecionado" [disabled]="!!bloqueio"
+                [attr.aria-describedby]="bloqueio ? 'participante-bloqueio-' + m.id : null"
+                (change)="mudarSelecaoMembro(m.id, caixaMembro)">{{ m.nome }}</label>
+              @if (bloqueio) { <small class="feedback-membro" [id]="'participante-bloqueio-' + m.id">{{ bloqueio }}</small> }
+            </div>
+          } @empty {
+            @if (!carregandoMembros() && !erroMembros()) { <p>Nenhum participante encontrado.</p> }
+          }
+        </div>
       </fieldset>
       @if (carregandoMembros()) { <p role="status">Carregando participantes…</p> }
       @if (erroMembros()) { <p role="alert">{{ erroMembros() }}</p> @if (acesso.tem('membros.consultar')) { <button type="button" class="secondary" (click)="carregarMembros()">Recarregar participantes</button> } }

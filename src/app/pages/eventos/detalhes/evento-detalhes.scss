@@ -31,9 +31,7 @@ label { display: flex; flex-direction: column; gap: 8px; font-size: 13px; margin
   border: 1px solid var(--theme-border);
   border-radius: 8px;
 }
-.financeiro-cabecalho { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 12px; }
-.financeiro-cabecalho h4 { margin: 0; }
-.financeiro-cabecalho button { color: var(--theme-link); border-color: var(--theme-border); }
+.situacao-financeira h4 { margin: 0 0 12px; }
 .situacao-financeira h5 { color: var(--theme-link); font-size: 14px; font-weight: 600; }
 .financeiro-dados { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 8px 0 12px; }
 .financeiro-dados > div { min-width: 0; max-width: 100%; }

@@ -57,12 +57,13 @@ describe('Eventos: HTTP, consultas e concorrência de navegação', () => {
   beforeEach(() => {
     acesso.tem.mockReturnValue(true);
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(), { provide: PermissoesService, useValue: acesso }] });
+    TestBed.overrideComponent(Eventos, { set: { template: '' } });
     http = TestBed.inject(HttpTestingController);
   });
   afterEach(() => http.verify());
   function pagina() {
     const fixture = TestBed.createComponent(Eventos);
-    fixture.componentInstance.ngOnInit();
+    fixture.detectChanges();
     return fixture.componentInstance;
   }
   it('consulta futuros separadamente, filtra passado e ordena cronologicamente', () => {
@@ -98,6 +99,17 @@ describe('Eventos: HTTP, consultas e concorrência de navegação', () => {
     p.mudarPeriodo({ dataInicial: '2026-11-01', dataFinal: '2026-11-30' }); p.recarregar(); p.selecionarDia('2026-11-19'); p.selecionarEvento('e1');
     http.expectOne('/api/Me/Eventos').flush({ items: [] });
     http.expectNone(r => r.url.endsWith('/Eventos')); expect(p.modal()).toBeNull();
+  });
+  it('trata uma listagem pessoal incompleta como erro e permite nova consulta', () => {
+    acesso.tem.mockReturnValue(false);
+    const p = pagina();
+    http.expectOne('/api/Me/Eventos').flush({});
+    expect(p.erroProximos()).toBeTruthy();
+    expect(p.carregandoProximos()).toBe(false);
+    p.recarregarProximos();
+    http.expectOne('/api/Me/Eventos').flush({ items: [] });
+    expect(p.erroProximos()).toBe('');
+    expect(p.eventosProximos()).toEqual([]);
   });
   it('seleciona pelo ID, abre no segundo clique e não confunde títulos iguais', () => {
     const p = pagina(); http.expectOne(r => r.url.endsWith('/Eventos')).flush(resposta());

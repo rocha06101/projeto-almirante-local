@@ -221,7 +221,7 @@ describe('Detalhes: minha situação financeira', () => {
     id: evento.id, local: evento.local, dataEvento: evento.dataEvento,
     transporte: evento.transporte, alimentacao: evento.alimentacao,
     seguroObrigatorio: evento.seguroObrigatorio, valorPorMembro: evento.valorPorMembro,
-    minhaCobranca: null,
+    minhaCobranca: null, minhasDevolucoes: [],
   };
   const pendente: MinhaDevolucao = { valor: 20, vencimento: '2026-11-20', status: 'Pendente' };
   let http: HttpTestingController;
@@ -290,6 +290,36 @@ describe('Detalhes: minha situação financeira', () => {
     expect(texto(registros[2])).toContain('Valor devolvidoR$ 12,50');
     expect(texto(registros[2])).toContain('19 de novembro de 2026');
     expect(texto(registros[2])).toContain('Valor acordado.');
+  });
+
+  it('preserva devoluções iguais quando o contrato não oferece identificador', () => {
+    abrir();
+    responder({ ...pessoal, minhasDevolucoes: [pendente, pendente] });
+    expect(secao()?.querySelectorAll('.minhas-devolucoes li')).toHaveLength(2);
+  });
+
+  it('mostra a cobrança do contrato antigo e informa que as devoluções estão indisponíveis', () => {
+    abrir();
+    responder({
+      ...pessoal,
+      minhaCobranca: { ...pendente, valor: 35.5 },
+      minhasDevolucoes: undefined,
+    });
+    expect(texto(secao())).toContain('R$ 35,50');
+    expect(texto(secao())).toContain('Informações sobre devoluções indisponíveis.');
+    expect(texto(secao())).not.toContain('Você não tem cobranças ou devoluções');
+  });
+
+  it.each([
+    ['corpo nulo', null],
+    ['cobrança omitida', { ...pessoal, minhaCobranca: undefined }],
+    ['devolução inválida', { ...pessoal, minhasDevolucoes: [{ ...pendente, vencimento: '2026-02-31' }] }],
+  ])('oferece nova tentativa quando a resposta contém %s', (_caso, dados) => {
+    abrir();
+    pedido().flush(dados);
+    fixture.detectChanges();
+    expect(secao()).toBeNull();
+    expect(texto(fixture.nativeElement)).toContain('Tentar novamente a consulta financeira');
   });
 
   it('oculta a situação pessoal para não participantes e mantém o detalhe autorizado', () => {

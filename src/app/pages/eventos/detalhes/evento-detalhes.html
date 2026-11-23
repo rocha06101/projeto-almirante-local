@@ -170,7 +170,12 @@
           }
         </ul>
       }
-      @if (!pessoal.evento.minhaCobranca && !pessoal.evento.minhasDevolucoes?.length) {
+      @if (pessoal.evento.minhasDevolucoes == null) {
+        @if (!pessoal.evento.minhaCobranca) {
+          <p>Você não tem cobrança para este evento.</p>
+        }
+        <p>Informações sobre devoluções indisponíveis.</p>
+      } @else if (!pessoal.evento.minhaCobranca && !pessoal.evento.minhasDevolucoes.length) {
         <p>Você não tem cobranças ou devoluções para este evento.</p>
       }
     </section>

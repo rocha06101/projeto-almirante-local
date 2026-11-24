@@ -1,3 +1,7 @@
+@use '@angular/cdk' as cdk;
+
+@include cdk.overlay();
+
 // A fonte Inter é empacotada (@fontsource-variable/inter, via angular.json) para funcionar
 // offline no PWA e sem depender de CDN de terceiros.
 

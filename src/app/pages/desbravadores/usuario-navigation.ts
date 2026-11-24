@@ -13,3 +13,13 @@ export function readNavigationState(router: Router): UsuarioNavigationState {
   const state = navigation ? navigation.extras.state : typeof history !== 'undefined' ? history.state : null;
   return (state as UsuarioNavigationState | null | undefined) ?? {};
 }
+
+export const isValidSelectedUser = (value: Partial<UserModel>): boolean =>
+  typeof value.id === 'string' &&
+  !!value.id.trim() &&
+  typeof value.nome === 'string' &&
+  !!value.nome.trim() &&
+  typeof value.email === 'string' &&
+  !!value.email.trim() &&
+  typeof (value.cargo?.id ?? value.cargoId) === 'string' &&
+  !!(value.cargo?.id ?? value.cargoId)?.trim();

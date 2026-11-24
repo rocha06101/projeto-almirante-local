@@ -77,7 +77,7 @@ export interface User {
   /** Nome do cargo (ex.: "Diretor"), igual a `cargo.nome`. */
   funcao?: string;
   /** `false` para usuários excluídos logicamente (só aparecem com `includeInactive=true`). */
-  ativo?: boolean;
+  ativo?: boolean | null;
   /** Campo legado retornado por versões anteriores da API. */
   roles?: string;
 }

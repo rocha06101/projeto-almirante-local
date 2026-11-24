@@ -1,0 +1,499 @@
+import { expect, Page, test } from '@playwright/test';
+import { measureOverflow, mockApi } from './support';
+
+const secretaria = 'secretaria.consultar';
+const admin = 'usuarios.consultar';
+const membros = 'membros.consultar';
+const permissoesEdicao = ['usuarios.editar', 'cargos.consultar'];
+const usuario = {
+  id: '00000001-aaaa-bbbb-cccc-dddddddddddd',
+  nome: 'Érica Prado',
+  email: 'erica.prado.albuquerque@clube-desbravadores.example.org',
+  dataCriacao: '2026-03-10T10:00:00Z',
+  funcao: 'Secretária',
+  cargoId: 'c1',
+  ativo: true,
+  fotoUrl: '/api/Usuarios/00000001-aaaa-bbbb-cccc-dddddddddddd/foto',
+};
+const inativo = { ...usuario, id: 'u2', nome: 'Paulo Lima', ativo: false };
+const desconhecido = { ...usuario, id: 'u3', nome: 'Ana Sousa', ativo: null };
+
+async function preparar(page: Page, permissoes: string[]) {
+  await mockApi(page);
+  await page.route('**/api/Me/Permissoes', route => route.fulfill({
+    json: { permissoes, permissoesPorDesignacao: [], versaoAutorizacao: 1 },
+  }));
+  await page.route('**/api/Me/Eventos', route => route.fulfill({
+    json: {
+      items: [{ id: 'e1', titulo: 'Reunião do clube', local: 'Sede', dataEvento: new Date().toISOString().slice(0, 10) }],
+    },
+  }));
+  const consultas: string[] = [];
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (request.method() === 'GET' && /^\/api\/(Usuarios|Membros)(\/|$)/i.test(url.pathname)) {
+      consultas.push(url.pathname + url.search);
+    }
+  });
+  return consultas;
+}
+
+test('Secretaria fica oculta e a URL direta redireciona sem consultar pessoas', async ({ page }) => {
+  const consultas = await preparar(page, [admin, membros]);
+  await page.route('**/api/Me/Permissoes', route => route.fulfill({
+    json: {
+      cargo: { id: 'c2', role: 'MEM', nome: 'Membro' },
+      permissoes: [admin, membros],
+      permissoesPorDesignacao: [],
+      versaoAutorizacao: 1,
+    },
+  }));
+  await page.goto('/secretaria');
+  await expect(page).toHaveURL(/\/perfil$/);
+  await expect(page.getByRole('link', { name: 'Secretaria' })).toHaveCount(0);
+  expect(consultas).toEqual([]);
+});
+
+for (const [role, nome] of [
+  ['ADM', 'Administrador'],
+  ['DIR', 'Diretor'],
+  ['DIRA', 'Diretor Associado'],
+  ['SEC', 'Secretário'],
+]) {
+  test(`${nome} acessa Secretaria pelo menu e pela URL com o cargo retornado pela API`, async ({ page }) => {
+    const consultas = await preparar(page, []);
+    await page.route('**/api/Me/Permissoes', route => route.fulfill({
+      json: {
+        cargo: { id: 'c1', role, nome },
+        permissoes: [],
+        permissoesPorDesignacao: [],
+        versaoAutorizacao: 1,
+      },
+    }));
+    await page.goto('/perfil');
+    const link = page.getByRole('navigation', { name: 'Navegação principal' })
+      .getByRole('link', { name: 'Secretaria' });
+    await expect(link).toBeVisible();
+    await link.click();
+    await expect(page).toHaveURL(/\/secretaria$/);
+    await expect(link).toHaveAttribute('aria-current', 'page');
+    await page.goto('/secretaria');
+    await expect(page.getByRole('heading', { name: 'Secretaria', exact: true })).toBeVisible();
+    await expect(page.getByText('Você não tem permissão para consultar os usuários cadastrados.')).toBeVisible();
+    expect(consultas).toEqual([]);
+  });
+}
+
+test('Secretaria abre pelo menu sem permissão de consultar pessoas', async ({ page }) => {
+  const consultas = await preparar(page, [secretaria]);
+  await page.goto('/perfil');
+  const link = page.getByRole('link', { name: 'Secretaria' });
+  await link.click();
+  await expect(page).toHaveURL(/\/secretaria$/);
+  await expect(link).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByText('Você não tem permissão para consultar os usuários cadastrados.')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Reunião do clube/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Documentos' })).toBeVisible();
+  expect(consultas).toEqual([]);
+});
+
+test('consulta resumida mantém e-mail e status indisponíveis sem consultas individuais', async ({ page }) => {
+  const consultas = await preparar(page, [secretaria, membros, ...permissoesEdicao]);
+  await page.route('**/api/Membros', route => route.fulfill({
+    json: [{ id: 'm1', nome: 'Érica Prado', cargo: 'Secretária', role: 'SEC', email: usuario.email, ativo: false }],
+  }));
+  await page.goto('/secretaria');
+  const linha = page.getByRole('row', { name: /Érica Prado/ });
+  await expect(linha.getByRole('cell')).toHaveText(['—', 'Secretária', 'Indisponível', '—']);
+  expect(consultas).toEqual(['/api/Membros']);
+});
+
+test('troca para o resumo se a permissão administrativa for revogada com a página aberta', async ({ page }) => {
+  await page.clock.install();
+  const consultas = await preparar(page, [secretaria, admin, membros]);
+  await page.route('**/api/Usuarios', route => route.fulfill({ json: [usuario] }));
+  await page.goto('/secretaria');
+  await expect(page.getByText(usuario.email)).toBeVisible();
+  await page.route('**/api/Me/Permissoes', route => route.fulfill({
+    json: { permissoes: [secretaria, membros], permissoesPorDesignacao: [], versaoAutorizacao: 2 },
+  }));
+  await page.clock.fastForward(61_000);
+  await expect(page.getByRole('row', { name: /Membro 1/ })).toBeVisible();
+  await expect(page.getByText(usuario.email)).toHaveCount(0);
+  expect(consultas).toEqual(['/api/Usuarios', '/api/Membros']);
+});
+
+test('consulta administrativa tem prioridade, pesquisa e inclui inativos sob demanda', async ({ page }) => {
+  const consultas = await preparar(page, [secretaria, admin, membros, ...permissoesEdicao]);
+  await page.route(/\/api\/Usuarios(?:\?|$)/, route => route.fulfill({
+    json: new URL(route.request().url()).searchParams.has('includeInactive')
+      ? [usuario, desconhecido, inativo] : [usuario, desconhecido],
+  }));
+  await page.goto('/secretaria');
+  const tabela = page.getByRole('table').filter({ has: page.getByRole('columnheader', { name: 'E-mail' }) });
+  await expect(tabela.getByRole('columnheader')).toHaveText(['Nome', 'E-mail', 'Perfil', 'Status', 'Ações']);
+  await expect(tabela.getByRole('row').nth(1)).toContainText('Ativo');
+  await expect(tabela.getByRole('row').nth(1)).toContainText(usuario.email);
+  await expect(tabela.getByRole('row').nth(2)).toContainText('Indisponível');
+
+  const pesquisa = page.getByRole('searchbox', { name: 'Pesquisar usuários por nome ou perfil' });
+  await pesquisa.fill('erica');
+  await expect(tabela.getByRole('row')).toHaveCount(2);
+  await expect(page.getByText('1 usuário', { exact: true })).toBeVisible();
+  await pesquisa.fill('secretaria');
+  await expect(tabela.getByRole('row')).toHaveCount(3);
+  await pesquisa.fill('sem correspondência');
+  await expect(tabela.getByText('Nenhum usuário corresponde à pesquisa.')).toBeVisible();
+  await pesquisa.clear();
+  await expect(tabela.getByRole('row')).toHaveCount(3);
+  await page.getByLabel('Exibir inativos').check();
+  const linhaInativa = tabela.getByRole('row', { name: /Paulo Lima/ });
+  await expect(linhaInativa).toContainText('Inativo');
+  await expect(linhaInativa.getByRole('button')).toHaveCount(0);
+  expect(consultas).toEqual(['/api/Usuarios', '/api/Usuarios?includeInactive=true']);
+});
+
+test('erro e nova tentativa ficam no painel de usuários e o resultado vazio é distinto', async ({ page }) => {
+  const consultas = await preparar(page, [secretaria, admin]);
+  let totalEventos = 0;
+  page.on('request', request => { if (request.url().endsWith('/api/Me/Eventos')) totalEventos++; });
+  let tentativas = 0;
+  const primeiraResposta = Promise.withResolvers<void>();
+  await page.route('**/api/Usuarios', async route => {
+    if (++tentativas === 1) {
+      await primeiraResposta.promise;
+      return route.fulfill({ status: 500, json: {} });
+    }
+    return route.fulfill({ json: [] });
+  });
+  await page.goto('/secretaria');
+  await expect(page.getByText('Carregando usuários…')).toBeVisible();
+  primeiraResposta.resolve();
+  await expect(page.getByRole('alert')).toContainText('Não foi possível carregar os usuários.');
+  await expect(page.getByText('Nenhum usuário cadastrado.')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Reunião do clube/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Abrir calendário de eventos' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Tentar novamente' }).click();
+  await expect(page.getByText('Nenhum usuário cadastrado.')).toBeVisible();
+  expect(consultas).toEqual(['/api/Usuarios', '/api/Usuarios']);
+  expect(totalEventos).toBe(1);
+});
+
+for (const mode of ['light', 'dark'] as const) {
+  test(`tabela e navegação compacta em ${mode}, incluindo ações por teclado na última linha`, async ({ page }, testInfo) => {
+    const compacto = mode === 'dark';
+    await page.setViewportSize(compacto ? { width: 320, height: 568 } : { width: 1366, height: 900 });
+    await page.addInitScript(theme => localStorage.setItem('app-theme', theme), mode);
+    await preparar(page, [
+      secretaria, admin, membros, 'dashboard.consultar', 'financeiro.tesouraria.consultar',
+      'autorizacao.consultar', 'usuarios.excluir', ...permissoesEdicao,
+    ]);
+    await page.route('**/api/Usuarios', route => route.fulfill({ json: [desconhecido, usuario] }));
+    await page.goto('/secretaria');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', mode);
+    await expect(page.locator('aside.sidebar')).toHaveCount(1);
+    await expect(page.locator('header.topbar')).toHaveCount(1);
+
+    const nav = page.getByRole('navigation', { name: 'Navegação principal' });
+    for (const destino of ['Dashboard', 'Desbravadores', 'Tesouraria', 'Eventos', 'Secretaria', 'Cargos e permissões']) {
+      const link = nav.getByRole('link', { name: destino, exact: true });
+      await expect(link).toBeInViewport();
+    }
+    await expect(nav.getByRole('link', { name: 'Secretaria' })).toHaveAttribute('aria-current', 'page');
+    const tabela = page.getByRole('region', { name: 'Usuários cadastrados' }).filter({ has: page.getByRole('table') }).last();
+    await expect(tabela.getByRole('table')).toBeVisible();
+    expect((await measureOverflow(page)).documentOverflow).toBe(0);
+    await page.screenshot({ path: testInfo.outputPath('secretaria.png'), fullPage: true });
+
+    const acoes = page.getByRole('button', { name: 'Ações para Érica Prado' });
+    await acoes.focus();
+    await page.keyboard.press('Enter');
+    const editar = page.getByRole('menuitem', { name: 'Editar' });
+    await expect(editar).toBeFocused();
+    await expect(editar).toBeInViewport();
+    await page.keyboard.press('Escape');
+    await expect(editar).toHaveCount(0);
+    await expect(acoes).toBeFocused();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('menuitem', { name: 'Excluir' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toContainText('Érica Prado');
+    await dialog.getByRole('button', { name: 'Cancelar' }).click();
+
+    await acoes.focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/desbravadores\/editar$/);
+    await expect(page.locator('app-user-edit .user-summary').getByLabel('Nome', { exact: true })).toHaveValue('Érica Prado');
+  });
+}
+
+test('grade mostra cinco usuários, mantém o cabeçalho fixo e pesquisa em toda a lista', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await preparar(page, [secretaria, admin]);
+  const usuarios = Array.from({ length: 8 }, (_, i) => ({
+    ...usuario,
+    id: `u-${i}`,
+    nome: `Usuário ${i + 1}`,
+    email: i === 2 ? 'endereco.extenso.para.testar.a.quebra.de.linha.na.grade@example.org' : usuario.email,
+  }));
+  await page.route('**/api/Usuarios', route => route.fulfill({ json: usuarios }));
+  await page.goto('/secretaria');
+
+  const tabela = page.getByRole('table').filter({ has: page.getByRole('columnheader', { name: 'E-mail' }) });
+  const area = tabela.locator('..');
+  await expect(tabela.getByRole('row')).toHaveCount(9);
+  const cabeçalho = tabela.getByRole('columnheader', { name: 'Nome' });
+  const quinto = tabela.getByRole('rowheader', { name: 'Usuário 5', exact: true });
+  const sexto = tabela.getByRole('rowheader', { name: 'Usuário 6', exact: true });
+  await expect(quinto).toBeInViewport({ ratio: 0.98 });
+  await expect(sexto).not.toBeInViewport({ ratio: 0.05 });
+
+  await area.focus();
+  await page.keyboard.press('End');
+  await expect(tabela.getByRole('rowheader', { name: 'Usuário 8', exact: true })).toBeInViewport();
+  await expect(cabeçalho).toBeInViewport({ ratio: 0.98 });
+
+  const pesquisa = page.getByRole('searchbox', { name: 'Pesquisar usuários por nome ou perfil' });
+  await pesquisa.fill('Usuario 8');
+  await expect(tabela.getByRole('row')).toHaveCount(2);
+  await pesquisa.clear();
+  await expect(quinto).toBeInViewport({ ratio: 0.98 });
+  await expect(sexto).not.toBeInViewport({ ratio: 0.05 });
+});
+
+test('grade vazia de documentos tem uma pesquisa independente por título', async ({ page }) => {
+  await preparar(page, [secretaria]);
+  await page.goto('/secretaria');
+  const documentos = page.getByRole('table').filter({ has: page.getByRole('columnheader', { name: 'Título' }) });
+  const pesquisa = page.getByRole('searchbox', { name: 'Pesquisar documentos por título' });
+  const criar = page.getByRole('button', { name: '+ Criar documento', exact: true });
+  await expect(criar).toBeVisible();
+  await expect(criar).toBeEnabled();
+  const campo = (await pesquisa.boundingBox())!;
+  const botao = (await criar.boundingBox())!;
+  expect(botao.x).toBeGreaterThanOrEqual(campo.x + campo.width);
+  expect(botao.y).toBeLessThan(campo.y + campo.height);
+  await criar.click();
+  await expect(page).toHaveURL(/\/secretaria$/);
+  await expect(documentos.getByText('Nenhum documento cadastrado.')).toBeVisible();
+  await pesquisa.fill('Ata');
+  await expect(documentos.getByText('Nenhum documento corresponde à pesquisa.')).toBeVisible();
+  await pesquisa.clear();
+  await expect(documentos.getByText('Nenhum documento cadastrado.')).toBeVisible();
+});
+
+test('botão do calendário fica acima dos cards, alinhado à direita, e abre Eventos', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await preparar(page, [secretaria]);
+  await page.goto('/secretaria');
+
+  const secao = page.getByRole('region', { name: 'Eventos e reuniões' });
+  const calendario = secao.getByRole('button', { name: 'Abrir calendário de eventos' });
+  const card = secao.getByRole('button', { name: /Reunião do clube/ });
+  await expect(calendario).toBeVisible();
+  await expect(card).toBeVisible();
+
+  const limite = (await secao.boundingBox())!;
+  const botao = (await calendario.boundingBox())!;
+  expect(Math.abs(botao.x + botao.width - (limite.x + limite.width))).toBeLessThanOrEqual(1);
+  expect(botao.y + botao.height).toBeLessThanOrEqual((await card.boundingBox())!.y);
+
+  await calendario.click();
+  await expect(page).toHaveURL(/\/eventos$/);
+});
+
+test('Eventos e reuniões pagina três cards por vez e trunca título e local longos', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.clock.install();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await preparar(page, [secretaria]);
+  const dataEvento = new Date().toISOString().slice(0, 10);
+  const titulo = 'Reunião com um título extenso para testar o limite horizontal do card no celular';
+  const local = 'Local com um endereço longo para testar que o texto permanece em uma única linha';
+  await page.route('**/api/Me/Eventos', route => route.fulfill({
+    json: {
+      items: Array.from({ length: 5 }, (_, i) => ({
+        id: `e${i + 1}`, titulo: `${titulo} ${i + 1}`, local, dataEvento,
+      })),
+    },
+  }));
+  await page.goto('/secretaria');
+
+  const secao = page.getByRole('region', { name: 'Eventos e reuniões' });
+  const cards = secao.getByRole('button', { name: /Reunião com um título extenso/ });
+  await expect(cards).toHaveCount(3);
+  const paginacao = secao.getByRole('navigation', { name: 'Paginação de próximos eventos' });
+  const anterior = paginacao.getByRole('button', { name: 'Eventos anteriores' });
+  const proximo = paginacao.getByRole('button', { name: 'Mais eventos' });
+  await expect(paginacao).toContainText('1 de 2');
+  await expect(anterior).toBeDisabled();
+  await expect(secao.getByRole('button', { name: 'Abrir calendário de eventos' })).toBeVisible();
+
+  for (const texto of [cards.first().getByText(`${titulo} 1`, { exact: true }), cards.first().getByText(local, { exact: true })]) {
+    await expect(texto).toHaveCSS('white-space', 'nowrap');
+    await expect(texto).toHaveCSS('text-overflow', 'ellipsis');
+    expect(await texto.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+  }
+
+  await proximo.click();
+  await expect(secao.locator('.upcoming-list')).toHaveCount(1);
+  await expect(paginacao).toContainText('2 de 2');
+  await expect(cards).toHaveCount(2);
+  await expect(cards.first().getByText(`${titulo} 4`, { exact: true })).toBeVisible();
+  await expect(proximo).toBeDisabled();
+
+  await anterior.click();
+  await expect(paginacao).toContainText('1 de 2');
+  await expect(cards).toHaveCount(3);
+});
+
+test('Eventos e reuniões avança automaticamente a cada cinco segundos e volta ao início', async ({ page }) => {
+  await preparar(page, [secretaria]);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.clock.install();
+  const dataEvento = new Date().toISOString().slice(0, 10);
+  await page.route('**/api/Me/Eventos', route => route.fulfill({
+    json: {
+      items: Array.from({ length: 5 }, (_, i) => ({
+        id: `e${i + 1}`, titulo: `Evento ${i + 1}`, local: 'Sede', dataEvento,
+      })),
+    },
+  }));
+  await page.goto('/secretaria');
+  const secao = page.getByRole('region', { name: 'Eventos e reuniões' });
+  const navegacao = secao.getByRole('navigation', { name: 'Paginação de próximos eventos' });
+  await expect(navegacao).toContainText('1 de 2');
+  await page.evaluate(() => {
+    document.addEventListener('animationstart', event => {
+      const alvo = event.target as HTMLElement;
+      if (event.animationName.endsWith('card-entrada')) {
+        alvo.dataset['direcaoEntrada'] = getComputedStyle(alvo).getPropertyValue('--direcao').trim();
+      }
+    });
+  });
+
+  await expect(navegacao.getByRole('button')).toHaveCount(2);
+  await page.clock.runFor(4000);
+  await expect(secao.locator('.entrando')).toHaveCount(0);
+  await page.clock.runFor(1000);
+  await expect(navegacao).toContainText('2 de 2');
+  const quarto = secao.getByRole('button', { name: /Evento 4/ });
+  await expect(quarto).toHaveAttribute('data-direcao-entrada', '1');
+
+  await page.clock.runFor(5000);
+  await expect(navegacao).toContainText('1 de 2');
+  await expect(secao.getByRole('button', { name: /Evento 1/ })).toHaveAttribute('data-direcao-entrada', '1');
+
+  await secao.getByRole('button', { name: 'Abrir calendário de eventos' }).focus();
+  await page.clock.runFor(5000);
+  await expect(navegacao).toContainText('1 de 2');
+  await page.getByRole('heading', { name: 'Secretaria', exact: true }).click();
+  await page.clock.runFor(5000);
+  await expect(navegacao).toContainText('2 de 2');
+});
+
+for (const largura of [1366, 390]) {
+  test(`transição direcional dos cards com largura de ${largura}px`, async ({ page }) => {
+    await page.setViewportSize({ width: largura, height: 900 });
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await preparar(page, [secretaria]);
+    const dataEvento = new Date().toISOString().slice(0, 10);
+    await page.route('**/api/Me/Eventos', route => route.fulfill({
+      json: {
+        items: Array.from({ length: 8 }, (_, i) => ({
+          id: `e${i + 1}`, titulo: `Evento ${i + 1}`, local: 'Sede', dataEvento,
+        })),
+      },
+    }));
+    await page.goto('/secretaria');
+    const secao = page.getByRole('region', { name: 'Eventos e reuniões' });
+    const paginacao = secao.getByRole('navigation', { name: 'Paginação de próximos eventos' });
+    const calendario = secao.getByRole('button', { name: 'Abrir calendário de eventos' });
+    await calendario.focus();
+    const cabecalho = secao.getByRole('heading', { name: 'Eventos e reuniões' });
+    const posicoes = async () => Promise.all([paginacao.boundingBox(), calendario.boundingBox(), cabecalho.boundingBox()]);
+    const iniciais = await posicoes();
+
+    for (const [direcao, paginaInicial, destino] of [[1, 1, 2], [1, 2, 3], [-1, 3, 2], [-1, 2, 1]]) {
+      const seta = paginacao.getByRole('button', { name: direcao === 1 ? 'Mais eventos' : 'Eventos anteriores' });
+      // Congela as animações no navegador para inspecionar o início e a sobreposição sem depender da taxa de quadros.
+      await seta.evaluate(botao => {
+        const secao = botao.closest('aside')!;
+        const observar = new MutationObserver(() => {
+          const entrando = secao.querySelector('.entrando');
+          if (!entrando) return;
+          for (const animacao of secao.getAnimations({ subtree: true })) animacao.pause();
+          observar.disconnect();
+        });
+        observar.observe(secao, { childList: true, subtree: true, attributes: true });
+        botao.click();
+      });
+      const saindo = secao.locator('.saindo');
+      const entrando = secao.locator('.entrando');
+      await expect(saindo).toHaveAttribute('inert', '');
+      await expect(saindo).toHaveAttribute('aria-hidden', 'true');
+      await expect(entrando).not.toHaveAttribute('inert');
+      await expect(paginacao).toContainText(`${paginaInicial} de 3`);
+      expect(await posicoes()).toEqual(iniciais);
+
+      await seta.evaluate(botao => { botao.click(); botao.click(); });
+      await expect(secao.locator('.upcoming-list')).toHaveCount(2);
+      const amostra = await secao.locator('.cards-viewport').evaluate(area => {
+        const ler = (lista: string, tempo: number) => Array.from(area.querySelectorAll<HTMLElement>(`${lista} button`)).map(card => {
+          const animacao = card.getAnimations().find(item => item instanceof CSSAnimation)!;
+          animacao.currentTime = tempo;
+          const estilo = getComputedStyle(card);
+          return {
+            coluna: card.offsetLeft,
+            atraso: animacao.effect!.getTiming().delay,
+            duracao: animacao.effect!.getTiming().duration,
+            x: estilo.transform === 'none' ? 0 : new DOMMatrix(estilo.transform).m41,
+            blur: estilo.filter,
+            opacidade: Number(estilo.opacity),
+          };
+        });
+        const saida = ler('.saindo', 30);
+        const entrada = ler('.entrando', 40);
+        const tempoSobreposicao = saida[0].atraso + 190;
+        return {
+          saida, entrada,
+          par: [ler('.saindo', tempoSobreposicao)[0], ler('.entrando', tempoSobreposicao)[0]],
+        };
+      });
+      const quantidadeSaida = paginaInicial === 3 ? 2 : 3;
+      const quantidadeEntrada = destino === 3 ? 2 : 3;
+      const atrasos = Array.from({ length: quantidadeSaida }, (_, i) => 42 * (direcao === 1 ? quantidadeSaida - 1 - i : i));
+      expect(amostra.saida.map(card => card.atraso)).toEqual(atrasos);
+      expect(amostra.saida.every(card => card.duracao === 245)).toBe(true);
+      const primeiro = amostra.saida[direcao === 1 ? quantidadeSaida - 1 : 0];
+      if (largura === 1366) {
+        const colunas = amostra.saida.map(card => card.coluna);
+        expect(new Set(colunas).size).toBe(quantidadeSaida);
+        expect(primeiro.coluna).toBe(direcao === 1 ? Math.max(...colunas) : Math.min(...colunas));
+      }
+      expect(primeiro.x * direcao).toBeGreaterThan(0);
+      expect(primeiro.blur).not.toBe('blur(0px)');
+      expect(primeiro.opacidade).toBeLessThan(1);
+      expect(amostra.saida.filter(card => card.x !== 0)).toHaveLength(1);
+      expect(amostra.entrada).toHaveLength(quantidadeEntrada);
+      expect(amostra.entrada.every(card => card.duracao === 295 && card.opacidade === 0 && card.x === -direcao * 56)).toBe(true);
+      expect(amostra.entrada.slice(0, quantidadeSaida).map(card => card.atraso))
+        .toEqual(atrasos.slice(0, quantidadeEntrada).map(atraso => atraso + 160));
+      const [saindoEmMovimento, entrandoEmMovimento] = amostra.par;
+      expect(saindoEmMovimento.x * direcao).toBeGreaterThan(0);
+      expect(entrandoEmMovimento.x * direcao).toBeLessThan(0);
+      expect(amostra.par.every(card => card.opacidade > 0 && card.opacidade < 1)).toBe(true);
+      expect((await measureOverflow(page)).documentOverflow).toBe(0);
+
+      await secao.locator('.cards-viewport').evaluate(area => {
+        for (const animacao of area.getAnimations({ subtree: true })) animacao.finish();
+      });
+      await expect(paginacao).toContainText(`${destino} de 3`);
+      await expect(secao.locator('.upcoming-list')).toHaveCount(1);
+      expect(await posicoes()).toEqual(iniciais);
+    }
+  });
+}

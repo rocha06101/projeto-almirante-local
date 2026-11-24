@@ -276,7 +276,7 @@ test('grade vazia de documentos tem uma pesquisa independente por título', asyn
   const botao = (await criar.boundingBox())!;
   expect(botao.x).toBeGreaterThanOrEqual(campo.x + campo.width);
   expect(botao.y).toBeLessThan(campo.y + campo.height);
-  await criar.click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page).toHaveURL(/\/secretaria$/);
   await expect(documentos.getByText('Nenhum documento cadastrado.')).toBeVisible();
   await pesquisa.fill('Ata');
@@ -495,5 +495,510 @@ for (const largura of [1366, 390]) {
       await expect(secao.locator('.upcoming-list')).toHaveCount(1);
       expect(await posicoes()).toEqual(iniciais);
     }
+  });
+}
+
+const consultarDocumentos = 'secretaria.documentos.consultar';
+const criarDocumentos = 'secretaria.documentos.criar';
+const editarDocumentos = 'secretaria.documentos.editar';
+const importacao = '**/api/Secretaria/Documentos/Importacao';
+const acervo = /\/api\/Secretaria\/Documentos(?:\?|$)/;
+const botaoCriar = (page: Page) => page.getByRole('button', { name: '+ Criar documento', exact: true });
+const modalCriar = (page: Page) => page.getByRole('dialog', { name: 'Criar documento' });
+const amostra = (extensao: string) => ({
+  name: 'Original.' + extensao, mimeType: 'application/octet-stream', buffer: Buffer.from('fixture'),
+});
+
+for (const tema of ['light', 'dark']) {
+  test(`fechamento pelo fundo restaura o foco e limpa os campos em ${tema}`, async ({ page }) => {
+    await page.addInitScript(valor => localStorage.setItem('app-theme', valor), tema);
+    await preparar(page, [secretaria, criarDocumentos]);
+    await page.goto('/secretaria');
+
+    const abrir = botaoCriar(page);
+    const modal = modalCriar(page);
+    await abrir.click();
+    const tipo = modal.getByRole('combobox', { name: 'Tipo de documento' });
+    const nome = modal.getByLabel('Nome do documento');
+    await tipo.selectOption('Ata');
+    await nome.fill('Documento a descartar');
+
+    const painel = modal.locator('.painel');
+    const area = (await painel.boundingBox())!;
+    await page.mouse.click(area.x + 8, area.y + 24);
+    await expect(modal).toBeVisible();
+    await expect(nome).toHaveValue('Documento a descartar');
+
+    await page.mouse.click(4, 4);
+    await expect(modal).toHaveCount(0);
+    await expect(abrir).toBeFocused();
+    await abrir.press('Enter');
+    await expect(tipo).toHaveValue('');
+    await expect(nome).toHaveValue('');
+    await expect(modal.getByRole('radio', { name: 'Enviar documento pronto' })).toBeChecked();
+    await page.keyboard.press('Escape');
+    await expect(modal).toHaveCount(0);
+    await expect(abrir).toBeFocused();
+  });
+
+  test(`grade vazia abre um único modal por mouse e teclado sem permissão de criação em ${tema}`, async ({ page }) => {
+    await page.addInitScript(valor => localStorage.setItem('app-theme', valor), tema);
+    await preparar(page, [secretaria, consultarDocumentos]);
+    const operacoes: string[] = [];
+    await page.route(acervo, route => {
+      if (route.request().method() === 'GET') return route.fulfill({ json: { items: [], total: 0 } });
+      operacoes.push(route.request().method());
+      return route.fulfill({ status: 403 });
+    });
+    await page.route(importacao, route => {
+      operacoes.push('importação');
+      return route.fulfill({ status: 403 });
+    });
+    await page.goto('/secretaria');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', tema);
+    await expect(page.getByText('Nenhum documento cadastrado.')).toBeVisible();
+
+    const abrir = botaoCriar(page);
+    const modal = modalCriar(page);
+    await expect(abrir).toBeEnabled();
+    await abrir.click();
+    await expect(modal).toBeVisible();
+    await modal.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(modal).toHaveCount(0);
+    await expect(abrir).toBeFocused();
+
+    await page.keyboard.press('Enter');
+    await expect(modal).toBeVisible();
+    await expect(page.locator('app-modal')).toHaveCount(1);
+    expect(operacoes).toEqual([]);
+
+    await modal.getByLabel('Tipo de documento').selectOption('Ata');
+    await modal.locator('input[type=file]').setInputFiles(amostra('pdf'));
+    await expect(modal.getByLabel('Nome do documento')).toHaveValue('Original.pdf');
+    await modal.getByRole('button', { name: 'Criar documento', exact: true }).click();
+    await expect(modal.getByRole('alert')).toHaveText('Você não tem permissão para criar documentos.');
+    expect(operacoes).toEqual([]);
+  });
+
+  for (const largura of [320, 1366]) {
+    test(`modal de documentos em ${tema}, ${largura}px, com foco e controles acessíveis`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width: largura, height: largura === 320 ? 480 : 900 });
+      await page.addInitScript(valor => localStorage.setItem('app-theme', valor), tema);
+      await preparar(page, [secretaria, criarDocumentos]);
+      await page.goto('/secretaria');
+
+      const abrir = botaoCriar(page);
+      if (largura === 320) await abrir.press('Enter');
+      else await abrir.click();
+      const modal = modalCriar(page);
+      await expect(modal).toBeVisible();
+      await expect(modal.getByLabel('Tipo de documento')).toBeFocused();
+      expect(await modal.evaluate(el => el.matches(':modal'))).toBe(true);
+      await expect(modal.locator('.painel')).toHaveCSS('background-color', tema === 'dark' ? 'rgb(31, 41, 55)' : 'rgb(255, 255, 255)');
+      await testInfo.attach('modal', { body: await modal.locator('.painel').screenshot(), contentType: 'image/png' });
+      const enviar = modal.getByRole('button', { name: 'Criar documento', exact: true });
+      await enviar.scrollIntoViewIfNeeded();
+      await expect(enviar).toBeInViewport();
+      await expect(modal.getByRole('button', { name: 'Cancelar' })).toBeInViewport();
+
+      for (let i = 0; i < 9; i++) {
+        await page.keyboard.press('Tab');
+        expect(await modal.evaluate(el => el.contains(document.activeElement))).toBe(true);
+      }
+      const pronto = modal.getByRole('radio', { name: 'Enviar documento pronto' });
+      await pronto.press('ArrowDown');
+      await expect(modal.getByRole('radio', { name: 'Usar como template' })).toBeChecked();
+      await expect(modal.getByLabel('Nome do documento')).toHaveCount(0);
+      await page.keyboard.press('Escape');
+      await expect(modal).toHaveCount(0);
+      await expect(abrir).toBeFocused();
+    });
+  }
+}
+
+for (const formato of ['docx', 'xlsx', 'pdf']) {
+  test(`importa e reabre ${formato} editável usando o ID retornado`, async ({ page }) => {
+    await preparar(page, [secretaria, consultarDocumentos, criarDocumentos, editarDocumentos]);
+    const tipo = 'Autorização de saída';
+    const titulo = 'Novo título escrito';
+    const markdown = '# Editável';
+    const registro = { id: 'doc-real', versao: 'rev-1', tipo, titulo, markdown };
+    const chamadas: string[] = [];
+    let gravado = false;
+    await page.route(acervo, route => {
+      if (route.request().method() === 'GET') {
+        chamadas.push('listar');
+        return route.fulfill({ json: { items: gravado ? [registro] : [], total: Number(gravado) } });
+      }
+      chamadas.push('salvar');
+      expect(route.request().postDataJSON()).toEqual({ tipo, titulo, markdown });
+      expect(route.request().headers()['idempotency-key']).toBeTruthy();
+      gravado = true;
+      return route.fulfill({ status: 201, json: { id: registro.id, versao: registro.versao } });
+    });
+    await page.route(importacao, route => {
+      chamadas.push('importar');
+      expect(route.request().headers()['content-type']).toMatch(/^multipart\/form-data; boundary=/);
+      expect(route.request().postData()).toContain('name="modo"\r\n\r\ndocumento');
+      expect(route.request().postData()).toContain(`filename="Original.${formato}"`);
+      return route.fulfill({ json: { modo: 'documento', markdown, avisos: formato === 'pdf' ? ['Revise o OCR da página 1.'] : [] } });
+    });
+    let edicoes = 0;
+    await page.route('**/api/Secretaria/Documentos/doc-real', route => {
+      if (route.request().method() === 'GET') return route.fulfill({ json: registro });
+      expect(route.request().method()).toBe('PUT');
+      expect(route.request().postDataJSON()).toEqual({ titulo, tipo, markdown: '# Revisado', versao: 'rev-1' });
+      edicoes++;
+      return route.fulfill({ json: { versao: 'rev-2' } });
+    });
+
+    await page.goto('/secretaria');
+    await botaoCriar(page).click();
+    const modal = modalCriar(page);
+    await modal.getByLabel('Tipo de documento').selectOption(tipo);
+    await modal.locator('input[type=file]').setInputFiles(amostra(formato));
+    const nome = modal.getByLabel('Nome do documento');
+    await expect(nome).toHaveValue('Original.' + formato);
+    await expect(modal.getByText('Original.' + formato, { exact: true })).toHaveCount(0);
+    const upload = (await modal.locator('.upload').boundingBox())!;
+    const nomeCampo = (await nome.boundingBox())!;
+    expect(nomeCampo.y).toBeGreaterThan(upload.y + upload.height);
+    const remover = (await modal.getByRole('button', { name: 'Remover arquivo' }).boundingBox())!;
+    const cancelar = (await modal.getByRole('button', { name: 'Cancelar' }).boundingBox())!;
+    expect(remover.x + remover.width).toBeLessThan(cancelar.x);
+    await nome.fill(titulo);
+    await modal.getByLabel('Tipo de documento').focus();
+    await expect(nome).toHaveValue(titulo);
+    await modal.getByRole('button', { name: 'Criar documento', exact: true }).click();
+    await expect(modal).toHaveCount(0);
+    if (formato === 'pdf') await expect(page.getByText('Revise o OCR da página 1.')).toBeVisible();
+    const editar = page.getByRole('link', { name: 'Editar ' + titulo });
+    await expect(editar).toBeVisible();
+    expect(chamadas).toEqual(['listar', 'importar', 'salvar', 'listar']);
+    await editar.click();
+    await expect(page).toHaveURL(/\/doc-real\/editar$/);
+    const editor = page.getByLabel('Conteúdo Markdown');
+    await expect(editor).toHaveValue(markdown);
+    if (formato === 'pdf') {
+      await editor.fill('# Revisado');
+      await page.getByRole('button', { name: 'Salvar documento' }).click();
+      await expect(page).toHaveURL(/\/secretaria$/);
+      expect(edicoes).toBe(1);
+      expect(chamadas.filter(chamada => chamada === 'salvar')).toHaveLength(1);
+    }
+  });
+
+  test(`abre ${formato} como template e grava somente no primeiro Salvar`, async ({ page }) => {
+    await preparar(page, [secretaria, criarDocumentos]);
+    const estrutura = '# Ata\n\nData: {{data}}';
+    const tipo = 'Modelo de reunião regional';
+    let gravacoes = 0;
+    await page.route(importacao, route => {
+      expect(route.request().postData()).toContain('name="modo"\r\n\r\ntemplate');
+      return route.fulfill({ json: { modo: 'template', markdown: estrutura, avisos: [] } });
+    });
+    await page.route(acervo, route => {
+      gravacoes++;
+      expect(route.request().postDataJSON()).toEqual({ titulo: 'Ata nova', tipo, markdown: estrutura });
+      return route.fulfill({ status: 201, json: { id: 'novo', versao: 'rev-1' } });
+    });
+    await page.goto('/secretaria');
+    const abrirTemplate = async () => {
+      await botaoCriar(page).click();
+      const modal = modalCriar(page);
+      await modal.getByRole('radio', { name: 'Usar como template' }).check();
+      await modal.getByRole('textbox', { name: 'Tipo de documento' }).fill(`  ${tipo}  `);
+      await modal.locator('input[type=file]').setInputFiles(amostra(formato));
+      await modal.getByRole('button', { name: 'Criar documento', exact: true }).click();
+      await expect(page).toHaveURL(/\/documentos\/novo$/);
+      await expect(page.getByLabel('Nome do documento')).toHaveValue('Novo documento');
+      await expect(page.getByLabel('Conteúdo Markdown')).toHaveValue(estrutura);
+      await expect(page.getByLabel('Tipo de documento')).toHaveValue(tipo);
+    };
+    await abrirTemplate();
+    await page.getByRole('link', { name: 'Voltar à Secretaria' }).click();
+    await expect(botaoCriar(page)).toBeVisible();
+    expect(gravacoes).toBe(0);
+    await abrirTemplate();
+    await page.getByLabel('Nome do documento').fill('Ata nova');
+    await page.getByRole('button', { name: 'Salvar documento' }).click();
+    await expect(page).toHaveURL(/\/secretaria$/);
+    expect(gravacoes).toBe(1);
+  });
+}
+
+test('valida tipo, arquivo ausente, ilegível, formato, tamanho e extensão no drop', async ({ page }) => {
+  await preparar(page, [secretaria, criarDocumentos]);
+  await page.goto('/secretaria');
+  await botaoCriar(page).click();
+  const modal = modalCriar(page);
+  const tipo = modal.getByLabel('Tipo de documento');
+  const seletor = modal.locator('input[type=file]');
+  await modal.getByRole('button', { name: 'Criar documento', exact: true }).click();
+  await expect(tipo).toHaveAttribute('aria-invalid', 'true');
+  await expect(modal.getByText('Selecione um arquivo.', { exact: true })).toBeVisible();
+  await seletor.setInputFiles({ ...amostra('pdf'), buffer: Buffer.alloc(0) });
+  await expect(modal.getByText('Não foi possível ler o arquivo.')).toBeVisible();
+  await seletor.setInputFiles({ ...amostra('pdf'), buffer: Buffer.alloc(1_000_001) });
+  await expect(modal.getByText('O arquivo excede o limite de 1 MB.')).toBeVisible();
+  await modal.locator('.upload').evaluate(el => {
+    const dados = new DataTransfer();
+    dados.items.add(new File(['inválido'], 'ata.txt'));
+    el.dispatchEvent(new DragEvent('drop', { dataTransfer: dados, bubbles: true }));
+  });
+  await expect(modal.getByText('Selecione um arquivo DOCX, XLSX ou PDF.')).toBeVisible();
+  await modal.locator('.upload').evaluate(el => {
+    const dados = new DataTransfer();
+    dados.items.add(new File(['a'], 'ata.pdf'));
+    dados.items.add(new File(['b'], 'ata.docx'));
+    el.dispatchEvent(new DragEvent('drop', { dataTransfer: dados, bubbles: true }));
+  });
+  await expect(modal.getByText('Selecione somente um arquivo.')).toBeVisible();
+});
+
+test('preserva a chave, o conteúdo e o título após perda da resposta e bloqueia envio duplicado', async ({ page }) => {
+  await preparar(page, [secretaria, consultarDocumentos, criarDocumentos]);
+  const primeiraGravacao = Promise.withResolvers<void>();
+  const liberarErro = Promise.withResolvers<void>();
+  const registros = new Map<string, { id: string; versao: string; titulo: string }>();
+  let conversoes = 0;
+  let gravacoes = 0;
+  await page.route(importacao, route => {
+    conversoes++;
+    return route.fulfill({ json: { modo: 'documento', markdown: '# Ata', avisos: [] } });
+  });
+  await page.route(acervo, async route => {
+    if (route.request().method() === 'GET') {
+      return route.fulfill({ json: { items: [...registros.values()], total: registros.size } });
+    }
+    const chave = route.request().headers()['idempotency-key'];
+    const { titulo } = route.request().postDataJSON();
+    if (!registros.has(chave)) registros.set(chave, { id: `doc-${registros.size}`, versao: '1', titulo });
+    gravacoes++;
+    if (gravacoes === 1) {
+      primeiraGravacao.resolve();
+      await liberarErro.promise;
+      return route.abort('failed');
+    }
+    return route.fulfill({ json: registros.get(chave) });
+  });
+  await page.goto('/secretaria');
+  await botaoCriar(page).click();
+  const modal = modalCriar(page);
+  await modal.getByLabel('Tipo de documento').selectOption('Ata');
+  await modal.locator('input[type=file]').setInputFiles(amostra('docx'));
+  await expect(modal.getByLabel('Nome do documento')).toHaveValue('Original.docx');
+  await modal.getByLabel('Nome do documento').fill('Ata revisada');
+  const enviar = modal.getByRole('button', { name: 'Criar documento', exact: true });
+  await enviar.click();
+  await primeiraGravacao.promise;
+  await expect(enviar).toBeDisabled();
+  await page.locator('.criar-documento-form').evaluate(el => el.dispatchEvent(new Event('submit', { cancelable: true })));
+  liberarErro.resolve();
+  await expect(modal.getByRole('alert')).toHaveText('Não foi possível salvar o documento. Tente novamente.');
+  await expect(modal.getByLabel('Nome do documento')).toHaveValue('Ata revisada');
+  await enviar.click();
+  await expect(page.getByRole('rowheader', { name: 'Ata revisada' })).toHaveCount(1);
+  expect([conversoes, gravacoes, registros.size]).toEqual([1, 2, 1]);
+});
+
+test('trocar para template durante importação descarta a resposta antiga', async ({ page }) => {
+  await preparar(page, [secretaria, criarDocumentos]);
+  const iniciou = Promise.withResolvers<void>();
+  const responder = Promise.withResolvers<void>();
+  let gravacoes = 0;
+  await page.route(acervo, route => {
+    gravacoes++;
+    return route.fulfill({ status: 500 });
+  });
+  await page.route(importacao, async route => {
+    if (route.request().postData()?.includes('name="modo"\r\n\r\ndocumento')) {
+      iniciou.resolve();
+      await responder.promise;
+      return route.fulfill({ json: { modo: 'documento', markdown: 'Dados preenchidos', avisos: ['Aviso antigo'] } });
+    }
+    return route.fulfill({ json: { modo: 'template', markdown: '# Estrutura', avisos: [] } });
+  });
+  await page.goto('/secretaria');
+  await botaoCriar(page).click();
+  const modal = modalCriar(page);
+  await modal.getByLabel('Tipo de documento').selectOption('Ata');
+  await modal.locator('input[type=file]').setInputFiles(amostra('pdf'));
+  const enviar = modal.getByRole('button', { name: 'Criar documento', exact: true });
+  await enviar.click();
+  await iniciou.promise;
+  await modal.getByRole('radio', { name: 'Usar como template' }).check();
+  responder.resolve();
+  await expect(modal.getByLabel('Nome do documento')).toHaveCount(0);
+  await modal.getByRole('textbox', { name: 'Tipo de documento' }).fill('Ata');
+  await enviar.click();
+  await expect(page.getByLabel('Conteúdo Markdown')).toHaveValue('# Estrutura');
+  await expect(page.getByText('Aviso antigo')).toHaveCount(0);
+  expect(gravacoes).toBe(0);
+});
+
+test('erro de leitura da API fica associado ao arquivo e mantém os dados para tentar novamente', async ({ page }) => {
+  await preparar(page, [secretaria, criarDocumentos]);
+  await page.route(importacao, route => route.fulfill({ status: 422, json: { title: 'Arquivo ilegível' } }));
+  await page.goto('/secretaria');
+  await botaoCriar(page).click();
+  const modal = modalCriar(page);
+  await modal.getByLabel('Tipo de documento').selectOption('Ata');
+  const arquivo = modal.locator('input[type=file]');
+  await arquivo.setInputFiles(amostra('pdf'));
+  await modal.getByRole('button', { name: 'Criar documento', exact: true }).click();
+  await expect(arquivo).toHaveAttribute('aria-invalid', 'true');
+  await expect(modal.getByRole('alert')).toContainText('Não foi possível ler o arquivo.');
+  await expect(modal.getByLabel('Tipo de documento')).toHaveValue('Ata');
+  await expect(modal.getByLabel('Nome do documento')).toHaveValue('Original.pdf');
+  await expect(modal.getByRole('button', { name: 'Criar documento', exact: true })).toBeEnabled();
+});
+
+for (const acao of ['Cancelar', 'Remover arquivo'] as const) {
+  test(`${acao} durante conversão impede que a resposta inicie a gravação`, async ({ page }) => {
+    await preparar(page, [secretaria, criarDocumentos]);
+    const iniciou = Promise.withResolvers<void>();
+    const responder = Promise.withResolvers<void>();
+    const respondeu = Promise.withResolvers<void>();
+    let gravacoes = 0;
+    await page.route(acervo, route => {
+      gravacoes++;
+      return route.fulfill({ status: 500 });
+    });
+    await page.route(importacao, async route => {
+      iniciou.resolve();
+      await responder.promise;
+      try {
+        await route.fulfill({ json: { modo: 'documento', markdown: '# Ata', avisos: [] } });
+      } finally {
+        respondeu.resolve();
+      }
+    });
+    await page.goto('/secretaria');
+    await botaoCriar(page).click();
+    const modal = modalCriar(page);
+    await modal.getByLabel('Tipo de documento').selectOption('Ata');
+    await modal.locator('input[type=file]').setInputFiles(amostra('pdf'));
+    await modal.getByRole('button', { name: 'Criar documento', exact: true }).click();
+    await iniciou.promise;
+    await modal.getByRole('button', { name: acao, exact: true }).click();
+    responder.resolve();
+    await respondeu.promise;
+    if (acao === 'Cancelar') {
+      await expect(modal).toHaveCount(0);
+      await expect(botaoCriar(page)).toBeFocused();
+    } else {
+      await expect(modal).toBeVisible();
+      await expect(modal.getByLabel('Nome do documento')).toHaveValue('');
+    }
+    await expect(page.getByText('Documento criado.', { exact: true })).toHaveCount(0);
+    expect(gravacoes).toBe(0);
+  });
+}
+
+test('trocar o modo limpa o tipo e grava somente a opção escolhida no select', async ({ page }) => {
+  await preparar(page, [secretaria, criarDocumentos]);
+  const tiposGravados: string[] = [];
+  let importacoes = 0;
+  await page.route(importacao, route => {
+    importacoes++;
+    expect(route.request().postData()).toContain('name="modo"\r\n\r\ndocumento');
+    return route.fulfill({ json: { modo: 'documento', markdown: '# Documento', avisos: [] } });
+  });
+  await page.route(acervo, route => {
+    tiposGravados.push(route.request().postDataJSON().tipo);
+    return route.fulfill({ status: 201, json: { id: 'doc', versao: '1' } });
+  });
+  await page.goto('/secretaria');
+  await botaoCriar(page).click();
+
+  const modal = modalCriar(page);
+  const seletor = modal.getByRole('combobox', { name: 'Tipo de documento' });
+  const campoLivre = modal.getByRole('textbox', { name: 'Tipo de documento' });
+  const erroTipo = modal.getByText('Informe o tipo de documento.');
+  const enviar = modal.getByRole('button', { name: 'Criar documento', exact: true });
+  await expect(seletor).toHaveValue('');
+  await expect(seletor.getByRole('option')).toHaveText([
+    'Selecione o tipo de documento',
+    'Ata',
+    'Autorização de saída',
+    'Ficha de cadastro',
+  ]);
+  await seletor.selectOption('Ata');
+  await modal.locator('input[type=file]').setInputFiles(amostra('docx'));
+
+  await modal.getByRole('radio', { name: 'Usar como template' }).check();
+  await expect(seletor).toHaveCount(0);
+  await expect(campoLivre).toHaveAttribute('placeholder', 'Ex.: Ata');
+  await expect(campoLivre).toHaveValue('');
+  await expect(erroTipo).toHaveCount(0);
+  await campoLivre.fill('   ');
+  await enviar.click();
+  await expect(campoLivre).toHaveAttribute('aria-invalid', 'true');
+  await expect(erroTipo).toBeVisible();
+  await campoLivre.fill('Modelo personalizado');
+
+  await modal.getByRole('radio', { name: 'Enviar documento pronto' }).check();
+  await expect(campoLivre).toHaveCount(0);
+  await expect(seletor).toHaveValue('');
+  await expect(seletor.locator('option:checked')).toHaveText('Selecione o tipo de documento');
+  await expect(erroTipo).toHaveCount(0);
+  await enviar.click();
+  await expect(erroTipo).toBeVisible();
+  expect(importacoes).toBe(0);
+
+  await seletor.selectOption('Ficha de cadastro');
+  await enviar.click();
+  await expect(modal).toHaveCount(0);
+  expect(importacoes).toBe(1);
+  expect(tiposGravados).toEqual(['Ficha de cadastro']);
+});
+
+for (const modo of ['documento', 'template'] as const) {
+  test(`fechar e reabrir descarta a importação pendente no modo ${modo}`, async ({ page }) => {
+    await preparar(page, [secretaria, criarDocumentos]);
+    const iniciou = Promise.withResolvers<void>();
+    const liberarResposta = Promise.withResolvers<void>();
+    const respondeu = Promise.withResolvers<void>();
+    let gravacoes = 0;
+    await page.route(importacao, async route => {
+      iniciou.resolve();
+      await liberarResposta.promise;
+      try {
+        await route.fulfill({ json: { modo, markdown: '# Antigo', avisos: ['Aviso antigo'] } });
+      } finally {
+        respondeu.resolve();
+      }
+    });
+    await page.route(acervo, route => {
+      gravacoes++;
+      return route.fulfill({ status: 201, json: { id: 'doc-antigo', versao: '1' } });
+    });
+    await page.goto('/secretaria');
+    const abrir = botaoCriar(page);
+    const modal = modalCriar(page);
+    await abrir.click();
+    if (modo === 'template') {
+      await modal.getByRole('radio', { name: 'Usar como template' }).check();
+      await modal.getByRole('textbox', { name: 'Tipo de documento' }).fill('Tipo anterior');
+    } else {
+      await modal.getByRole('combobox', { name: 'Tipo de documento' }).selectOption('Ata');
+    }
+    await modal.locator('input[type=file]').setInputFiles(amostra('docx'));
+    await modal.getByRole('button', { name: 'Criar documento', exact: true }).click();
+    await iniciou.promise;
+
+    await page.mouse.click(4, 4);
+    await expect(modal).toHaveCount(0);
+    await abrir.press('Enter');
+    await expect(modal).toBeVisible();
+    liberarResposta.resolve();
+    await respondeu.promise;
+
+    await expect(page).toHaveURL(/\/secretaria$/);
+    await expect(modal.getByRole('combobox', { name: 'Tipo de documento' })).toHaveValue('');
+    await expect(modal.getByText('Original.docx')).toHaveCount(0);
+    await expect(page.getByText('Aviso antigo')).toHaveCount(0);
+    expect(gravacoes).toBe(0);
   });
 }

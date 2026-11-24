@@ -1,0 +1,21 @@
+:host { display: block; color: var(--theme-text); }
+a { color: var(--theme-link); }
+h1 { margin-block: 1rem; }
+
+form {
+  display: grid;
+  gap: 0.625rem;
+}
+
+input, textarea {
+  width: 100%;
+  min-height: var(--tap-target);
+  padding: 0.75rem;
+  border: 1px solid var(--theme-control-border);
+  border-radius: 0.5rem;
+  background: var(--theme-surface);
+  color: var(--theme-text);
+}
+
+textarea { font-family: monospace; }
+.erro { color: var(--error); }

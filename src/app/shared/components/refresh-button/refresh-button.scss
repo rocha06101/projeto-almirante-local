@@ -25,6 +25,8 @@
 
   &:disabled {
     cursor: not-allowed;
-    opacity: 0.65;
+    background: var(--refresh-disabled-background, #2563eb);
+    color: var(--refresh-disabled-color, #fff);
+    opacity: var(--refresh-disabled-opacity, 0.65);
   }
 }

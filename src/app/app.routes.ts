@@ -87,6 +87,18 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/secretaria/secretaria').then(m => m.Secretaria),
       },
       {
+        path: 'secretaria/documentos/novo',
+        canActivate: [permissaoGuard],
+        data: { permissao: 'secretaria.consultar', exige: ['secretaria.documentos.criar'] },
+        loadComponent: () => import('./pages/secretaria/documento-editor').then(m => m.DocumentoEditor),
+      },
+      {
+        path: 'secretaria/documentos/:id/editar',
+        canActivate: [permissaoGuard],
+        data: { permissao: 'secretaria.consultar', exige: ['secretaria.documentos.consultar', 'secretaria.documentos.editar'] },
+        loadComponent: () => import('./pages/secretaria/documento-editor').then(m => m.DocumentoEditor),
+      },
+      {
         path: 'eventos',
         loadComponent: () => import('./pages/eventos/eventos').then(m => m.Eventos),
       },

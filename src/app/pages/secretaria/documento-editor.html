@@ -1,0 +1,18 @@
+<a routerLink="/secretaria">Voltar à Secretaria</a>
+<h1>Editor Markdown</h1>
+@if (carregando()) {
+  <p role="status">Carregando documento…</p>
+}
+@if (erro()) {
+  <p class="erro" role="alert">{{ erro() }}</p>
+}
+<form (submit)="$event.preventDefault(); salvar()">
+  <label for="editor-titulo">Nome do documento</label>
+  <input id="editor-titulo" required [value]="titulo()" (input)="titulo.set($any($event.target).value)">
+  <label for="editor-tipo">Tipo de documento</label>
+  <input id="editor-tipo" required [value]="tipo()" (input)="tipo.set($any($event.target).value)">
+  <label for="editor-markdown">Conteúdo Markdown</label>
+  <textarea id="editor-markdown" required rows="14" [value]="markdown()"
+    (input)="markdown.set($any($event.target).value)"></textarea>
+  <app-refresh-button type="submit" [disabled]="carregando() || salvando()">Salvar documento</app-refresh-button>
+</form>

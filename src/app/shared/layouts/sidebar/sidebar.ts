@@ -23,8 +23,7 @@ export class SidebarComponent {
 
   readonly expanded = model(true);
 
-  // Somente destinos com página. Novos itens (Atividades, Relatórios…) entram aqui quando existirem;
-  // a barra inferior do celular comporta até 5.
+  // Somente destinos com página.
   private readonly todosOsItens: MenuItem[] = [
     {
       label: 'Dashboard',
@@ -49,6 +48,12 @@ export class SidebarComponent {
       label: 'Eventos',
       icon: 'clipboard',
       route: '/eventos',
+    },
+    {
+      label: 'Secretaria',
+      icon: 'folder',
+      route: '/secretaria',
+      permissoes: ['secretaria.consultar'],
     },
     {
       label: 'Cargos e permissões',

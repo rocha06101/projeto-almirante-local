@@ -35,7 +35,7 @@ export default defineConfig({
   projects: [
     {
       name: 'layout',
-      testMatch: /(responsive|shell)\.spec\.ts/,
+      testMatch: /(responsive|shell|secretaria)\.spec\.ts/,
       use: { baseURL: 'https://localhost:4201' },
     },
     {

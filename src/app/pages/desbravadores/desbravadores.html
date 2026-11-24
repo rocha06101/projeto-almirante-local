@@ -13,7 +13,7 @@
           <input
             type="checkbox"
             [checked]="includeInactive()"
-            [disabled]="isLoading()"
+            [disabled]="isLoading() || isDeleting()"
             (change)="alternarInativos($event)"
           >
           Exibir inativos
@@ -27,10 +27,9 @@
     </div>
   </header>
 
-  @let podeEditar = permissoes.tem('usuarios.editar') &&
-    permissoes.tem('usuarios.consultar') && permissoes.tem('cargos.consultar');
-  @let podeExcluir = permissoes.tem('usuarios.excluir');
-  @let exibeAcoes = podeEditar || podeExcluir;
+  @let mostraEdicao = temPermissaoEdicao();
+  @let mostraExclusao = permissoes.tem('usuarios.excluir');
+  @let exibeAcoes = mostraEdicao || mostraExclusao;
 
   @if (isLoading()) {
     <div class="state-card">
@@ -113,13 +112,13 @@
                   </div>
                 </td>
                 <td role="cell" data-label="Cargo/Função">
-                  <span class="role-pill">{{ usuario.cargo?.nome ?? usuario.funcao ?? usuario.roles }}</span>
+                  <span class="role-pill">{{ perfil(usuario) }}</span>
                 </td>
                 @if (exibeAcoes) {
                   <td class="cell-actions" role="cell" data-label="Ações">
-                    @if (usuario.ativo !== false) {
+                    @if (podeEditar(usuario) || podeExcluir(usuario)) {
                       <div class="row-actions">
-                        @if (podeEditar) {
+                        @if (podeEditar(usuario)) {
                           <button
                             type="button"
                             class="action-button"
@@ -129,7 +128,7 @@
                             Editar
                           </button>
                         }
-                        @if (podeExcluir) {
+                        @if (podeExcluir(usuario)) {
                           <button
                             type="button"
                             class="action-button danger"
@@ -154,38 +153,12 @@
   }
 
   @if (usuarioParaExcluir(); as usuario) {
-    <div class="modal-backdrop" (click)="cancelarExclusao()" (keydown.escape)="cancelarExclusao()">
-      <div
-        class="modal-card"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="delete-user-title"
-        aria-describedby="delete-user-text"
-        cdkTrapFocus
-        [cdkTrapFocusAutoCapture]="true"
-        (click)="$event.stopPropagation()"
-      >
-        <div class="modal-header">
-          <h3 id="delete-user-title">Excluir usuário</h3>
-          <button type="button" class="close-button" aria-label="Fechar modal" [disabled]="isDeleting()" (click)="cancelarExclusao()">×</button>
-        </div>
-
-        <p class="delete-text" id="delete-user-text">
-          Deseja realmente excluir o usuário <strong>{{ usuario.nome }}</strong> ({{ usuario.email }})?
-          Ele deixará de acessar o sistema e passará a aparecer somente entre os inativos.
-        </p>
-
-        @if (deleteError()) {
-          <p class="form-error" role="alert">{{ deleteError() }}</p>
-        }
-
-        <div class="modal-actions">
-          <button type="button" class="secondary-button" [disabled]="isDeleting()" (click)="cancelarExclusao()">Cancelar</button>
-          <button type="button" class="danger-button" [disabled]="isDeleting()" (click)="confirmarExclusao()">
-            {{ isDeleting() ? 'Excluindo…' : 'Excluir' }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <app-excluir-usuario-dialog
+      [usuario]="usuario"
+      [isDeleting]="isDeleting()"
+      [deleteError]="deleteError()"
+      (cancelar)="cancelarExclusao()"
+      (confirmar)="confirmarExclusao()"
+    />
   }
 </section>

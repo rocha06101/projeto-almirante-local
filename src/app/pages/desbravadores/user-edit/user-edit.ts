@@ -43,19 +43,8 @@ import { RefreshButton } from '../../../shared/components/refresh-button/refresh
 import { cpfValidator } from '../../../shared/validators/cpf.validator';
 import { apiDateToForm, formDateToApi, isValidFormDate } from '../../../shared/utils/profile-form';
 import { onlyDigits } from '../../../shared/utils/masks';
-import { readNavigationState } from '../usuario-navigation';
+import { isValidSelectedUser, readNavigationState } from '../usuario-navigation';
 import { describeUsuarioError, usuarioFieldErrors } from '../usuarios-api-errors';
-
-const isValidSelectedUser = (value: UserModel | undefined): value is UserModel =>
-  !!value &&
-  typeof value.id === 'string' &&
-  !!value.id.trim() &&
-  typeof value.nome === 'string' &&
-  !!value.nome.trim() &&
-  typeof value.email === 'string' &&
-  !!value.email.trim() &&
-  typeof (value.cargo?.id ?? value.cargoId) === 'string' &&
-  !!(value.cargo?.id ?? value.cargoId)?.trim();
 
 type CepFeedbackStatus = 'neutral' | 'loading' | 'success' | 'error';
 
@@ -146,7 +135,7 @@ export class UserEdit implements OnDestroy {
 
   constructor() {
     const candidate = readNavigationState(this.router).usuario;
-    if (isValidSelectedUser(candidate)) {
+    if (candidate && isValidSelectedUser(candidate)) {
       this.usuario.set(candidate);
       this.isLoaded.set(true);
       this.setRgValidators();

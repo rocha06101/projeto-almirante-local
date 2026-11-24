@@ -1,0 +1,33 @@
+<div class="modal-backdrop" (click)="cancelar.emit()" (keydown.escape)="cancelar.emit()">
+  <div
+    class="modal-card"
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="delete-user-title"
+    aria-describedby="delete-user-text"
+    cdkTrapFocus
+    [cdkTrapFocusAutoCapture]="true"
+    (click)="$event.stopPropagation()"
+  >
+    <div class="modal-header">
+      <h3 id="delete-user-title">Excluir usuário</h3>
+      <button type="button" class="close-button" aria-label="Fechar modal" [disabled]="isDeleting()" (click)="cancelar.emit()">×</button>
+    </div>
+
+    <p class="delete-text" id="delete-user-text">
+      Deseja realmente excluir o usuário <strong>{{ usuario().nome }}</strong> @if (usuario().email) { ({{ usuario().email }}) }?
+      Ele deixará de acessar o sistema e passará a aparecer somente entre os inativos.
+    </p>
+
+    @if (deleteError()) {
+      <p class="form-error" role="alert">{{ deleteError() }}</p>
+    }
+
+    <div class="modal-actions">
+      <button type="button" class="secondary-button" [disabled]="isDeleting()" (click)="cancelar.emit()">Cancelar</button>
+      <button type="button" class="danger-button" [disabled]="isDeleting()" (click)="confirmar.emit()">
+        {{ isDeleting() ? 'Excluindo…' : 'Excluir' }}
+      </button>
+    </div>
+  </div>
+</div>

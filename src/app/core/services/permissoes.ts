@@ -4,6 +4,8 @@ import { Observable, Subject, catchError, defaultIfEmpty, finalize, map, of, sha
 import { MinhasPermissoes } from '../models/permissoes.model';
 import { ApiService } from './api';
 
+const CARGOS_COM_ACESSO_A_SECRETARIA = new Set(['ADM', 'DIR', 'DIRA', 'SEC']);
+
 type ResultadoAtualizacao =
   | { tipo: 'validado'; permissoes: MinhasPermissoes }
   | { tipo: 'falha'; erro: unknown }
@@ -54,7 +56,12 @@ export class PermissoesService {
   }
 
   tem(permissao: string): boolean {
-    return this.chaves().has(permissao);
+    if (this.chaves().has(permissao)) return true;
+
+    // O backend atual ainda não publica secretaria.consultar. O cargo validado
+    // pela API libera somente a página, sem conceder permissões de listagem ou escrita.
+    const role = this.cargo()?.role;
+    return permissao === 'secretaria.consultar' && !!role && CARGOS_COM_ACESSO_A_SECRETARIA.has(role);
   }
 
   limpar(): void {

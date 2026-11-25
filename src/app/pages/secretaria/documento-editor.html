@@ -4,7 +4,10 @@
 @if (erro()) {
   <p class="erro" role="alert">{{ erro() }}</p>
 }
-<form (submit)="$event.preventDefault(); salvar()">
+<form
+  [class.editor-sem-previa]="!previaVisivel()"
+  (submit)="$event.preventDefault(); salvar()"
+>
   <header class="editor-cabecalho">
   <div class="editor-identificacao">
     <a
@@ -37,8 +40,20 @@
   </div>
 
   <div class="editor-acoes" role="group" aria-label="Ações do documento">
-   <button class="editor-acao-secundaria" type="button" disabled>
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+<button
+  class="editor-acao-secundaria"
+  type="button"
+  [attr.aria-pressed]="previaVisivel()"
+  aria-controls="painel-previa-documento"
+  (click)="alternarPrevia()"
+>
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    aria-hidden="true"
+  >
     <path
       fill-rule="evenodd"
       d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
@@ -48,6 +63,20 @@
 </button>
 
 <button class="editor-acao-secundaria" type="button" disabled>
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M12 3v12m-5-5 5 5 5-5" />
+    <path d="M4 16v4h16v-4" />
+  </svg>
   Exportar
 </button>
 
@@ -59,24 +88,41 @@
  
  <div class="editor-area">
   <div class="editor-ferramentas" role="group" aria-label="Formatação Markdown">
-  <button type="button" disabled aria-label="Título" title="Título">H</button>
-  <button type="button" disabled aria-label="Negrito" title="Negrito">
+  <button
+  type="button"
+  aria-label="Título"
+  title="Título"
+  (click)="aplicarTitulo(campoMarkdown)"
+>
+  H
+</button>
+  <button 
+  type="button" 
+  aria-label="Negrito" 
+  title="Negrito"
+  (click)="aplicarEnfase(campoMarkdown, '**')"
+  >
     <strong>B</strong>
   </button>
-  <button type="button" disabled aria-label="Itálico" title="Itálico">
-    <em>I</em>
-  </button>
-  <button type="button" disabled aria-label="Lista com marcadores" title="Lista com marcadores">
+ <button
+  type="button"
+  aria-label="Itálico"
+  title="Itálico"
+  (click)="aplicarEnfase(campoMarkdown, '*')"
+>
+  <em>I</em>
+</button>
+  <button type="button" (click)="aplicarLista(campoMarkdown, 'marcadores')" aria-label="Lista com marcadores" title="Lista com marcadores">
   <span aria-hidden="true">• ≡</span>
 </button>
 
-<button type="button" disabled aria-label="Lista numerada" title="Lista numerada">
+<button type="button" (click)="aplicarLista(campoMarkdown, 'numerada')" aria-label="Lista numerada" title="Lista numerada">
   <span aria-hidden="true">1. ≡</span>
 </button>
 
-  <button type="button" disabled>Citação</button>
-  <button type="button" disabled>Código</button>
-  <button type="button" disabled>Link</button>
+  <button type="button" (click)="aplicarCitacao(campoMarkdown)">Citação</button>
+  <button type="button" (click)="aplicarBlocoCodigo(campoMarkdown)">Código</button>
+  <button type="button" (click)="inserirLink(campoMarkdown)">Link</button>
   <span class="editor-formato">Markdown (.md)</span>
 </div>
   <div class="editor-paineis">
@@ -84,23 +130,38 @@
   <div class="editor-painel">
     <label for="editor-markdown">Editor Markdown</label>
     
-    <textarea
-      id="editor-markdown"
-      required
-      rows="14"
-      [value]="markdown()"
-      (input)="markdown.set($any($event.target).value)"
-    ></textarea>
+    <div class="editor-escrita">
+  <div #numeracao class="editor-numeracao" aria-hidden="true">
+    @for (linha of linhasMarkdown(); track $index) {
+      <div>{{ $index + 1 }}</div>
+    }
   </div>
 
-  <section class="editor-painel" aria-labelledby="editor-previa-titulo">
-    <h2 id="editor-previa-titulo">Pré vizualização</h2>
-    <div class="editor-previa"></div>
+  <textarea
+    #campoMarkdown
+    id="editor-markdown"
+    required
+    rows="14"
+    wrap="off"
+    [value]="markdown()"
+    (input)="markdown.set(campoMarkdown.value)"
+    (scroll)="numeracao.scrollTop = campoMarkdown.scrollTop"
+  ></textarea>
+</div>
+  </div>
+
+  <section
+    id="painel-previa-documento"
+    class="editor-painel"
+    aria-labelledby="editor-previa-titulo"
+  >
+    <h2 id="editor-previa-titulo">Pré-visualização</h2>
+    <div #painelPrevia class="editor-previa" [innerHTML]="previaHtml()"></div>
   </section>
 </div>
 <footer class="editor-rodape">
   <span>Formato: Markdown</span>
-  <span>Linhas: {{ markdown().split('\n').length }}</span>
+  <span>Linhas: {{ linhasMarkdown().length }}</span>
 
   @if (salvando()) {
     <span class="editor-estado" role="status">Salvando…</span>

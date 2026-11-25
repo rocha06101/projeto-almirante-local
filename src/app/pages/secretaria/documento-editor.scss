@@ -233,6 +233,32 @@ textarea { font-family: monospace; }
   background-color: transparent;
 }
 
+.editor-escrita {
+  display: grid;
+  grid-template-columns: 5ch minmax(0, 1fr);
+  min-width: 0;
+}
+
+.editor-escrita textarea,
+.editor-numeracao {
+  font-family: monospace;
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  padding-block: 0.75rem;
+}
+
+.editor-numeracao {
+  box-sizing: border-box;
+  height: 0;
+  min-height: 100%;
+  overflow: hidden;
+  padding-inline-end: 0.5rem;
+  border-inline-end: 1px solid var(--theme-control-border);
+  color: var(--theme-text);
+  text-align: end;
+  user-select: none;
+}
+
 .editor-acao-secundaria {
   min-height: var(--tap-target);
   padding-inline: 1rem;
@@ -272,4 +298,34 @@ gap: 0.5rem;
   width: 11rem;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+.editor-previa {
+  table {
+    border-collapse: collapse;
+    margin-block: 0.75rem;
+  }
+
+  th,
+  td {
+    border: 1px solid var(--theme-control-border);
+    padding: 0.5rem 0.75rem;
+    vertical-align: top;
+  }
+
+  th {
+    font-weight: 600;
+  }
+}
+
+.editor-sem-previa .editor-paineis {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.editor-sem-previa #painel-previa-documento {
+  display: none;
+}
+
+.editor-acao-secundaria[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 1px currentColor;
 }

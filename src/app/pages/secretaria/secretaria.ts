@@ -141,6 +141,10 @@ export class Secretaria extends UsuariosListagem implements OnInit {
 
   enviar(): void {
     if (!this.criandoDocumento() || this.etapa()) return;
+    if (this.modo() === null) {
+  this.abrirTemplate({ tipo: this.tipo().trim(), markdown: '' });
+  return;
+}
     this.tentouEnviar.set(true);
     this.erro.set('');
     if (!this.verificarPermissao()) return;

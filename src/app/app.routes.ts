@@ -89,7 +89,7 @@ export const routes: Routes = [
       {
         path: 'secretaria/documentos/novo',
         canActivate: [permissaoGuard],
-        data: { permissao: 'secretaria.consultar', exige: ['secretaria.documentos.criar'] },
+        data: { permissao: 'secretaria.consultar' },
         loadComponent: () => import('./pages/secretaria/documento-editor').then(m => m.DocumentoEditor),
       },
       {

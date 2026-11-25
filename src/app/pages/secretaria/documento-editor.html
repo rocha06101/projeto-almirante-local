@@ -25,7 +25,7 @@
       [value]="titulo()"
       (input)="titulo.set($any($event.target).value)"
     >
-    <div class="editor-tipo">
+    <div class="editor-tipo"> 
   <label for="editor-tipo">Tipo de documento</label>
   <input
     id="editor-tipo"
@@ -38,6 +38,12 @@
 
   <div class="editor-acoes" role="group" aria-label="Ações do documento">
    <button class="editor-acao-secundaria" type="button" disabled>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path
+      fill-rule="evenodd"
+      d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+    />
+  </svg>
   Visualizar
 </button>
 
@@ -60,7 +66,14 @@
   <button type="button" disabled aria-label="Itálico" title="Itálico">
     <em>I</em>
   </button>
-  <button type="button" disabled>Lista</button>
+  <button type="button" disabled aria-label="Lista com marcadores" title="Lista com marcadores">
+  <span aria-hidden="true">• ≡</span>
+</button>
+
+<button type="button" disabled aria-label="Lista numerada" title="Lista numerada">
+  <span aria-hidden="true">1. ≡</span>
+</button>
+
   <button type="button" disabled>Citação</button>
   <button type="button" disabled>Código</button>
   <button type="button" disabled>Link</button>

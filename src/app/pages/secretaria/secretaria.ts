@@ -35,7 +35,7 @@ export class Secretaria extends UsuariosListagem implements OnInit {
   private readonly chaves = new Map<string, string>();
 
   readonly criandoDocumento = signal(false);
-  readonly modo = signal<ModoImportacao>('documento');
+  readonly modo = signal<ModoImportacao | null>(null);
   readonly tiposDocumento = ['Ata', 'Autorização de saída', 'Ficha de cadastro'];
   readonly tipo = signal('');
   readonly titulo = signal('');
@@ -92,7 +92,7 @@ export class Secretaria extends UsuariosListagem implements OnInit {
 
   fecharCriacao(): void {
     this.remover();
-    this.modo.set('documento');
+    this.modo.set(null);
     this.tipo.set('');
     this.tentouEnviar.set(false);
     this.arrastando.set(false);
@@ -109,8 +109,8 @@ export class Secretaria extends UsuariosListagem implements OnInit {
     void this.router.navigate(['/secretaria/documentos/novo'], { info: template });
   }
 
-  trocarModo(modo: ModoImportacao): void {
-    if (this.modo() === modo) return;
+  trocarModo(opcao: ModoImportacao): void {
+    const modo =this.modo() === opcao ? null : opcao;
     this.invalidar();
     this.tipo.set('');
     this.modo.set(modo);
@@ -147,6 +147,11 @@ export class Secretaria extends UsuariosListagem implements OnInit {
 
     const arquivo = this.arquivo();
     const modo = this.modo();
+    if (modo === null) {
+      this.abrirTemplate({ tipo: this.tipo().trim(), markdown: '' });
+      return;
+    }
+    
     const tipo = this.tipo().trim();
     const titulo = this.titulo().trim();
     if (!arquivo && !this.erroArquivo()) this.erroArquivo.set('Selecione um arquivo.');

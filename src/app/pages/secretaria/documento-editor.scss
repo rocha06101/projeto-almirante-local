@@ -19,3 +19,253 @@ input, textarea {
 
 textarea { font-family: monospace; }
 .erro { color: var(--error); }
+
+.editor-paineis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.editor-painel {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+.editor-painel h2 {
+  margin: 0;
+  font: inherit;
+}
+
+.editor-painel textarea,
+.editor-previa {
+  box-sizing: border-box;
+  min-height: 20rem;
+}
+
+.editor-painel textarea {
+  resize: vertical;
+}
+
+.editor-previa {
+  padding: 0.75rem;
+  border: 1px solid var(--theme-control-border);
+  border-radius: 0.5rem;
+  background: var(--theme-surface);
+  color: var(--theme-text);
+}
+
+@media (max-width: 48rem) {
+  .editor-paineis {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.editor-ferramentas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem;
+  border: 1px solid var(--theme-control-border);
+  border-radius: 0.5rem;
+  background: var(--theme-surface);
+}
+
+.editor-ferramentas button {
+  min-width: var(--tap-target);
+  min-height: var(--tap-target);
+  padding-inline: 0.625rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--theme-text);
+  font: inherit;
+}
+
+.editor-ferramentas button:disabled {
+  opacity: 0.65;
+}
+
+.editor-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.editor-cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--theme-control-border);
+  background: var(--theme-surface);
+}
+
+.editor-identificacao {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.editor-voltar {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: var(--tap-target);
+  height: var(--tap-target);
+  border: 1px solid var(--theme-control-border);
+  border-radius: 0.5rem;
+  color: var(--theme-text);
+  text-decoration: none;
+}
+
+.editor-nome {
+  width: 18rem;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.editor-formato {
+  margin-inline-start: auto;
+  padding-inline: 0.5rem;
+  color: var(--theme-text);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.editor-area {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--theme-control-border);
+  border-radius: 0.5rem;
+  background: var(--theme-surface);
+}
+
+.editor-area .editor-ferramentas {
+  border: 0;
+  border-bottom: 1px solid var(--theme-control-border);
+  border-radius: 0;
+}
+
+.editor-area .editor-paineis,
+.editor-area .editor-painel {
+  gap: 0;
+}
+
+.editor-painel + .editor-painel {
+  border-inline-start: 1px solid var(--theme-control-border);
+}
+
+.editor-painel > label,
+.editor-painel > h2 {
+  margin: 0;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--theme-control-border);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.editor-area textarea,
+.editor-area .editor-previa {
+  border: 0;
+  border-radius: 0;
+}
+
+.editor-area textarea:focus-visible {
+  outline: 2px solid var(--theme-link);
+  outline-offset: -2px;
+}
+
+@media (max-width: 48rem) {
+  .editor-painel + .editor-painel {
+    border-inline-start: 0;
+    border-top: 1px solid var(--theme-control-border);
+  }
+}
+
+.editor-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  padding: 0.375rem 0.875rem;
+  border-top: 1px solid var(--theme-control-border);
+  background: var(--theme-surface);
+  color: var(--theme-text);
+  font-size: 0.75rem;
+}
+
+.editor-estado {
+  margin-inline-start: auto;
+}
+
+@media (min-width: 48.01rem) {
+  .editor-area {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    min-height: 68dvh;
+  }
+}
+
+.editor-area {
+  background-color: transparent;
+}
+
+.editor-area .editor-ferramentas,
+.editor-area .editor-painel > label,
+.editor-area .editor-painel > h2,
+.editor-area .editor-previa,
+.editor-area .editor-rodape {
+  background-color: var(--theme-surface);
+}
+
+.editor-area #editor-markdown {
+  background-color: transparent;
+}
+
+.editor-acao-secundaria {
+  min-height: var(--tap-target);
+  padding-inline: 1rem;
+  border: 1px solid var(--theme-link);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--theme-link);
+  font: inherit;
+  font-weight: 600;
+}
+
+.editor-acao-secundaria:disabled {
+  opacity: 0.65;
+}
+
+.editor-identificacao {
+  flex-wrap: wrap;
+}
+
+.editor-tipo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+
+.editor-tipo label {
+  font-size: 0.875rem;
+}
+
+.editor-tipo input {
+  width: 11rem;
+  max-width: 100%;
+  box-sizing: border-box;
+}

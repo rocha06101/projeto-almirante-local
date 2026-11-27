@@ -332,7 +332,7 @@ gap: 0.5rem;
   }
 }
 
-.confirmacao-saida-mensagem {
+.confirmacao-mensagem {
   margin: 0;
   padding: 0.75rem;
   border-radius: 0.5rem;
@@ -340,14 +340,14 @@ gap: 0.5rem;
   color: var(--theme-warning-text);
 }
 
-.confirmacao-saida-acoes {
+.confirmacao-acoes {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.5rem;
 }
 
-.confirmacao-saida-acoes button {
+.confirmacao-acoes button {
   min-height: var(--tap-target);
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--theme-control-border);
@@ -357,7 +357,7 @@ gap: 0.5rem;
   font-weight: 600;
 }
 
-.confirmacao-saida-acoes .confirmacao-saida-sair {
+.confirmacao-acoes .confirmacao-perigo {
   border-color: var(--theme-warning-text);
   background: var(--theme-warning-surface);
   color: var(--theme-warning-text);

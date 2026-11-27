@@ -11,6 +11,7 @@ import { Modal } from '../../shared/components/modal/modal';
 import { RefreshButton } from '../../shared/components/refresh-button/refresh-button';
 import { DocumentoExportacao } from './documento-exportacao';
 import { DocumentoMarkdown } from './documento-markdown';
+import { RascunhoDocumentoInicial, modeloDocumento } from './modelos-documento';
 
 class TransicaoDocumentoCriado {
   constructor(
@@ -35,6 +36,7 @@ export class DocumentoEditor {
   private readonly campoMarkdown = viewChild<ElementRef<HTMLTextAreaElement>>('campoMarkdown');
   private transicao?: TransicaoDocumentoCriado;
   private consultaFormatos?: Subscription;
+  private modeloAplicado?: string;
   readonly id = signal(this.rota.snapshot.paramMap.get('id'));
   private versao = '';
   private tentativa?: { payload: string; chave: string };
@@ -44,7 +46,7 @@ export class DocumentoEditor {
   readonly tiposDocumento = TIPOS_DOCUMENTO;
   readonly tipoForaDaLista = computed(() => {
     const tipo = this.tipo();
-    return TIPOS_DOCUMENTO.includes(tipo) ? '' : tipo;
+    return TIPOS_DOCUMENTO.some(opcao => opcao === tipo) ? '' : tipo;
   });
   readonly markdown = signal('');
   readonly previaVisivel = signal(true);
@@ -54,12 +56,14 @@ export class DocumentoEditor {
   }
 
   readonly linhasMarkdown = computed(() => this.markdown().split('\n'));
+  readonly totalCaracteres = computed(() => Array.from(this.markdown()).length);
   readonly carregando = signal(!!this.id());
   readonly salvando = signal(false);
   readonly documentoConfirmado = signal(false);
   readonly podeEditar = computed(() => !this.carregando() && (!this.id() || this.documentoConfirmado()));
   readonly erro = signal('');
   readonly confirmacaoSaida = signal<((sair: boolean) => void) | null>(null);
+  readonly trocaTipoPendente = signal<Pick<ConteudoDocumento, 'tipo' | 'markdown'> | null>(null);
 
   readonly formatos = signal<FormatoExportacao[] | undefined>(undefined);
   readonly carregandoFormatos = signal(false);
@@ -91,11 +95,17 @@ export class DocumentoEditor {
         this.versao = '';
         this.documentoConfirmado.set(false);
         this.carregando.set(!!id);
+        this.modeloAplicado = undefined;
+        this.trocaTipoPendente.set(null);
 
         if (!id) {
-          const template = info as Pick<ConteudoDocumento, 'tipo' | 'markdown'> | undefined;
-          this.tipo.set(template?.tipo ?? '');
-          this.markdown.set(template?.markdown ?? '');
+          const rascunho = info as RascunhoDocumentoInicial | undefined;
+          this.preencher({
+            titulo: rascunho?.titulo ?? '',
+            tipo: rascunho?.tipo ?? '',
+            markdown: rascunho?.markdown ?? '',
+          });
+          if (rascunho?.modeloFixo) this.modeloAplicado = rascunho.markdown;
           return EMPTY;
         }
 
@@ -125,6 +135,40 @@ export class DocumentoEditor {
       this.preencher(documento);
       this.confirmar(documento);
     });
+  }
+
+  trocarTipo(seletor: HTMLSelectElement): void {
+    const tipo = seletor.value;
+    if (tipo === this.tipo()) return;
+
+    const modelo = modeloDocumento(tipo);
+    const markdown = this.markdown();
+    if (modelo === undefined || modelo === markdown) {
+      this.tipo.set(tipo);
+      this.modeloAplicado = undefined;
+      return;
+    }
+
+    const modeloIntacto = !this.id() && markdown === this.modeloAplicado;
+    if (!markdown || modeloIntacto) {
+      this.aplicarModelo(tipo, modelo);
+      return;
+    }
+
+    seletor.value = this.tipo();
+    this.trocaTipoPendente.set({ tipo, markdown: modelo });
+  }
+
+  responderTrocaTipo(confirmar: boolean): void {
+    const troca = this.trocaTipoPendente();
+    if (confirmar && troca) this.aplicarModelo(troca.tipo, troca.markdown);
+    this.trocaTipoPendente.set(null);
+  }
+
+  private aplicarModelo(tipo: string, markdown: string): void {
+    this.tipo.set(tipo);
+    this.markdown.set(markdown);
+    this.modeloAplicado = markdown;
   }
 
   private conteudoAtual(): ConteudoDocumento {

@@ -7,7 +7,7 @@ export type ModoImportacao = 'documento' | 'template';
 
 export type FormatoExportacao = 'pdf' | 'md' | 'docx' | 'xlsx';
 
-export const TIPOS_DOCUMENTO: readonly string[] = ['Ata', 'Autorização de saída', 'Ficha de cadastro'];
+export const TIPOS_DOCUMENTO = ['Ata', 'Autorização de saída', 'Ficha de cadastro'] as const;
 
 export interface DocumentoListagem {
   id: string;

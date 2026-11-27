@@ -33,7 +33,7 @@
       <label for="editor-tipo">Tipo de documento</label>
       <select #seletorTipo id="editor-tipo" required
         [disabled]="!podeEditar()"
-        (change)="tipo.set(seletorTipo.value)">
+        (change)="trocarTipo(seletorTipo)">
         <option value="" [selected]="!tipo()" disabled>Selecione o tipo de documento</option>
         @for (opcao of tiposDocumento; track opcao) {
           <option [value]="opcao" [selected]="opcao === tipo()">{{ opcao }}</option>
@@ -178,7 +178,7 @@
 </div>
 <footer class="editor-rodape">
   <span>Formato: Markdown</span>
-  <span>Linhas: {{ linhasMarkdown().length }}</span>
+  <span>Caracteres: {{ totalCaracteres() }}</span>
 
 <span class="editor-estado" role="status">
   @if (salvando()) {
@@ -196,12 +196,25 @@
 
 @if (confirmacaoSaida(); as responder) {
   <app-modal titulo="Sair sem salvar?" descricaoId="editor-confirmacao-saida-mensagem" [dispensavel]="false">
-    <p id="editor-confirmacao-saida-mensagem" class="confirmacao-saida-mensagem">
+    <p id="editor-confirmacao-saida-mensagem" class="confirmacao-mensagem">
       Você tem alterações não salvas neste documento. Se sair agora, elas serão perdidas.
     </p>
-    <div modal-acoes class="confirmacao-saida-acoes">
+    <div modal-acoes class="confirmacao-acoes">
       <button type="button" autofocus (click)="responder(false)">Continuar editando</button>
-      <button type="button" class="confirmacao-saida-sair" (click)="responder(true)">Sair sem salvar</button>
+      <button type="button" class="confirmacao-perigo" (click)="responder(true)">Sair sem salvar</button>
+    </div>
+  </app-modal>
+}
+
+@if (trocaTipoPendente(); as troca) {
+  <app-modal titulo="Substituir o conteúdo do documento?" descricaoId="editor-confirmacao-tipo-mensagem"
+    (fechar)="responderTrocaTipo(false)">
+    <p id="editor-confirmacao-tipo-mensagem" class="confirmacao-mensagem">
+      Ao trocar para {{ troca.tipo }}, o modelo substituirá o conteúdo atual do documento.
+    </p>
+    <div modal-acoes class="confirmacao-acoes">
+      <button type="button" autofocus (click)="responderTrocaTipo(false)">Cancelar</button>
+      <button type="button" class="confirmacao-perigo" (click)="responderTrocaTipo(true)">Substituir conteúdo</button>
     </div>
   </app-modal>
 }

@@ -7,7 +7,7 @@ import { EventoCalendarioItem } from '../../core/models/evento.model';
 import { EventosService } from '../../core/services/eventos';
 import { RouterLink } from '@angular/router';
 import {
-  ConteudoDocumento, DocumentoListagem, DocumentosService, LIMITE_ARQUIVO_DOCUMENTO,
+  DocumentoListagem, DocumentosService, LIMITE_ARQUIVO_DOCUMENTO,
   ModoImportacao, TIPOS_DOCUMENTO, erroImportacaoDocumento,
 } from '../../core/services/documentos';
 import { Modal } from '../../shared/components/modal/modal';
@@ -19,6 +19,7 @@ import { dataCivil, erroEvento, somarDias } from '../eventos/eventos.utils';
 import { ProximosEventos } from '../eventos/proximos/proximos-eventos';
 import { DocumentoExportacao } from './documento-exportacao';
 import { GradeRolavel } from './grade-rolavel';
+import { RascunhoDocumentoInicial, modeloDocumento } from './modelos-documento';
 
 @Component({
   selector: 'app-secretaria',
@@ -39,6 +40,7 @@ export class Secretaria extends UsuariosListagem implements OnInit {
   readonly modo = signal<ModoImportacao | null>(null);
   readonly tiposDocumento = TIPOS_DOCUMENTO;
   readonly tipo = signal('');
+  readonly tipoPersonalizado = signal(false);
   readonly titulo = signal('');
   readonly arquivo = signal<File | null>(null);
   readonly etapa = signal<'leitura' | 'importacao' | 'gravacao' | null>(null);
@@ -47,6 +49,17 @@ export class Secretaria extends UsuariosListagem implements OnInit {
   readonly erroArquivo = signal('');
   readonly tentouEnviar = signal(false);
   readonly arrastando = signal(false);
+  private readonly modeloSelecionado = computed(() => modeloDocumento(this.tipo().trim()));
+  readonly arquivoObrigatorio = computed(() => this.modo() === 'template' || (
+    this.modo() === 'documento' && (!!this.arquivo() || this.modeloSelecionado() === undefined)
+  ));
+  readonly nomeObrigatorio = computed(() => this.modo() === 'documento' && !!this.arquivo());
+  readonly tipoInvalido = computed(() => this.tentouEnviar() && !!this.modo() && !this.tipo().trim());
+  readonly nomeInvalido = computed(() => this.tentouEnviar() && this.nomeObrigatorio() && !this.titulo().trim());
+  readonly mensagemArquivo = computed(() => this.erroArquivo() || (
+    this.tentouEnviar() && this.arquivoObrigatorio() && !this.arquivo() && !this.etapa()
+      ? 'Selecione um arquivo.' : ''
+  ));
 
 
   readonly carregandoDocumentos = signal(false);
@@ -78,6 +91,7 @@ export class Secretaria extends UsuariosListagem implements OnInit {
     this.remover();
     this.modo.set(null);
     this.tipo.set('');
+    this.tipoPersonalizado.set(false);
     this.tentouEnviar.set(false);
     this.arrastando.set(false);
     this.criandoDocumento.set(false);
@@ -88,19 +102,25 @@ export class Secretaria extends UsuariosListagem implements OnInit {
     this.carregarDocumentos(documento);
   }
 
-  private abrirTemplate(template: Pick<ConteudoDocumento, 'tipo' | 'markdown'>): void {
+  private abrirTemplate(template: RascunhoDocumentoInicial): void {
     this.fecharCriacao();
     void this.router.navigate(['/secretaria/documentos/novo'], { info: template });
   }
 
   trocarModo(opcao: ModoImportacao): void {
-    const modo =this.modo() === opcao ? null : opcao;
+    const modo = this.modo() === opcao ? null : opcao;
     this.invalidar();
     this.tipo.set('');
+    this.tipoPersonalizado.set(false);
     this.modo.set(modo);
     if (this.arquivo()) this.erroArquivo.set('');
     this.titulo.set(modo === 'documento' ? this.arquivo()?.name ?? '' : '');
     this.tentouEnviar.set(false);
+  }
+
+  selecionarTipo(valor: string): void {
+    this.tipoPersonalizado.set(valor === 'personalizado');
+    this.tipo.set(this.tipoPersonalizado() ? '' : valor);
   }
 
   selecionar(input: HTMLInputElement): void {
@@ -130,14 +150,14 @@ export class Secretaria extends UsuariosListagem implements OnInit {
 
     const arquivo = this.arquivo();
     const modo = this.modo();
-    if (!modo) {
-      this.abrirTemplate({ tipo: this.tipo().trim(), markdown: '' });
-      return;
-    }
-
     const tipo = this.tipo().trim();
     const titulo = this.titulo().trim();
-    if (!arquivo && !this.erroArquivo()) this.erroArquivo.set('Selecione um arquivo.');
+    const modelo = this.modeloSelecionado();
+    if (!arquivo && this.erroArquivo()) return;
+    if (!modo || (modo === 'documento' && !arquivo && modelo !== undefined)) {
+      this.abrirTemplate({ tipo, titulo, markdown: modelo ?? '', modeloFixo: modelo !== undefined });
+      return;
+    }
     if (!arquivo || !tipo || (modo === 'documento' && !titulo)) return;
 
     this.erroArquivo.set('');

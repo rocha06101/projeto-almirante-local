@@ -1,14 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { CdkMenuModule } from '@angular/cdk/menu';
-import { Component, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, Observable, Subscription, expand, finalize, of, reduce, switchMap, take } from 'rxjs';
 import { EventoCalendarioItem } from '../../core/models/evento.model';
 import { EventosService } from '../../core/services/eventos';
 import { RouterLink } from '@angular/router';
 import {
-  ConteudoDocumento, DocumentoListagem, DocumentosService, LIMITE_ARQUIVO_DOCUMENTO,
-  ModoImportacao, PERMISSAO_DOCUMENTOS, erroImportacaoDocumento,
+  DocumentoListagem, DocumentosService, LIMITE_ARQUIVO_DOCUMENTO,
+  ModoImportacao, TIPOS_DOCUMENTO, erroImportacaoDocumento,
 } from '../../core/services/documentos';
 import { Modal } from '../../shared/components/modal/modal';
 import { RefreshButton } from '../../shared/components/refresh-button/refresh-button';
@@ -17,11 +17,13 @@ import { normalizar, UsuariosListagem } from '../desbravadores/usuarios-listagem
 import { EventoDetalhes } from '../eventos/detalhes/evento-detalhes';
 import { dataCivil, erroEvento, somarDias } from '../eventos/eventos.utils';
 import { ProximosEventos } from '../eventos/proximos/proximos-eventos';
+import { DocumentoExportacao } from './documento-exportacao';
 import { GradeRolavel } from './grade-rolavel';
+import { RascunhoDocumentoInicial, modeloDocumento } from './modelos-documento';
 
 @Component({
   selector: 'app-secretaria',
-  imports: [CdkMenuModule, ExcluirUsuarioDialog, ProximosEventos, EventoDetalhes, RefreshButton, GradeRolavel, RouterLink, Modal],
+  imports: [CdkMenuModule, ExcluirUsuarioDialog, ProximosEventos, EventoDetalhes, RefreshButton, GradeRolavel, RouterLink, Modal, DocumentoExportacao],
   templateUrl: './secretaria.html',
   styleUrl: './secretaria.scss',
 })
@@ -36,8 +38,9 @@ export class Secretaria extends UsuariosListagem implements OnInit {
 
   readonly criandoDocumento = signal(false);
   readonly modo = signal<ModoImportacao | null>(null);
-  readonly tiposDocumento = ['Ata', 'Autorização de saída', 'Ficha de cadastro'];
+  readonly tiposDocumento = TIPOS_DOCUMENTO;
   readonly tipo = signal('');
+  readonly tipoPersonalizado = signal(false);
   readonly titulo = signal('');
   readonly arquivo = signal<File | null>(null);
   readonly etapa = signal<'leitura' | 'importacao' | 'gravacao' | null>(null);
@@ -46,12 +49,21 @@ export class Secretaria extends UsuariosListagem implements OnInit {
   readonly erroArquivo = signal('');
   readonly tentouEnviar = signal(false);
   readonly arrastando = signal(false);
+  private readonly modeloSelecionado = computed(() => modeloDocumento(this.tipo().trim()));
+  readonly arquivoObrigatorio = computed(() => this.modo() === 'template' || (
+    this.modo() === 'documento' && (!!this.arquivo() || this.modeloSelecionado() === undefined)
+  ));
+  readonly nomeObrigatorio = computed(() => this.modo() === 'documento' && !!this.arquivo());
+  readonly tipoInvalido = computed(() => this.tentouEnviar() && !!this.modo() && !this.tipo().trim());
+  readonly nomeInvalido = computed(() => this.tentouEnviar() && this.nomeObrigatorio() && !this.titulo().trim());
+  readonly mensagemArquivo = computed(() => this.erroArquivo() || (
+    this.tentouEnviar() && this.arquivoObrigatorio() && !this.arquivo() && !this.etapa()
+      ? 'Selecione um arquivo.' : ''
+  ));
 
 
   readonly carregandoDocumentos = signal(false);
   readonly erroDocumentos = signal('');
-  readonly podeConsultarDocumentos = computed(() => this.permissoes.tem(PERMISSAO_DOCUMENTOS.consultar));
-  readonly podeEditarDocumento = computed(() => this.permissoes.tem(PERMISSAO_DOCUMENTOS.editar));
   private readonly documentos = signal<DocumentoListagem[]>([]);
   readonly buscaDocumentos = signal('');
   readonly documentosFiltrados = computed(() => {
@@ -66,24 +78,9 @@ export class Secretaria extends UsuariosListagem implements OnInit {
   readonly dataMinimaEvento = signal('');
   readonly eventoSelecionado = signal<string | null>(null);
 
-  constructor() {
-    super();
-    effect(() => {
-      const podeConsultar = this.podeConsultarDocumentos();
-      untracked(() => {
-        if (podeConsultar) {
-          this.carregarDocumentos();
-        } else {
-          this.consultaDocumentos?.unsubscribe();
-          this.documentos.set([]);
-          this.erroDocumentos.set('');
-        }
-      });
-    });
-  }
-
   ngOnInit(): void {
     this.carregarEventos();
+    this.carregarDocumentos();
   }
 
   abrirCriacao(): void {
@@ -94,6 +91,7 @@ export class Secretaria extends UsuariosListagem implements OnInit {
     this.remover();
     this.modo.set(null);
     this.tipo.set('');
+    this.tipoPersonalizado.set(false);
     this.tentouEnviar.set(false);
     this.arrastando.set(false);
     this.criandoDocumento.set(false);
@@ -104,19 +102,25 @@ export class Secretaria extends UsuariosListagem implements OnInit {
     this.carregarDocumentos(documento);
   }
 
-  private abrirTemplate(template: Pick<ConteudoDocumento, 'tipo' | 'markdown'>): void {
+  private abrirTemplate(template: RascunhoDocumentoInicial): void {
     this.fecharCriacao();
     void this.router.navigate(['/secretaria/documentos/novo'], { info: template });
   }
 
   trocarModo(opcao: ModoImportacao): void {
-    const modo =this.modo() === opcao ? null : opcao;
+    const modo = this.modo() === opcao ? null : opcao;
     this.invalidar();
     this.tipo.set('');
+    this.tipoPersonalizado.set(false);
     this.modo.set(modo);
     if (this.arquivo()) this.erroArquivo.set('');
     this.titulo.set(modo === 'documento' ? this.arquivo()?.name ?? '' : '');
     this.tentouEnviar.set(false);
+  }
+
+  selecionarTipo(valor: string): void {
+    this.tipoPersonalizado.set(valor === 'personalizado');
+    this.tipo.set(this.tipoPersonalizado() ? '' : valor);
   }
 
   selecionar(input: HTMLInputElement): void {
@@ -143,18 +147,17 @@ export class Secretaria extends UsuariosListagem implements OnInit {
     if (!this.criandoDocumento() || this.etapa()) return;
     this.tentouEnviar.set(true);
     this.erro.set('');
-    if (!this.verificarPermissao()) return;
 
     const arquivo = this.arquivo();
     const modo = this.modo();
-    if (modo === null) {
-      this.abrirTemplate({ tipo: this.tipo().trim(), markdown: '' });
-      return;
-    }
-    
     const tipo = this.tipo().trim();
     const titulo = this.titulo().trim();
-    if (!arquivo && !this.erroArquivo()) this.erroArquivo.set('Selecione um arquivo.');
+    const modelo = this.modeloSelecionado();
+    if (!arquivo && this.erroArquivo()) return;
+    if (!modo || (modo === 'documento' && !arquivo && modelo !== undefined)) {
+      this.abrirTemplate({ tipo, titulo, markdown: modelo ?? '', modeloFixo: modelo !== undefined });
+      return;
+    }
     if (!arquivo || !tipo || (modo === 'documento' && !titulo)) return;
 
     this.erroArquivo.set('');
@@ -166,11 +169,6 @@ export class Secretaria extends UsuariosListagem implements OnInit {
     this.operacao = conversao.pipe(
       switchMap(({ markdown, avisos }) => {
         this.avisos.set(Array.isArray(avisos) ? avisos.filter(aviso => typeof aviso === 'string') : []);
-        if (!this.verificarPermissao()) {
-          this.etapa.set(null);
-          return EMPTY;
-        }
-
         if (modo === 'template') {
           this.notificarAvisos();
           this.abrirTemplate({ tipo, markdown });
@@ -206,8 +204,6 @@ export class Secretaria extends UsuariosListagem implements OnInit {
   }
 
   carregarDocumentos(criado?: DocumentoListagem): void {
-    if (!this.podeConsultarDocumentos()) return;
-
     this.consultaDocumentos?.unsubscribe();
     this.carregandoDocumentos.set(true);
     this.erroDocumentos.set('');
@@ -282,12 +278,6 @@ export class Secretaria extends UsuariosListagem implements OnInit {
         if (this.selecao === selecao) this.etapa.set(null);
       }
     }
-  }
-
-  private verificarPermissao(): boolean {
-    if (this.permissoes.tem(PERMISSAO_DOCUMENTOS.criar)) return true;
-    this.erro.set('Você não tem permissão para criar documentos.');
-    return false;
   }
 
   private invalidar(): void {

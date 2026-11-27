@@ -1,0 +1,17 @@
+@mixin controle {
+  min-height: var(--tap-target);
+  padding: 0.5rem 0.75rem;
+  border: 1px solid light-dark(#6b7280, var(--theme-control-border));
+  border-radius: 0.5rem;
+  background: var(--theme-surface);
+  color: var(--theme-text);
+}
+
+@mixin estados-select {
+  &:invalid { color: var(--theme-text-muted); }
+  option { color: var(--theme-text); }
+  &:disabled {
+    background: var(--theme-surface-secondary);
+    color: var(--theme-text-muted-on-secondary);
+  }
+}

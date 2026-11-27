@@ -14,6 +14,8 @@ export class Modal {
   private readonly destroyRef = inject(DestroyRef);
 
   readonly titulo = input.required<string>();
+  readonly descricaoId = input<string>();
+  readonly dispensavel = input(true);
   readonly fechar = output<void>();
   readonly tituloId = `app-modal-titulo-${++proximoId}`;
 
@@ -33,11 +35,11 @@ export class Modal {
   }
 
   clicarFundo(evento: MouseEvent): void {
-    if (evento.target === evento.currentTarget) this.fechar.emit();
+    if (this.dispensavel() && evento.target === evento.currentTarget) this.fechar.emit();
   }
 
   cancelar(evento: Event): void {
     evento.preventDefault();
-    this.fechar.emit();
+    if (this.dispensavel()) this.fechar.emit();
   }
 }

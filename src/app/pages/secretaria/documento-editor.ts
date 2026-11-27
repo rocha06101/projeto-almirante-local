@@ -1,16 +1,29 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, HostListener, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { finalize, map } from 'rxjs';
-import { ConteudoDocumento, DocumentosService, PERMISSAO_DOCUMENTOS } from '../../core/services/documentos';
-import { PermissoesService } from '../../core/services/permissoes';
+import { EMPTY, Observable, Subscription, catchError, finalize, map, switchMap } from 'rxjs';
+import {
+  ConteudoDocumento, Documento, DocumentosService, FormatoExportacao, TIPOS_DOCUMENTO,
+} from '../../core/services/documentos';
 import { ToastService } from '../../core/services/toast.service';
+import { Modal } from '../../shared/components/modal/modal';
 import { RefreshButton } from '../../shared/components/refresh-button/refresh-button';
+import { DocumentoExportacao } from './documento-exportacao';
+import { DocumentoMarkdown } from './documento-markdown';
+import { RascunhoDocumentoInicial, modeloDocumento } from './modelos-documento';
+
+class TransicaoDocumentoCriado {
+  constructor(
+    readonly salvo: Documento,
+    readonly obterRascunho: () => ConteudoDocumento,
+    readonly previaVisivel: boolean,
+  ) {}
+}
 
 @Component({
   selector: 'app-documento-editor',
-  imports: [RouterLink, RefreshButton],
+  imports: [RouterLink, RefreshButton, DocumentoMarkdown, DocumentoExportacao, Modal],
   templateUrl: './documento-editor.html',
   styleUrl: './documento-editor.scss',
 })
@@ -18,57 +31,354 @@ export class DocumentoEditor {
   private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(DocumentosService);
   private readonly router = inject(Router);
-  private readonly permissoes = inject(PermissoesService);
   private readonly toast = inject(ToastService);
-  private id = inject(ActivatedRoute).snapshot.paramMap.get('id');
+  private readonly rota = inject(ActivatedRoute);
+  private readonly campoMarkdown = viewChild<ElementRef<HTMLTextAreaElement>>('campoMarkdown');
+  private transicao?: TransicaoDocumentoCriado;
+  private consultaFormatos?: Subscription;
+  private modeloAplicado?: string;
+  readonly id = signal(this.rota.snapshot.paramMap.get('id'));
   private versao = '';
   private tentativa?: { payload: string; chave: string };
 
-  readonly titulo = signal('Novo documento');
+  readonly titulo = signal('');
   readonly tipo = signal('');
+  readonly tiposDocumento = TIPOS_DOCUMENTO;
+  readonly tipoForaDaLista = computed(() => {
+    const tipo = this.tipo();
+    return TIPOS_DOCUMENTO.some(opcao => opcao === tipo) ? '' : tipo;
+  });
   readonly markdown = signal('');
-  readonly carregando = signal(!!this.id);
+  readonly previaVisivel = signal(true);
+
+  alternarPrevia(): void {
+    this.previaVisivel.update(visivel => !visivel);
+  }
+
+  readonly linhasMarkdown = computed(() => this.markdown().split('\n'));
+  readonly totalCaracteres = computed(() => Array.from(this.markdown()).length);
+  readonly carregando = signal(!!this.id());
   readonly salvando = signal(false);
+  readonly documentoConfirmado = signal(false);
+  readonly podeEditar = computed(() => !this.carregando() && (!this.id() || this.documentoConfirmado()));
   readonly erro = signal('');
+  readonly confirmacaoSaida = signal<((sair: boolean) => void) | null>(null);
+  readonly trocaTipoPendente = signal<Pick<ConteudoDocumento, 'tipo' | 'markdown'> | null>(null);
+
+  readonly formatos = signal<FormatoExportacao[] | undefined>(undefined);
+  readonly carregandoFormatos = signal(false);
+  private readonly ultimaVersaoSalva = signal<ConteudoDocumento>({
+    titulo: '',
+    tipo: '',
+    markdown: '',
+  });
+  readonly tituloSalvo = computed(() => this.ultimaVersaoSalva().titulo);
+  readonly temAlteracoesPendentes = computed(() => {
+    const salvo = this.ultimaVersaoSalva();
+    const atual = this.conteudoAtual();
+    return atual.titulo.trim() !== salvo.titulo.trim()
+      || atual.tipo !== salvo.tipo
+      || atual.markdown !== salvo.markdown;
+  });
 
   constructor() {
-    if (this.id) {
-      this.api.obter(this.id).pipe(
-        takeUntilDestroyed(this.destroyRef),
-        finalize(() => this.carregando.set(false)),
-      ).subscribe({
-        next: ({ titulo, tipo, markdown, versao }) => {
-          this.titulo.set(titulo);
-          this.tipo.set(tipo);
-          this.markdown.set(markdown);
-          this.versao = versao;
-        },
-        error: () => this.erro.set('Não foi possível carregar o documento.'),
-      });
+    let infoInicial = this.router.currentNavigation()?.extras.info;
+    this.rota.paramMap.pipe(
+      switchMap(params => {
+        const info = infoInicial;
+        infoInicial = undefined;
+        const id = params.get('id');
+        this.id.set(id);
+        this.erro.set('');
+        this.consultaFormatos?.unsubscribe();
+        this.formatos.set(undefined);
+        this.versao = '';
+        this.documentoConfirmado.set(false);
+        this.carregando.set(!!id);
+        this.modeloAplicado = undefined;
+        this.trocaTipoPendente.set(null);
+
+        if (!id) {
+          const rascunho = info as RascunhoDocumentoInicial | undefined;
+          this.preencher({
+            titulo: rascunho?.titulo ?? '',
+            tipo: rascunho?.tipo ?? '',
+            markdown: rascunho?.markdown ?? '',
+          });
+          if (rascunho?.modeloFixo) this.modeloAplicado = rascunho.markdown;
+          return EMPTY;
+        }
+
+        if (info instanceof TransicaoDocumentoCriado && info.salvo.id === id) {
+          this.confirmar(info.salvo);
+          this.preencher(info.obterRascunho());
+          this.previaVisivel.set(info.previaVisivel);
+          this.carregando.set(false);
+          this.atualizarFormatos(id);
+          return EMPTY;
+        }
+
+        this.preencher({ titulo: '', tipo: '', markdown: '' });
+        this.ultimaVersaoSalva.set(this.conteudoAtual());
+        return this.api.obter(id).pipe(
+          catchError((erro: unknown) => {
+            this.erro.set(erro instanceof HttpErrorResponse && erro.status === 404
+              ? 'Documento não encontrado.'
+              : 'Não foi possível carregar o documento.');
+            return EMPTY;
+          }),
+          finalize(() => this.carregando.set(false)),
+        );
+      }),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(documento => {
+      this.preencher(documento);
+      this.confirmar(documento);
+    });
+  }
+
+  trocarTipo(seletor: HTMLSelectElement): void {
+    const tipo = seletor.value;
+    if (tipo === this.tipo()) return;
+
+    const modelo = modeloDocumento(tipo);
+    const markdown = this.markdown();
+    if (modelo === undefined || modelo === markdown) {
+      this.tipo.set(tipo);
+      this.modeloAplicado = undefined;
       return;
     }
-    const template = this.router.currentNavigation()?.extras.info as
-      Pick<ConteudoDocumento, 'tipo' | 'markdown'> | undefined;
-    this.tipo.set(template?.tipo ?? '');
-    this.markdown.set(template?.markdown ?? '');
+
+    const modeloIntacto = !this.id() && markdown === this.modeloAplicado;
+    if (!markdown || modeloIntacto) {
+      this.aplicarModelo(tipo, modelo);
+      return;
+    }
+
+    seletor.value = this.tipo();
+    this.trocaTipoPendente.set({ tipo, markdown: modelo });
+  }
+
+  responderTrocaTipo(confirmar: boolean): void {
+    const troca = this.trocaTipoPendente();
+    if (confirmar && troca) this.aplicarModelo(troca.tipo, troca.markdown);
+    this.trocaTipoPendente.set(null);
+  }
+
+  private aplicarModelo(tipo: string, markdown: string): void {
+    this.tipo.set(tipo);
+    this.markdown.set(markdown);
+    this.modeloAplicado = markdown;
+  }
+
+  private conteudoAtual(): ConteudoDocumento {
+    return { titulo: this.titulo(), tipo: this.tipo(), markdown: this.markdown() };
+  }
+
+  private preencher({ titulo, tipo, markdown }: ConteudoDocumento): void {
+    this.titulo.set(titulo);
+    this.tipo.set(tipo);
+    this.markdown.set(markdown);
+  }
+
+  private confirmar(documento: Documento): void {
+    const { titulo, tipo, markdown, versao, formatosExportacao } = documento;
+    this.versao = versao;
+    this.ultimaVersaoSalva.set({ titulo, tipo, markdown });
+    this.formatos.set(formatosExportacao);
+    this.documentoConfirmado.set(true);
+  }
+
+  private atualizarFormatos(id: string): void {
+    this.consultaFormatos?.unsubscribe();
+    this.carregandoFormatos.set(true);
+    this.consultaFormatos = this.api.obter(id).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.carregandoFormatos.set(false)),
+    ).subscribe({
+      next: documento => this.formatos.set(documento.formatosExportacao),
+      error: () => this.formatos.set(undefined),
+    });
+  }
+
+  inserirLink(campo: HTMLTextAreaElement): void {
+    const inicio = campo.selectionStart;
+    const fim = campo.selectionEnd;
+    const selecao = campo.value.slice(inicio, fim);
+    const rotulo = (selecao || 'Texto do link')
+      .replace(/\\/g, '\\\\')
+      .replace(/\[/g, '\\[')
+      .replace(/\]/g, '\\]');
+
+    const url = 'https://exemplo.com';
+    const prefixo = `[${rotulo}](`;
+    const link = `${prefixo}${url})`;
+
+    campo.setRangeText(link, inicio, fim, 'end');
+    this.markdown.set(campo.value);
+
+    const inicioUrl = inicio + prefixo.length;
+    campo.focus();
+    campo.setSelectionRange(inicioUrl, inicioUrl + url.length);
+  }
+
+  aplicarBlocoCodigo(campo: HTMLTextAreaElement): void {
+    const valor = campo.value;
+    const inicioSelecao = campo.selectionStart;
+    const fimSelecao = campo.selectionEnd;
+    const inicio = valor.slice(0, inicioSelecao).lastIndexOf('\n') + 1;
+    const ultimoCaractere = Math.max(inicioSelecao, fimSelecao - 1);
+    const proximaQuebra = valor.indexOf('\n', ultimoCaractere);
+    const fim = proximaQuebra === -1 ? valor.length : proximaQuebra;
+
+    const conteudo = valor.slice(inicio, fim) || 'código';
+
+    // A cerca precisa ser maior que qualquer sequência de crases do conteúdo.
+    const sequencias = conteudo.match(/`+/g) ?? [];
+    const tamanhoCerca = sequencias.reduce(
+      (tamanho, sequencia) => Math.max(tamanho, sequencia.length + 1),
+      3,
+    );
+    const cerca = '`'.repeat(tamanhoCerca);
+    const bloco = `${cerca}\n${conteudo}\n${cerca}`;
+
+    campo.setRangeText(bloco, inicio, fim, 'end');
+    this.markdown.set(campo.value);
+
+    const inicioConteudo = inicio + cerca.length + 1;
+    campo.focus();
+    campo.setSelectionRange(inicioConteudo, inicioConteudo + conteudo.length);
+  }
+
+  aplicarCitacao(campo: HTMLTextAreaElement): void {
+    const valor = campo.value;
+    const inicioSelecao = campo.selectionStart;
+    const fimSelecao = campo.selectionEnd;
+    const inicio = valor.slice(0, inicioSelecao).lastIndexOf('\n') + 1;
+
+    const ultimoCaractere = Math.max(inicioSelecao, fimSelecao - 1);
+    const proximaQuebra = valor.indexOf('\n', ultimoCaractere);
+    const fim = proximaQuebra === -1 ? valor.length : proximaQuebra;
+
+    const trecho = valor.slice(inicio, fim);
+    const citacao = trecho === ''
+      ? '> Citação'
+      : trecho.split('\n').map(linha => {
+        if (/^ {0,3}>/.test(linha)) return linha;
+        return linha ? `> ${linha}` : '>';
+      }).join('\n');
+
+    campo.setRangeText(citacao, inicio, fim, 'end');
+    this.markdown.set(campo.value);
+    campo.focus();
+
+    if (trecho === '') {
+      campo.setSelectionRange(inicio + 2, inicio + citacao.length);
+    }
+  }
+
+  aplicarLista(
+    campo: HTMLTextAreaElement,
+    tipo: 'marcadores' | 'numerada',
+  ): void {
+    const valor = campo.value;
+    const inicioSelecao = campo.selectionStart;
+    const fimSelecao = campo.selectionEnd;
+    const inicio = valor.slice(0, inicioSelecao).lastIndexOf('\n') + 1;
+
+    // Se a seleção termina no início da próxima linha, ela fica fora da lista.
+    const ultimoCaractere = Math.max(inicioSelecao, fimSelecao - 1);
+    const proximaQuebra = valor.indexOf('\n', ultimoCaractere);
+    const fim = proximaQuebra === -1 ? valor.length : proximaQuebra;
+
+    const linhas = valor.slice(inicio, fim).split('\n');
+    const lista = linhas.map((linha, indice) => {
+      const [, recuo, conteudo] = /^([ \t]*)(.*)$/.exec(linha)!;
+      const item = conteudo.replace(/^(?:[-+*]|\d+[.)])(?:[ \t]+|$)/, '');
+      const marcador = tipo === 'numerada' ? `${indice + 1}. ` : '- ';
+      return `${recuo}${marcador}${item || 'Item'}`;
+    }).join('\n');
+
+    campo.setRangeText(lista, inicio, fim, 'end');
+    this.markdown.set(campo.value);
+
+    campo.focus();
+    if (linhas.length === 1 && !linhas[0].trim()) {
+      const fimItem = inicio + lista.length;
+      campo.setSelectionRange(fimItem - 'Item'.length, fimItem);
+    }
+  }
+
+  aplicarTitulo(campo: HTMLTextAreaElement): void {
+    const valor = campo.value;
+    const cursor = campo.selectionStart;
+    const inicio = valor.slice(0, cursor).lastIndexOf('\n') + 1;
+    const proximaQuebra = valor.indexOf('\n', cursor);
+    const fim = proximaQuebra === -1 ? valor.length : proximaQuebra;
+
+    const linha = valor.slice(inicio, fim);
+    const texto = linha.replace(/^ {0,3}#{1,6}(?:[ \t]+|$)/, '') || 'Título';
+
+    campo.setRangeText(`## ${texto}`, inicio, fim, 'end');
+    this.markdown.set(campo.value);
+
+    campo.focus();
+    campo.setSelectionRange(inicio + 3, inicio + 3 + texto.length);
+  }
+
+  aplicarEnfase(campo: HTMLTextAreaElement, marcador: '*' | '**'): void {
+    const inicio = campo.selectionStart;
+    const fim = campo.selectionEnd;
+    const texto = campo.value.slice(inicio, fim) || 'texto';
+
+    campo.setRangeText(`${marcador}${texto}${marcador}`, inicio, fim, 'end');
+    this.markdown.set(campo.value);
+
+    const inicioTexto = inicio + marcador.length;
+    campo.focus();
+    campo.setSelectionRange(inicioTexto, inicioTexto + texto.length);
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  avisarAntesDeFechar(evento: BeforeUnloadEvent): void {
+    if (this.temAlteracoesPendentes()) evento.preventDefault();
+  }
+
+  podeSair(): boolean | Observable<boolean> {
+    if (this.transicao && this.router.currentNavigation()?.extras.info === this.transicao) return true;
+    if (this.salvando()) return false;
+    if (!this.temAlteracoesPendentes()) return true;
+
+    return new Observable<boolean>(inscricao => {
+      const campo = this.campoMarkdown()?.nativeElement;
+      if (campo && campo.ownerDocument.activeElement === campo.ownerDocument.body) {
+        campo.focus({ preventScroll: true });
+      }
+
+      const responder = (sair: boolean) => {
+        inscricao.next(sair);
+        inscricao.complete();
+      };
+      this.confirmacaoSaida.set(responder);
+      return () => {
+        if (this.confirmacaoSaida() === responder) this.confirmacaoSaida.set(null);
+      };
+    });
   }
 
   salvar(): void {
-    if (this.salvando() || this.carregando() || (this.id && !this.versao)) return;
-    if (!this.permissoes.tem(this.id ? PERMISSAO_DOCUMENTOS.editar : PERMISSAO_DOCUMENTOS.criar)) {
-      this.erro.set('Você não tem permissão para salvar este documento.');
-      return;
-    }
+    const id = this.id();
+    if (!this.podeEditar() || this.salvando() || this.transicao) return;
 
-    const conteudo = { titulo: this.titulo().trim(), tipo: this.tipo().trim(), markdown: this.markdown() };
-    if (!conteudo.titulo || !conteudo.tipo || !conteudo.markdown.trim()) {
-      this.erro.set('Informe o título, o tipo e o conteúdo do documento.');
+    const enviado = this.conteudoAtual();
+    const conteudo = { ...enviado, titulo: enviado.titulo.trim() };
+    if (!conteudo.titulo || !conteudo.tipo.trim() || !conteudo.markdown.trim()) {
+      this.falhaAoSalvar('Informe o título, o tipo e o conteúdo do documento.');
       return;
     }
     this.erro.set('');
     this.salvando.set(true);
 
-    const id = this.id;
     const requisicao = id
       ? this.api.editar(id, this.versao, conteudo).pipe(map(({ versao }) => ({ id, versao })))
       : this.api.criar(conteudo, this.chaveCriacao(conteudo));
@@ -77,17 +387,64 @@ export class DocumentoEditor {
       takeUntilDestroyed(this.destroyRef),
       finalize(() => this.salvando.set(false)),
     ).subscribe({
-      next: registro => {
-        this.id = registro.id;
-        this.versao = registro.versao;
+      next: ({ id: salvoId, versao }) => {
+        const salvo = { ...conteudo, id: salvoId, versao };
+        this.id.set(salvoId);
+        this.confirmar(salvo);
+        if (this.titulo() === enviado.titulo) this.titulo.set(conteudo.titulo);
         this.tentativa = undefined;
         this.toast.success('Documento salvo.');
-        void this.router.navigate(['/secretaria']);
+
+        if (id) {
+          this.atualizarFormatos(id);
+        } else {
+          this.abrirEdicao(salvo);
+        }
       },
-      error: erro => this.erro.set(erro instanceof HttpErrorResponse && erro.status === 409
-        ? 'O documento foi alterado em outra sessão. Seu texto continua disponível nesta tela.'
-        : 'Não foi possível salvar o documento. Tente novamente.'),
+      error: (erro: unknown) => {
+        const status = erro instanceof HttpErrorResponse ? erro.status : undefined;
+        switch (status) {
+          case 409:
+            this.falhaAoSalvar('O documento foi alterado em outra sessão. Seu rascunho continua nesta tela.');
+            break;
+          case 403:
+            this.falhaAoSalvar('Você não tem permissão para salvar este documento.');
+            break;
+          case 400:
+          case 422:
+            this.falhaAoSalvar('A API recusou os dados do documento. Revise os campos e tente novamente.');
+            break;
+          default:
+            this.falhaAoSalvar('Não foi possível salvar o documento. Seu rascunho continua nesta tela.');
+        }
+      },
     });
+  }
+
+  private abrirEdicao(salvo: Documento): void {
+    const transicao = new TransicaoDocumentoCriado(
+      salvo, () => this.conteudoAtual(), this.previaVisivel(),
+    );
+    this.transicao = transicao;
+    const falha = () => {
+      if (this.destroyRef.destroyed) return;
+      this.atualizarFormatos(salvo.id);
+      this.toast.warning('Documento salvo. Não foi possível abrir a URL de edição.');
+    };
+
+    void this.router.navigate(['/secretaria', 'documentos', salvo.id, 'editar'], {
+      info: transicao,
+      replaceUrl: true,
+    }).then(abriu => {
+      if (!abriu) falha();
+    }, falha).finally(() => {
+      this.transicao = undefined;
+    });
+  }
+
+  private falhaAoSalvar(mensagem: string): void {
+    this.erro.set(mensagem);
+    this.toast.error(mensagem);
   }
 
   private chaveCriacao(conteudo: ConteudoDocumento): string {

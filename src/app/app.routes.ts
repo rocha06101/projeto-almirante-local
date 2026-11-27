@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth-guard';
 import { LayoutComponent } from './shared/layouts/layout/layout';
 import { permissaoGuard } from './core/guards/permissao-guard';
+import type { DocumentoEditor } from './pages/secretaria/documento-editor';
 
 export const routes: Routes = [
   {
@@ -89,14 +90,22 @@ export const routes: Routes = [
       {
         path: 'secretaria/documentos/novo',
         canActivate: [permissaoGuard],
-        data: { permissao: 'secretaria.consultar', exige: ['secretaria.documentos.criar'] },
+        canDeactivate: [(editor: DocumentoEditor) => editor.podeSair()],
+        data: { permissao: 'secretaria.consultar' },
         loadComponent: () => import('./pages/secretaria/documento-editor').then(m => m.DocumentoEditor),
       },
       {
         path: 'secretaria/documentos/:id/editar',
         canActivate: [permissaoGuard],
-        data: { permissao: 'secretaria.consultar', exige: ['secretaria.documentos.consultar', 'secretaria.documentos.editar'] },
+        canDeactivate: [(editor: DocumentoEditor) => editor.podeSair()],
+        data: { permissao: 'secretaria.consultar' },
         loadComponent: () => import('./pages/secretaria/documento-editor').then(m => m.DocumentoEditor),
+      },
+      {
+        path: 'secretaria/documentos/:id/visualizar',
+        canActivate: [permissaoGuard],
+        data: { permissao: 'secretaria.consultar' },
+        loadComponent: () => import('./pages/secretaria/documento-leitura').then(m => m.DocumentoLeitura),
       },
       {
         path: 'eventos',

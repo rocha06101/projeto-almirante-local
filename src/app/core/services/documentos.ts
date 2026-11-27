@@ -5,9 +5,12 @@ import { ApiService } from './api';
 
 export type ModoImportacao = 'documento' | 'template';
 
+export type FormatoExportacao = 'pdf' | 'md' | 'docx' | 'xlsx';
+
 export interface DocumentoListagem {
   id: string;
   titulo: string;
+  formatosExportacao?: FormatoExportacao[];
 }
 
 export interface ConteudoDocumento {
@@ -16,8 +19,7 @@ export interface ConteudoDocumento {
   markdown: string;
 }
 
-export interface Documento extends ConteudoDocumento {
-  id: string;
+export interface Documento extends ConteudoDocumento, DocumentoListagem {
   versao: string;
 }
 
@@ -26,12 +28,6 @@ interface ImportacaoDocumento {
   markdown: string;
   avisos: string[];
 }
-
-export const PERMISSAO_DOCUMENTOS = {
-  consultar: 'secretaria.documentos.consultar',
-  criar: 'secretaria.documentos.criar',
-  editar: 'secretaria.documentos.editar',
-} as const;
 
 // O nginx atual usa 1 MiB nas rotas gerais. Reserve espaço para o multipart.
 export const LIMITE_ARQUIVO_DOCUMENTO = 1_000_000;
@@ -72,11 +68,29 @@ export class DocumentosService {
   }
 
   obter(id: string) {
-    return this.api.get<Documento>(this.caminhoDocumento(id));
+    return this.api.get<Documento>(this.caminhoDocumento(id)).pipe(
+      map(documento => {
+        if (documento?.id !== id || typeof documento.titulo !== 'string' ||
+            typeof documento.tipo !== 'string' || typeof documento.markdown !== 'string' ||
+            typeof documento.versao !== 'string' || !documento.versao) {
+          throw new Error('Dados do documento inválidos.');
+        }
+        return documento;
+      }),
+    );
   }
 
   editar(id: string, versao: string, conteudo: ConteudoDocumento) {
-    return this.api.put<Pick<Documento, 'versao'>>(this.caminhoDocumento(id), { ...conteudo, versao });
+    return this.api.put<Pick<Documento, 'versao'>>(this.caminhoDocumento(id), { ...conteudo, versao }).pipe(
+      map(resposta => {
+        if (!resposta?.versao) throw new Error('Edição sem confirmação da API.');
+        return resposta;
+      }),
+    );
+  }
+
+  exportar(id: string, formato: FormatoExportacao) {
+    return this.api.getBlobResponse(this.caminhoDocumento(id) + '/exportar', { params: { formato } });
   }
 
   private caminhoDocumento(id: string): string {

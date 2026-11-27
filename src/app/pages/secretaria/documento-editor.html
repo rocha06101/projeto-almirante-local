@@ -62,7 +62,13 @@
   Visualizar
 </button>
 
-<button class="editor-acao-secundaria" type="button" disabled>
+<app-documento-exportacao class="editor-exportacao"
+  [id]="documentoConfirmado() ? id() : null"
+  [titulo]="tituloSalvo()"
+  [formatos]="formatos()"
+  [carregandoFormatos]="carregandoFormatos()"
+  [alteracoesPendentes]="temAlteracoesPendentes()"
+>
   <svg
     width="16"
     height="16"
@@ -78,9 +84,9 @@
     <path d="M4 16v4h16v-4" />
   </svg>
   Exportar
-</button>
+</app-documento-exportacao>
 
-    <app-refresh-button type="submit" [disabled]="carregando() || salvando()">
+    <app-refresh-button type="submit" [disabled]="carregando() || salvando() || (!!id() && !documentoConfirmado())">
       Salvar documento
     </app-refresh-button>
   </div>
@@ -156,16 +162,23 @@
     aria-labelledby="editor-previa-titulo"
   >
     <h2 id="editor-previa-titulo">Pré-visualização</h2>
-    <div #painelPrevia class="editor-previa" [innerHTML]="previaHtml()"></div>
+    <div appDocumentoMarkdown class="editor-previa" [markdown]="markdown()"
+      tabindex="0" role="region" aria-labelledby="editor-previa-titulo"></div>
   </section>
 </div>
 <footer class="editor-rodape">
   <span>Formato: Markdown</span>
   <span>Linhas: {{ linhasMarkdown().length }}</span>
 
+<span class="editor-estado" role="status">
   @if (salvando()) {
-    <span class="editor-estado" role="status">Salvando…</span>
+    Salvando…
+  } @else if (temAlteracoesPendentes()) {
+    Alterações não salvas
+  } @else if (documentoConfirmado()) {
+    Alterações salvas
   }
+</span>
 </footer>
 </div>
  

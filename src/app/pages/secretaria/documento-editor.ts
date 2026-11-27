@@ -1,17 +1,25 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, ElementRef, afterRenderEffect, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, HostListener, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { finalize, map } from 'rxjs';
-import { ConteudoDocumento, DocumentosService, PERMISSAO_DOCUMENTOS } from '../../core/services/documentos';
-import { PermissoesService } from '../../core/services/permissoes';
+import { EMPTY, Subscription, catchError, finalize, map, switchMap } from 'rxjs';
+import { ConteudoDocumento, Documento, DocumentosService, FormatoExportacao } from '../../core/services/documentos';
 import { ToastService } from '../../core/services/toast.service';
 import { RefreshButton } from '../../shared/components/refresh-button/refresh-button';
-import { marked } from 'marked';
+import { DocumentoExportacao } from './documento-exportacao';
+import { DocumentoMarkdown } from './documento-markdown';
+
+class TransicaoDocumentoCriado {
+  constructor(
+    readonly salvo: Documento,
+    readonly obterRascunho: () => ConteudoDocumento,
+    readonly previaVisivel: boolean,
+  ) {}
+}
 
 @Component({
   selector: 'app-documento-editor',
-  imports: [RouterLink, RefreshButton],
+  imports: [RouterLink, RefreshButton, DocumentoMarkdown, DocumentoExportacao],
   templateUrl: './documento-editor.html',
   styleUrl: './documento-editor.scss',
 })
@@ -19,26 +27,13 @@ export class DocumentoEditor {
   private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(DocumentosService);
   private readonly router = inject(Router);
-  private readonly permissoes = inject(PermissoesService);
   private readonly toast = inject(ToastService);
-  private id = inject(ActivatedRoute).snapshot.paramMap.get('id');
+  private readonly rota = inject(ActivatedRoute);
+  private transicao?: TransicaoDocumentoCriado;
+  private consultaFormatos?: Subscription;
+  readonly id = signal(this.rota.snapshot.paramMap.get('id'));
   private versao = '';
   private tentativa?: { payload: string; chave: string };
-  private readonly painelPrevia =
-    viewChild<ElementRef<HTMLDivElement>>('painelPrevia');
-
-  private readonly configurarLinksDaPrevia = afterRenderEffect({
-    write: () => {
-      // Reaplica os atributos quando a edição recria os links da prévia.
-      this.previaHtml();
-
-      const painel = this.painelPrevia()?.nativeElement;
-      painel?.querySelectorAll<HTMLAnchorElement>('a[href]').forEach(link => {
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-      });
-    },
-  });
 
   readonly titulo = signal('Novo documento');
   readonly tipo = signal('');
@@ -50,33 +45,103 @@ export class DocumentoEditor {
   }
 
   readonly linhasMarkdown = computed(() => this.markdown().split('\n'));
-  readonly previaHtml = computed(() =>
-    marked.parse(this.markdown(), { async: false, gfm: true })
-  );
-  readonly carregando = signal(!!this.id);
+  readonly carregando = signal(!!this.id());
   readonly salvando = signal(false);
+  readonly documentoConfirmado = signal(false);
   readonly erro = signal('');
 
+  readonly formatos = signal<FormatoExportacao[] | undefined>(undefined);
+  readonly carregandoFormatos = signal(false);
+  private readonly ultimaVersaoSalva = signal<ConteudoDocumento>({
+    titulo: 'Novo documento',
+    tipo: '',
+    markdown: '',
+  });
+  readonly tituloSalvo = computed(() => this.ultimaVersaoSalva().titulo);
+  readonly temAlteracoesPendentes = computed(() => {
+    const salvo = this.ultimaVersaoSalva();
+    const atual = this.conteudoAtual();
+    return atual.titulo.trim() !== salvo.titulo.trim()
+      || atual.tipo.trim() !== salvo.tipo.trim()
+      || atual.markdown !== salvo.markdown;
+  });
+
   constructor() {
-    if (this.id) {
-      this.api.obter(this.id).pipe(
-        takeUntilDestroyed(this.destroyRef),
-        finalize(() => this.carregando.set(false)),
-      ).subscribe({
-        next: ({ titulo, tipo, markdown, versao }) => {
-          this.titulo.set(titulo);
-          this.tipo.set(tipo);
-          this.markdown.set(markdown);
-          this.versao = versao;
-        },
-        error: () => this.erro.set('Não foi possível carregar o documento.'),
-      });
-      return;
-    }
-    const template = this.router.currentNavigation()?.extras.info as
-      Pick<ConteudoDocumento, 'tipo' | 'markdown'> | undefined;
-    this.tipo.set(template?.tipo ?? '');
-    this.markdown.set(template?.markdown ?? '');
+    const info = this.router.currentNavigation()?.extras.info;
+    this.rota.paramMap.pipe(
+      switchMap(params => {
+        const id = params.get('id');
+        this.id.set(id);
+        this.erro.set('');
+        this.consultaFormatos?.unsubscribe();
+        this.formatos.set(undefined);
+        this.versao = '';
+        this.documentoConfirmado.set(false);
+        this.carregando.set(!!id);
+
+        if (!id) {
+          const template = info as Pick<ConteudoDocumento, 'tipo' | 'markdown'> | undefined;
+          this.tipo.set(template?.tipo ?? '');
+          this.markdown.set(template?.markdown ?? '');
+          return EMPTY;
+        }
+
+        if (info instanceof TransicaoDocumentoCriado && info.salvo.id === id) {
+          this.confirmar(info.salvo);
+          this.preencher(info.obterRascunho());
+          this.previaVisivel.set(info.previaVisivel);
+          this.carregando.set(false);
+          this.atualizarFormatos(id);
+          return EMPTY;
+        }
+
+        this.preencher({ titulo: '', tipo: '', markdown: '' });
+        this.ultimaVersaoSalva.set(this.conteudoAtual());
+        return this.api.obter(id).pipe(
+          catchError((erro: unknown) => {
+            this.erro.set(erro instanceof HttpErrorResponse && erro.status === 404
+              ? 'Documento não encontrado.'
+              : 'Não foi possível carregar o documento.');
+            return EMPTY;
+          }),
+          finalize(() => this.carregando.set(false)),
+        );
+      }),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(documento => {
+      this.preencher(documento);
+      this.confirmar(documento);
+    });
+  }
+
+  private conteudoAtual(): ConteudoDocumento {
+    return { titulo: this.titulo(), tipo: this.tipo(), markdown: this.markdown() };
+  }
+
+  private preencher({ titulo, tipo, markdown }: ConteudoDocumento): void {
+    this.titulo.set(titulo);
+    this.tipo.set(tipo);
+    this.markdown.set(markdown);
+  }
+
+  private confirmar(documento: Documento): void {
+    const { titulo, tipo, markdown, versao, formatosExportacao } = documento;
+    this.versao = versao;
+    this.ultimaVersaoSalva.set({ titulo, tipo, markdown });
+    this.formatos.set(formatosExportacao);
+    this.documentoConfirmado.set(true);
+  }
+
+  private atualizarFormatos(id: string): void {
+    this.consultaFormatos?.unsubscribe();
+    this.carregandoFormatos.set(true);
+    this.consultaFormatos = this.api.obter(id).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.carregandoFormatos.set(false)),
+    ).subscribe({
+      next: documento => this.formatos.set(documento.formatosExportacao),
+      error: () => this.formatos.set(undefined),
+    });
   }
 
   inserirLink(campo: HTMLTextAreaElement): void {
@@ -217,22 +282,31 @@ export class DocumentoEditor {
     campo.setSelectionRange(inicioTexto, inicioTexto + texto.length);
   }
 
-  salvar(): void {
-    if (this.salvando() || this.carregando() || (this.id && !this.versao)) return;
-    if (!this.permissoes.tem(this.id ? PERMISSAO_DOCUMENTOS.editar : PERMISSAO_DOCUMENTOS.criar)) {
-      this.erro.set('Você não tem permissão para salvar este documento.');
-      return;
-    }
+  @HostListener('window:beforeunload', ['$event'])
+  avisarAntesDeFechar(evento: BeforeUnloadEvent): void {
+    if (this.temAlteracoesPendentes()) evento.preventDefault();
+  }
 
-    const conteudo = { titulo: this.titulo().trim(), tipo: this.tipo().trim(), markdown: this.markdown() };
+  podeSair(): boolean {
+    if (this.transicao && this.router.currentNavigation()?.extras.info === this.transicao) return true;
+    if (this.salvando()) return false;
+    return !this.temAlteracoesPendentes()
+      || window.confirm('Há alterações não salvas. Deseja sair e descartá-las?');
+  }
+
+  salvar(): void {
+    const id = this.id();
+    if (this.salvando() || this.carregando() || this.transicao || (id && !this.versao)) return;
+
+    const enviado = this.conteudoAtual();
+    const conteudo = { ...enviado, titulo: enviado.titulo.trim(), tipo: enviado.tipo.trim() };
     if (!conteudo.titulo || !conteudo.tipo || !conteudo.markdown.trim()) {
-      this.erro.set('Informe o título, o tipo e o conteúdo do documento.');
+      this.falhaAoSalvar('Informe o título, o tipo e o conteúdo do documento.');
       return;
     }
     this.erro.set('');
     this.salvando.set(true);
 
-    const id = this.id;
     const requisicao = id
       ? this.api.editar(id, this.versao, conteudo).pipe(map(({ versao }) => ({ id, versao })))
       : this.api.criar(conteudo, this.chaveCriacao(conteudo));
@@ -241,20 +315,65 @@ export class DocumentoEditor {
       takeUntilDestroyed(this.destroyRef),
       finalize(() => this.salvando.set(false)),
     ).subscribe({
-      next: registro => {
-        this.id = registro.id;
-        this.versao = registro.versao;
+      next: ({ id: salvoId, versao }) => {
+        const salvo = { ...conteudo, id: salvoId, versao };
+        this.id.set(salvoId);
+        this.confirmar(salvo);
+        if (this.titulo() === enviado.titulo) this.titulo.set(conteudo.titulo);
+        if (this.tipo() === enviado.tipo) this.tipo.set(conteudo.tipo);
         this.tentativa = undefined;
         this.toast.success('Documento salvo.');
 
-        if (!id) {
-          void this.router.navigate(['/secretaria']);
+        if (id) {
+          this.atualizarFormatos(id);
+        } else {
+          this.abrirEdicao(salvo);
         }
       },
-      error: erro => this.erro.set(erro instanceof HttpErrorResponse && erro.status === 409
-        ? 'O documento foi alterado em outra sessão. Seu texto continua disponível nesta tela.'
-        : 'Não foi possível salvar o documento. Tente novamente.'),
+      error: (erro: unknown) => {
+        const status = erro instanceof HttpErrorResponse ? erro.status : undefined;
+        switch (status) {
+          case 409:
+            this.falhaAoSalvar('O documento foi alterado em outra sessão. Seu rascunho continua nesta tela.');
+            break;
+          case 403:
+            this.falhaAoSalvar('Você não tem permissão para salvar este documento.');
+            break;
+          case 400:
+          case 422:
+            this.falhaAoSalvar('A API recusou os dados do documento. Revise os campos e tente novamente.');
+            break;
+          default:
+            this.falhaAoSalvar('Não foi possível salvar o documento. Seu rascunho continua nesta tela.');
+        }
+      },
     });
+  }
+
+  private abrirEdicao(salvo: Documento): void {
+    const transicao = new TransicaoDocumentoCriado(
+      salvo, () => this.conteudoAtual(), this.previaVisivel(),
+    );
+    this.transicao = transicao;
+    const falha = () => {
+      if (this.destroyRef.destroyed) return;
+      this.atualizarFormatos(salvo.id);
+      this.toast.warning('Documento salvo. Não foi possível abrir a URL de edição.');
+    };
+
+    void this.router.navigate(['/secretaria', 'documentos', salvo.id, 'editar'], {
+      info: transicao,
+      replaceUrl: true,
+    }).then(abriu => {
+      if (!abriu) falha();
+    }, falha).finally(() => {
+      this.transicao = undefined;
+    });
+  }
+
+  private falhaAoSalvar(mensagem: string): void {
+    this.erro.set(mensagem);
+    this.toast.error(mensagem);
   }
 
   private chaveCriacao(conteudo: ConteudoDocumento): string {

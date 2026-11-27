@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, Page, test } from '@playwright/test';
 import { measureOverflow, mockApi } from './support';
 
@@ -20,6 +21,9 @@ const desconhecido = { ...usuario, id: 'u3', nome: 'Ana Sousa', ativo: null };
 
 async function preparar(page: Page, permissoes: string[]) {
   await mockApi(page);
+  await page.route(/\/api\/Secretaria\/Documentos(?:\?|$)/, route =>
+    route.request().method() === 'GET' ? route.fulfill({ json: { items: [], total: 0 } }) : route.fallback(),
+  );
   await page.route('**/api/Me/Permissoes', route => route.fulfill({
     json: { permissoes, permissoesPorDesignacao: [], versaoAutorizacao: 1 },
   }));
@@ -518,6 +522,7 @@ for (const tema of ['light', 'dark']) {
     const abrir = botaoCriar(page);
     const modal = modalCriar(page);
     await abrir.click();
+    await modal.getByRole('checkbox', { name: 'Enviar documento pronto' }).check();
     const tipo = modal.getByRole('combobox', { name: 'Tipo de documento' });
     const nome = modal.getByLabel('Nome do documento');
     await tipo.selectOption('Ata');
@@ -533,15 +538,15 @@ for (const tema of ['light', 'dark']) {
     await expect(modal).toHaveCount(0);
     await expect(abrir).toBeFocused();
     await abrir.press('Enter');
-    await expect(tipo).toHaveValue('');
-    await expect(nome).toHaveValue('');
-    await expect(modal.getByRole('radio', { name: 'Enviar documento pronto' })).toBeChecked();
+    await expect(modal.getByRole('textbox', { name: 'Tipo de documento' })).toHaveValue('');
+    await expect(nome).toHaveCount(0);
+    await expect(modal.getByRole('checkbox', { name: 'Enviar documento pronto' })).not.toBeChecked();
     await page.keyboard.press('Escape');
     await expect(modal).toHaveCount(0);
     await expect(abrir).toBeFocused();
   });
 
-  test(`grade vazia abre um único modal por mouse e teclado sem permissão de criação em ${tema}`, async ({ page }) => {
+  test(`grade vazia abre um único modal e respeita a recusa da API em ${tema}`, async ({ page }) => {
     await page.addInitScript(valor => localStorage.setItem('app-theme', valor), tema);
     await preparar(page, [secretaria, consultarDocumentos]);
     const operacoes: string[] = [];
@@ -572,12 +577,13 @@ for (const tema of ['light', 'dark']) {
     await expect(page.locator('app-modal')).toHaveCount(1);
     expect(operacoes).toEqual([]);
 
+    await modal.getByRole('checkbox', { name: 'Enviar documento pronto' }).check();
     await modal.getByLabel('Tipo de documento').selectOption('Ata');
     await modal.locator('input[type=file]').setInputFiles(amostra('pdf'));
     await expect(modal.getByLabel('Nome do documento')).toHaveValue('Original.pdf');
     await modal.getByRole('button', { name: 'Criar documento', exact: true }).click();
-    await expect(modal.getByRole('alert')).toHaveText('Você não tem permissão para criar documentos.');
-    expect(operacoes).toEqual([]);
+    await expect(modal.getByRole('alert')).toHaveText('Você não tem permissão para importar documentos.');
+    expect(operacoes).toEqual(['importação']);
   });
 
   for (const largura of [320, 1366]) {
@@ -605,9 +611,8 @@ for (const tema of ['light', 'dark']) {
         await page.keyboard.press('Tab');
         expect(await modal.evaluate(el => el.contains(document.activeElement))).toBe(true);
       }
-      const pronto = modal.getByRole('radio', { name: 'Enviar documento pronto' });
-      await pronto.press('ArrowDown');
-      await expect(modal.getByRole('radio', { name: 'Usar como template' })).toBeChecked();
+      await modal.getByRole('checkbox', { name: 'Usar como template' }).press('Space');
+      await expect(modal.getByRole('checkbox', { name: 'Usar como template' })).toBeChecked();
       await expect(modal.getByLabel('Nome do documento')).toHaveCount(0);
       await page.keyboard.press('Escape');
       await expect(modal).toHaveCount(0);
@@ -655,6 +660,7 @@ for (const formato of ['docx', 'xlsx', 'pdf']) {
     await page.goto('/secretaria');
     await botaoCriar(page).click();
     const modal = modalCriar(page);
+    await modal.getByRole('checkbox', { name: 'Enviar documento pronto' }).check();
     await modal.getByLabel('Tipo de documento').selectOption(tipo);
     await modal.locator('input[type=file]').setInputFiles(amostra(formato));
     const nome = modal.getByLabel('Nome do documento');
@@ -677,12 +683,13 @@ for (const formato of ['docx', 'xlsx', 'pdf']) {
     expect(chamadas).toEqual(['listar', 'importar', 'salvar', 'listar']);
     await editar.click();
     await expect(page).toHaveURL(/\/doc-real\/editar$/);
-    const editor = page.getByLabel('Conteúdo Markdown');
+    const editor = page.getByLabel('Editor Markdown');
     await expect(editor).toHaveValue(markdown);
     if (formato === 'pdf') {
       await editor.fill('# Revisado');
       await page.getByRole('button', { name: 'Salvar documento' }).click();
-      await expect(page).toHaveURL(/\/secretaria$/);
+      await expect(page.getByText('Alterações salvas')).toBeVisible();
+      await expect(page).toHaveURL(/\/doc-real\/editar$/);
       expect(edicoes).toBe(1);
       expect(chamadas.filter(chamada => chamada === 'salvar')).toHaveLength(1);
     }
@@ -698,6 +705,7 @@ for (const formato of ['docx', 'xlsx', 'pdf']) {
       return route.fulfill({ json: { modo: 'template', markdown: estrutura, avisos: [] } });
     });
     await page.route(acervo, route => {
+      if (route.request().method() === 'GET') return route.fallback();
       gravacoes++;
       expect(route.request().postDataJSON()).toEqual({ titulo: 'Ata nova', tipo, markdown: estrutura });
       return route.fulfill({ status: 201, json: { id: 'novo', versao: 'rev-1' } });
@@ -706,23 +714,24 @@ for (const formato of ['docx', 'xlsx', 'pdf']) {
     const abrirTemplate = async () => {
       await botaoCriar(page).click();
       const modal = modalCriar(page);
-      await modal.getByRole('radio', { name: 'Usar como template' }).check();
+      await modal.getByRole('checkbox', { name: 'Usar como template' }).check();
       await modal.getByRole('textbox', { name: 'Tipo de documento' }).fill(`  ${tipo}  `);
       await modal.locator('input[type=file]').setInputFiles(amostra(formato));
       await modal.getByRole('button', { name: 'Criar documento', exact: true }).click();
       await expect(page).toHaveURL(/\/documentos\/novo$/);
       await expect(page.getByLabel('Nome do documento')).toHaveValue('Novo documento');
-      await expect(page.getByLabel('Conteúdo Markdown')).toHaveValue(estrutura);
+      await expect(page.getByLabel('Editor Markdown')).toHaveValue(estrutura);
       await expect(page.getByLabel('Tipo de documento')).toHaveValue(tipo);
     };
     await abrirTemplate();
+    page.once('dialog', dialog => dialog.accept());
     await page.getByRole('link', { name: 'Voltar à Secretaria' }).click();
     await expect(botaoCriar(page)).toBeVisible();
     expect(gravacoes).toBe(0);
     await abrirTemplate();
     await page.getByLabel('Nome do documento').fill('Ata nova');
     await page.getByRole('button', { name: 'Salvar documento' }).click();
-    await expect(page).toHaveURL(/\/secretaria$/);
+    await expect(page).toHaveURL(/\/novo\/editar$/);
     expect(gravacoes).toBe(1);
   });
 }
@@ -732,6 +741,7 @@ test('valida tipo, arquivo ausente, ilegível, formato, tamanho e extensão no d
   await page.goto('/secretaria');
   await botaoCriar(page).click();
   const modal = modalCriar(page);
+  await modal.getByRole('checkbox', { name: 'Enviar documento pronto' }).check();
   const tipo = modal.getByLabel('Tipo de documento');
   const seletor = modal.locator('input[type=file]');
   await modal.getByRole('button', { name: 'Criar documento', exact: true }).click();
@@ -785,6 +795,7 @@ test('preserva a chave, o conteúdo e o título após perda da resposta e bloque
   await page.goto('/secretaria');
   await botaoCriar(page).click();
   const modal = modalCriar(page);
+  await modal.getByRole('checkbox', { name: 'Enviar documento pronto' }).check();
   await modal.getByLabel('Tipo de documento').selectOption('Ata');
   await modal.locator('input[type=file]').setInputFiles(amostra('docx'));
   await expect(modal.getByLabel('Nome do documento')).toHaveValue('Original.docx');
@@ -808,6 +819,7 @@ test('trocar para template durante importação descarta a resposta antiga', asy
   const responder = Promise.withResolvers<void>();
   let gravacoes = 0;
   await page.route(acervo, route => {
+    if (route.request().method() === 'GET') return route.fallback();
     gravacoes++;
     return route.fulfill({ status: 500 });
   });
@@ -822,17 +834,18 @@ test('trocar para template durante importação descarta a resposta antiga', asy
   await page.goto('/secretaria');
   await botaoCriar(page).click();
   const modal = modalCriar(page);
+  await modal.getByRole('checkbox', { name: 'Enviar documento pronto' }).check();
   await modal.getByLabel('Tipo de documento').selectOption('Ata');
   await modal.locator('input[type=file]').setInputFiles(amostra('pdf'));
   const enviar = modal.getByRole('button', { name: 'Criar documento', exact: true });
   await enviar.click();
   await iniciou.promise;
-  await modal.getByRole('radio', { name: 'Usar como template' }).check();
+  await modal.getByRole('checkbox', { name: 'Usar como template' }).check();
   responder.resolve();
   await expect(modal.getByLabel('Nome do documento')).toHaveCount(0);
   await modal.getByRole('textbox', { name: 'Tipo de documento' }).fill('Ata');
   await enviar.click();
-  await expect(page.getByLabel('Conteúdo Markdown')).toHaveValue('# Estrutura');
+  await expect(page.getByLabel('Editor Markdown')).toHaveValue('# Estrutura');
   await expect(page.getByText('Aviso antigo')).toHaveCount(0);
   expect(gravacoes).toBe(0);
 });
@@ -843,6 +856,7 @@ test('erro de leitura da API fica associado ao arquivo e mantém os dados para t
   await page.goto('/secretaria');
   await botaoCriar(page).click();
   const modal = modalCriar(page);
+  await modal.getByRole('checkbox', { name: 'Enviar documento pronto' }).check();
   await modal.getByLabel('Tipo de documento').selectOption('Ata');
   const arquivo = modal.locator('input[type=file]');
   await arquivo.setInputFiles(amostra('pdf'));
@@ -862,6 +876,7 @@ for (const acao of ['Cancelar', 'Remover arquivo'] as const) {
     const respondeu = Promise.withResolvers<void>();
     let gravacoes = 0;
     await page.route(acervo, route => {
+      if (route.request().method() === 'GET') return route.fallback();
       gravacoes++;
       return route.fulfill({ status: 500 });
     });
@@ -877,6 +892,7 @@ for (const acao of ['Cancelar', 'Remover arquivo'] as const) {
     await page.goto('/secretaria');
     await botaoCriar(page).click();
     const modal = modalCriar(page);
+    await modal.getByRole('checkbox', { name: 'Enviar documento pronto' }).check();
     await modal.getByLabel('Tipo de documento').selectOption('Ata');
     await modal.locator('input[type=file]').setInputFiles(amostra('pdf'));
     await modal.getByRole('button', { name: 'Criar documento', exact: true }).click();
@@ -906,6 +922,7 @@ test('trocar o modo limpa o tipo e grava somente a opção escolhida no select',
     return route.fulfill({ json: { modo: 'documento', markdown: '# Documento', avisos: [] } });
   });
   await page.route(acervo, route => {
+    if (route.request().method() === 'GET') return route.fallback();
     tiposGravados.push(route.request().postDataJSON().tipo);
     return route.fulfill({ status: 201, json: { id: 'doc', versao: '1' } });
   });
@@ -913,6 +930,7 @@ test('trocar o modo limpa o tipo e grava somente a opção escolhida no select',
   await botaoCriar(page).click();
 
   const modal = modalCriar(page);
+  await modal.getByRole('checkbox', { name: 'Enviar documento pronto' }).check();
   const seletor = modal.getByRole('combobox', { name: 'Tipo de documento' });
   const campoLivre = modal.getByRole('textbox', { name: 'Tipo de documento' });
   const erroTipo = modal.getByText('Informe o tipo de documento.');
@@ -927,7 +945,7 @@ test('trocar o modo limpa o tipo e grava somente a opção escolhida no select',
   await seletor.selectOption('Ata');
   await modal.locator('input[type=file]').setInputFiles(amostra('docx'));
 
-  await modal.getByRole('radio', { name: 'Usar como template' }).check();
+  await modal.getByRole('checkbox', { name: 'Usar como template' }).check();
   await expect(seletor).toHaveCount(0);
   await expect(campoLivre).toHaveAttribute('placeholder', 'Ex.: Ata');
   await expect(campoLivre).toHaveValue('');
@@ -938,7 +956,7 @@ test('trocar o modo limpa o tipo e grava somente a opção escolhida no select',
   await expect(erroTipo).toBeVisible();
   await campoLivre.fill('Modelo personalizado');
 
-  await modal.getByRole('radio', { name: 'Enviar documento pronto' }).check();
+  await modal.getByRole('checkbox', { name: 'Enviar documento pronto' }).check();
   await expect(campoLivre).toHaveCount(0);
   await expect(seletor).toHaveValue('');
   await expect(seletor.locator('option:checked')).toHaveText('Selecione o tipo de documento');
@@ -971,6 +989,7 @@ for (const modo of ['documento', 'template'] as const) {
       }
     });
     await page.route(acervo, route => {
+      if (route.request().method() === 'GET') return route.fallback();
       gravacoes++;
       return route.fulfill({ status: 201, json: { id: 'doc-antigo', versao: '1' } });
     });
@@ -979,9 +998,10 @@ for (const modo of ['documento', 'template'] as const) {
     const modal = modalCriar(page);
     await abrir.click();
     if (modo === 'template') {
-      await modal.getByRole('radio', { name: 'Usar como template' }).check();
+      await modal.getByRole('checkbox', { name: 'Usar como template' }).check();
       await modal.getByRole('textbox', { name: 'Tipo de documento' }).fill('Tipo anterior');
     } else {
+      await modal.getByRole('checkbox', { name: 'Enviar documento pronto' }).check();
       await modal.getByRole('combobox', { name: 'Tipo de documento' }).selectOption('Ata');
     }
     await modal.locator('input[type=file]').setInputFiles(amostra('docx'));
@@ -996,9 +1016,304 @@ for (const modo of ['documento', 'template'] as const) {
     await respondeu.promise;
 
     await expect(page).toHaveURL(/\/secretaria$/);
-    await expect(modal.getByRole('combobox', { name: 'Tipo de documento' })).toHaveValue('');
+    await expect(modal.getByRole('textbox', { name: 'Tipo de documento' })).toHaveValue('');
     await expect(modal.getByText('Original.docx')).toHaveCount(0);
     await expect(page.getByText('Aviso antigo')).toHaveCount(0);
     expect(gravacoes).toBe(0);
   });
 }
+
+test('editor vazio cria uma vez, leva o rascunho posterior à edição e atualiza a grade', async ({ page }) => {
+  await preparar(page, [secretaria]);
+  const inicio = Promise.withResolvers<void>();
+  const gravar = Promise.withResolvers<void>();
+  const id = 'ata-234';
+  let registro = { id, titulo: '', tipo: '', markdown: '', versao: 'v1', formatosExportacao: ['pdf', 'md', 'docx'] };
+  let posts = 0;
+  let puts = 0;
+  await page.route(acervo, async route => {
+    const req = route.request();
+    if (req.method() === 'GET') {
+      return route.fulfill({ json: { items: posts ? [registro] : [], total: posts } });
+    }
+    posts++;
+    expect(req.headers()['idempotency-key']).toBeTruthy();
+    expect(req.postDataJSON()).toEqual({ titulo: 'Ata da reunião', tipo: 'Ata', markdown: '# Enviado' });
+    registro = { ...registro, ...req.postDataJSON() };
+    inicio.resolve();
+    await gravar.promise;
+    await route.fulfill({ status: 201, json: { id, versao: 'v1' } });
+  });
+  await page.route('**/api/Secretaria/Documentos/' + id, route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: registro });
+    expect(route.request().method()).toBe('PUT');
+    expect(route.request().postDataJSON()).toEqual({
+      titulo: 'Ata revisada', tipo: 'Ata', markdown: '# Depois do envio', versao: puts === 0 ? 'v1' : 'v2',
+    });
+    puts++;
+    registro = { ...registro, ...route.request().postDataJSON(), versao: 'v' + (puts + 1), formatosExportacao: ['pdf', 'md', 'xlsx'] };
+    return route.fulfill({ json: { versao: registro.versao } });
+  });
+  await page.goto('/secretaria');
+  await botaoCriar(page).click();
+  await modalCriar(page).getByRole('button', { name: 'Criar documento' }).click();
+  await expect(page).toHaveURL(/\/documentos\/novo$/);
+  await expect(page.getByText('Alterações salvas', { exact: true })).toHaveCount(0);
+  const exportar = page.getByRole('button', { name: /^Exportar / });
+  await exportar.click();
+  await expect(page.getByText('Salve o documento antes de exportar.')).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  const titulo = page.getByLabel('Nome do documento');
+  const tipo = page.getByLabel('Tipo de documento');
+  const markdown = page.getByLabel('Editor Markdown');
+  const salvar = page.getByRole('button', { name: 'Salvar documento' });
+  await titulo.fill('  Ata da reunião  ');
+  await tipo.fill(' Ata ');
+  await markdown.fill('# Enviado');
+  await salvar.click();
+  await inicio.promise;
+  await expect(salvar).toBeDisabled();
+  await expect(page.getByText('Salvando…', { exact: true })).toBeVisible();
+  await titulo.fill('  Ata revisada  ');
+  await markdown.fill('# Depois do envio');
+  gravar.resolve();
+
+  await expect(page).toHaveURL(/\/ata-234\/editar$/);
+  await expect(markdown).toHaveValue('# Depois do envio');
+  await expect(page.getByText('Alterações não salvas', { exact: true })).toBeVisible();
+  await exportar.click();
+  const dialogo = page.getByRole('dialog', { name: 'Exportar documento' });
+  await expect(dialogo.getByText(/última versão salva/)).toBeVisible();
+  await expect(dialogo.getByRole('button', { name: 'DOCX' })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.getByRole('link', { name: 'Voltar à Secretaria' }).click();
+  await expect(markdown).toHaveValue('# Depois do envio');
+  await salvar.click();
+  await expect(page.getByText('Alterações salvas', { exact: true })).toBeVisible();
+  await expect(titulo).toHaveValue('Ata revisada');
+  await expect(tipo).toHaveValue('Ata');
+  await exportar.click();
+  await expect(dialogo.getByRole('button', { name: 'XLSX' })).toBeVisible();
+  await expect(dialogo.getByRole('button', { name: 'DOCX' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await salvar.click();
+  await expect(page.getByText('Documento salvo.').last()).toBeVisible();
+  await expect.poll(() => puts).toBe(2);
+  await expect(salvar).toBeEnabled();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/secretaria$/);
+  await expect(page.getByRole('rowheader', { name: 'Ata revisada' })).toHaveCount(1);
+  expect(posts).toBe(1);
+});
+
+test('editor mantém o rascunho após falha de rede e conflito e bloqueia gravar após GET 404', async ({ page }) => {
+  await preparar(page, [secretaria]);
+  const chaves: string[] = [];
+  await page.route(acervo, route => {
+    if (route.request().method() === 'GET') return route.fallback();
+    chaves.push(route.request().headers()['idempotency-key']);
+    return chaves.length === 1 ? route.abort('failed') : route.fulfill({ status: 409 });
+  });
+  await page.route('**/api/Secretaria/Documentos/inexistente', route => {
+    expect(route.request().method()).toBe('GET');
+    return route.fulfill({ status: 404 });
+  });
+  await page.goto('/secretaria/documentos/inexistente/editar');
+  await expect(page.getByText('Documento não encontrado.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Salvar documento' })).toBeDisabled();
+  expect(chaves).toHaveLength(0);
+
+  await page.goto('/secretaria/documentos/novo');
+  await page.getByLabel('Nome do documento').fill('Ata');
+  await page.getByLabel('Tipo de documento').fill('Ata');
+  const markdown = page.getByLabel('Editor Markdown');
+  await markdown.fill('# Rascunho');
+  const salvar = page.getByRole('button', { name: 'Salvar documento' });
+  await salvar.click();
+  await expect(page.locator('app-documento-editor > .erro')).toContainText('Seu rascunho continua');
+  await expect(markdown).toHaveValue('# Rascunho');
+  await salvar.click();
+  await expect(page.locator('app-documento-editor > .erro')).toContainText('outra sessão');
+  await expect(markdown).toHaveValue('# Rascunho');
+  await expect(page.getByText('Alterações não salvas', { exact: true })).toBeVisible();
+  expect(chaves[0]).toBeTruthy();
+  expect(chaves).toEqual([chaves[0], chaves[0]]);
+  expect(await page.evaluate(() => {
+    const evento = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(evento);
+    return evento.defaultPrevented;
+  })).toBe(true);
+});
+
+const tabelaLarga = [
+  Array.from({ length: 60 }, (_, i) => 'Coluna ' + (i + 1)),
+  Array.from({ length: 60 }, () => '---'),
+  Array.from({ length: 60 }, () => 'Valor'),
+].map(linha => '| ' + linha.join(' | ') + ' |');
+const markdownAta = [
+  '# Reunião', '', 'Olá **diretoria** e *equipe*.', '', '- Primeiro', '- Segundo',
+  '', '> Citação', '', '\x60\x60\x60', 'conteúdo de código'.repeat(30), '\x60\x60\x60', '',
+  '[Site](https://example.org)', '', '| A | B |', '|---|---|', '| ação | conclusão |',
+  '', ...tabelaLarga, '', '<iframe title="Elemento fora da lista permitida"></iframe>',
+  '', ...Array.from({ length: 50 }, (_, i) => 'Linha ' + (i + 1)),
+].join('\n');
+const ata234 = { id: 'ata', titulo: 'Ata da reunião', tipo: 'Ata', markdown: markdownAta, versao: 'v1', formatosExportacao: ['pdf', 'md', 'docx'] };
+const planilha234 = { id: 'planilha', titulo: 'Lista de presença', tipo: 'Planilha', markdown: '| A | B |\n|---|---|\n| 1 | 2 |', versao: 'v1', formatosExportacao: ['pdf', 'md', 'xlsx'] };
+
+for (const [tema, largura] of [['light', 1366], ['dark', 390]] as const) {
+  test(`prévia e leitura compartilham o Markdown em ${tema}, ${largura}px`, async ({ page }) => {
+    await page.setViewportSize({ width: largura, height: 800 });
+    await page.addInitScript(valor => localStorage.setItem('app-theme', valor), tema);
+    await preparar(page, [secretaria]);
+    await page.route(acervo, route => route.fulfill({ json: { items: [ata234], total: 1 } }));
+    await page.route('**/api/Secretaria/Documentos/ata', route => route.fulfill({ json: ata234 }));
+    await page.goto('/secretaria/documentos/ata/visualizar');
+    await expect(page.getByRole('heading', { name: ata234.titulo, exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Salvar documento' })).toHaveCount(0);
+    await expect(page.getByRole('textbox')).toHaveCount(0);
+    await expect(page.getByRole('group', { name: 'Formatação Markdown' })).toHaveCount(0);
+    const previa = page.locator('.editor-previa');
+    const link = previa.getByRole('link', { name: 'Site' });
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    for (const seletor of ['h1', 'strong', 'em', 'ul', 'blockquote', 'pre', 'table']) {
+      await expect(previa.locator(seletor).first()).toBeVisible();
+    }
+    await expect(previa.getByRole('cell', { name: 'ação' })).toBeVisible();
+    await expect(previa.locator('iframe')).toHaveCount(0);
+    expect(await previa.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+    expect(await previa.locator('pre').evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+    const html = await previa.innerHTML();
+    await page.reload();
+    await expect(link).toBeVisible();
+    await page.getByRole('link', { name: 'Voltar à Secretaria' }).click();
+    await page.getByRole('link', { name: 'Visualizar ' + ata234.titulo }).click();
+    await expect(page).toHaveURL(/\/ata\/visualizar$/);
+    await page.getByRole('link', { name: 'Voltar à Secretaria' }).click();
+    await page.getByRole('link', { name: 'Editar ' + ata234.titulo }).click();
+    await expect(page).toHaveURL(/\/ata\/editar$/);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', tema);
+    await expect(previa.getByRole('link', { name: 'Site' })).toHaveAttribute('target', '_blank');
+    expect(await previa.innerHTML()).toBe(html);
+    const escrita = page.locator('.editor-painel').first();
+    const painel = page.locator('#painel-previa-documento');
+    const esquerda = (await escrita.boundingBox())!;
+    const direita = (await painel.boundingBox())!;
+    if (largura > 768) {
+      expect(Math.abs(esquerda.width - direita.width)).toBeLessThan(3);
+      expect(esquerda.y).toBe(direita.y);
+    } else {
+      expect(direita.y).toBeGreaterThan(esquerda.y);
+    }
+    const visualizar = page.getByRole('button', { name: 'Visualizar', exact: true });
+    const campo = page.getByLabel('Editor Markdown');
+    await campo.evaluate((el: HTMLTextAreaElement) => {
+      el.setSelectionRange(3, 8);
+      el.scrollTop = 90;
+    });
+    const posicao = await campo.evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd, el.scrollTop]);
+    expect(posicao[2]).toBeGreaterThan(0);
+    await expect.poll(() => page.locator('.editor-numeracao').evaluate(el => el.scrollTop)).toBe(posicao[2]);
+    await expect(visualizar).toHaveAttribute('aria-pressed', 'true');
+    await visualizar.press('Space');
+    await expect(visualizar).toHaveAttribute('aria-pressed', 'false');
+    await expect(painel).toBeHidden();
+    if (largura > 768) expect((await escrita.boundingBox())!.width).toBeGreaterThan(esquerda.width);
+    await visualizar.press('Space');
+    await expect(painel).toBeVisible();
+    await expect(campo).toHaveValue(markdownAta);
+    await expect(page.getByText('Linhas: ' + markdownAta.split('\n').length)).toBeVisible();
+    expect(await campo.evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd, el.scrollTop])).toEqual(posicao);
+    expect((await measureOverflow(page)).documentOverflow).toBeLessThanOrEqual(1);
+  });
+}
+
+test('grade exporta com os formatos da API e rejeita resposta sem arquivo válido', async ({ page }) => {
+  await preparar(page, [secretaria]);
+  await page.route(acervo, route => route.fulfill({ json: { items: [ata234, planilha234], total: 2 } }));
+  const requisicoes: string[] = [];
+  await page.route(/\/api\/Secretaria\/Documentos\/(ata|planilha)\/exportar\?/, route => {
+    const url = new URL(route.request().url());
+    requisicoes.push(url.pathname + url.search);
+    expect(route.request().headers()['authorization']).toBe('Bearer token-de-teste');
+    return url.pathname.endsWith('/ata/exportar')
+      ? route.fulfill({ contentType: 'text/markdown; charset=utf-8', body: markdownAta, headers: {
+        'Content-Disposition': "attachment; filename=Reuniao.md; filename*=UTF-8''Reuni%C3%A3o.md",
+      } })
+      : route.fulfill({ contentType: 'text/html', body: '<html>Resposta inválida</html>' });
+  });
+  await page.goto('/secretaria');
+  const exportarAta = page.getByRole('button', { name: 'Exportar ' + ata234.titulo });
+  const dialogo = page.getByRole('dialog', { name: 'Exportar documento' });
+  await exportarAta.press('Enter');
+  await expect(dialogo.getByRole('button', { name: 'DOCX' })).toBeVisible();
+  await expect(dialogo.getByRole('button', { name: 'XLSX' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(exportarAta).toBeFocused();
+  expect(requisicoes).toEqual([]);
+  await exportarAta.click();
+  const download = page.waitForEvent('download');
+  await dialogo.getByRole('button', { name: 'MD', exact: true }).press('Enter');
+  const arquivo = await download;
+  expect(arquivo.suggestedFilename()).toBe('Reunião.md');
+  expect(await readFile(await arquivo.path(), 'utf8')).toBe(markdownAta);
+  await expect(dialogo).toHaveCount(0);
+  await expect(exportarAta).toBeFocused();
+
+  await page.getByRole('button', { name: 'Exportar ' + planilha234.titulo }).click();
+  await expect(dialogo.getByRole('button', { name: 'DOCX' })).toHaveCount(0);
+  const downloadsInvalidos: string[] = [];
+  page.on('download', arquivo => downloadsInvalidos.push(arquivo.suggestedFilename()));
+  await dialogo.getByRole('button', { name: 'XLSX' }).click();
+  await expect(dialogo.getByRole('alert')).toContainText('Não foi possível baixar o documento');
+  expect(downloadsInvalidos).toEqual([]);
+  expect(requisicoes).toEqual([
+    '/api/Secretaria/Documentos/ata/exportar?formato=md',
+    '/api/Secretaria/Documentos/planilha/exportar?formato=xlsx',
+  ]);
+});
+
+test('leitura mostra 404 e o guard bloqueia acesso direto sem permissão da Secretaria', async ({ page }) => {
+  await preparar(page, [secretaria]);
+  let consultas = 0;
+  await page.route('**/api/Secretaria/Documentos/removido', route => {
+    consultas++;
+    return route.fulfill({ status: 404 });
+  });
+  await page.goto('/secretaria/documentos/removido/visualizar');
+  await expect(page.getByRole('alert')).toHaveText('Documento não encontrado.');
+  await expect(page.getByRole('link', { name: 'Voltar à Secretaria' })).toBeVisible();
+  await page.route('**/api/Me/Permissoes', route => route.fulfill({
+    json: { permissoes: ['secretaria.documentos.consultar'], permissoesPorDesignacao: [], versaoAutorizacao: 2 },
+  }));
+  await page.reload();
+  await expect(page).toHaveURL(/\/perfil$/);
+  expect(consultas).toBe(1);
+});
+
+test('conflito no PUT preserva a versão e o rascunho da edição', async ({ page }) => {
+  await preparar(page, [secretaria]);
+  const versoes: string[] = [];
+  await page.route('**/api/Secretaria/Documentos/ata', route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: ata234 });
+    expect(route.request().method()).toBe('PUT');
+    const corpo = route.request().postDataJSON();
+    versoes.push(corpo.versao);
+    expect(corpo.markdown).toBe('# Rascunho em edição');
+    return route.fulfill({ status: 409 });
+  });
+  await page.goto('/secretaria/documentos/ata/editar');
+  const markdown = page.getByLabel('Editor Markdown');
+  await expect(markdown).toHaveValue(markdownAta);
+  await markdown.fill('# Rascunho em edição');
+  const salvar = page.getByRole('button', { name: 'Salvar documento' });
+  for (let i = 0; i < 2; i++) {
+    await salvar.click();
+    await expect(page.locator('app-documento-editor > .erro')).toContainText('outra sessão');
+    await expect(markdown).toHaveValue('# Rascunho em edição');
+  }
+  expect(versoes).toEqual(['v1', 'v1']);
+});

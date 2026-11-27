@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import type { RouterLink } from '@angular/router';
 import { expect, Page, test } from '@playwright/test';
 import { measureOverflow, mockApi } from './support';
 
@@ -507,8 +508,10 @@ const criarDocumentos = 'secretaria.documentos.criar';
 const editarDocumentos = 'secretaria.documentos.editar';
 const importacao = '**/api/Secretaria/Documentos/Importacao';
 const acervo = /\/api\/Secretaria\/Documentos(?:\?|$)/;
+const opcoesTipoDocumento = ['Selecione o tipo de documento', 'Ata', 'Autorização de saída', 'Ficha de cadastro'];
 const botaoCriar = (page: Page) => page.getByRole('button', { name: '+ Criar documento', exact: true });
 const modalCriar = (page: Page) => page.getByRole('dialog', { name: 'Criar documento' });
+const confirmacaoSaida = (page: Page) => page.getByRole('dialog', { name: 'Sair sem salvar?' });
 const amostra = (extensao: string) => ({
   name: 'Original.' + extensao, mimeType: 'application/octet-stream', buffer: Buffer.from('fixture'),
 });
@@ -719,13 +722,16 @@ for (const formato of ['docx', 'xlsx', 'pdf']) {
       await modal.locator('input[type=file]').setInputFiles(amostra(formato));
       await modal.getByRole('button', { name: 'Criar documento', exact: true }).click();
       await expect(page).toHaveURL(/\/documentos\/novo$/);
-      await expect(page.getByLabel('Nome do documento')).toHaveValue('Novo documento');
+      await expect(page.getByLabel('Nome do documento')).toHaveValue('');
       await expect(page.getByLabel('Editor Markdown')).toHaveValue(estrutura);
-      await expect(page.getByLabel('Tipo de documento')).toHaveValue(tipo);
+      const tipos = page.getByRole('combobox', { name: 'Tipo de documento' });
+      await expect(tipos).toHaveValue(tipo);
+      await expect(tipos.getByRole('option')).toHaveText([...opcoesTipoDocumento, tipo]);
+      await expect(page.getByLabel('Editor Markdown')).toBeEditable();
     };
     await abrirTemplate();
-    page.once('dialog', dialog => dialog.accept());
     await page.getByRole('link', { name: 'Voltar à Secretaria' }).click();
+    await confirmacaoSaida(page).getByRole('button', { name: 'Sair sem salvar' }).click();
     await expect(botaoCriar(page)).toBeVisible();
     expect(gravacoes).toBe(0);
     await abrirTemplate();
@@ -936,12 +942,7 @@ test('trocar o modo limpa o tipo e grava somente a opção escolhida no select',
   const erroTipo = modal.getByText('Informe o tipo de documento.');
   const enviar = modal.getByRole('button', { name: 'Criar documento', exact: true });
   await expect(seletor).toHaveValue('');
-  await expect(seletor.getByRole('option')).toHaveText([
-    'Selecione o tipo de documento',
-    'Ata',
-    'Autorização de saída',
-    'Ficha de cadastro',
-  ]);
+  await expect(seletor.getByRole('option')).toHaveText(opcoesTipoDocumento);
   await seletor.selectOption('Ata');
   await modal.locator('input[type=file]').setInputFiles(amostra('docx'));
 
@@ -1023,10 +1024,12 @@ for (const modo of ['documento', 'template'] as const) {
   });
 }
 
-test('editor vazio cria uma vez, leva o rascunho posterior à edição e atualiza a grade', async ({ page }) => {
+test('editor vazio leva o rascunho digitado durante POST e PUT e atualiza a grade', async ({ page }) => {
   await preparar(page, [secretaria]);
   const inicio = Promise.withResolvers<void>();
   const gravar = Promise.withResolvers<void>();
+  const inicioEdicao = Promise.withResolvers<void>();
+  const gravarEdicao = Promise.withResolvers<void>();
   const id = 'ata-234';
   let registro = { id, titulo: '', tipo: '', markdown: '', versao: 'v1', formatosExportacao: ['pdf', 'md', 'docx'] };
   let posts = 0;
@@ -1044,13 +1047,18 @@ test('editor vazio cria uma vez, leva o rascunho posterior à edição e atualiz
     await gravar.promise;
     await route.fulfill({ status: 201, json: { id, versao: 'v1' } });
   });
-  await page.route('**/api/Secretaria/Documentos/' + id, route => {
+  await page.route('**/api/Secretaria/Documentos/' + id, async route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: registro });
     expect(route.request().method()).toBe('PUT');
     expect(route.request().postDataJSON()).toEqual({
-      titulo: 'Ata revisada', tipo: 'Ata', markdown: '# Depois do envio', versao: puts === 0 ? 'v1' : 'v2',
+      titulo: 'Ata revisada', tipo: 'Ata', markdown: puts === 0 ? '# Depois do envio' : '# Durante o PUT',
+      versao: puts === 0 ? 'v1' : 'v2',
     });
     puts++;
+    if (puts === 1) {
+      inicioEdicao.resolve();
+      await gravarEdicao.promise;
+    }
     registro = { ...registro, ...route.request().postDataJSON(), versao: 'v' + (puts + 1), formatosExportacao: ['pdf', 'md', 'xlsx'] };
     return route.fulfill({ json: { versao: registro.versao } });
   });
@@ -1059,40 +1067,72 @@ test('editor vazio cria uma vez, leva o rascunho posterior à edição e atualiz
   await modalCriar(page).getByRole('button', { name: 'Criar documento' }).click();
   await expect(page).toHaveURL(/\/documentos\/novo$/);
   await expect(page.getByText('Alterações salvas', { exact: true })).toHaveCount(0);
-  const exportar = page.getByRole('button', { name: /^Exportar / });
+  const exportar = page.getByRole('button', { name: /^Exportar(?: |$)/ });
   await exportar.click();
   await expect(page.getByText('Salve o documento antes de exportar.')).toBeVisible();
   await page.keyboard.press('Escape');
 
   const titulo = page.getByLabel('Nome do documento');
-  const tipo = page.getByLabel('Tipo de documento');
+  const tipo = page.getByRole('combobox', { name: 'Tipo de documento' });
   const markdown = page.getByLabel('Editor Markdown');
   const salvar = page.getByRole('button', { name: 'Salvar documento' });
-  await titulo.fill('  Ata da reunião  ');
-  await tipo.fill(' Ata ');
+  const pendente = page.getByText('Alterações não salvas', { exact: true });
+  await expect(titulo).toHaveAttribute('placeholder', 'Novo documento');
+  await expect(titulo).toHaveValue('');
+  await expect(tipo).toHaveValue('');
+  await expect(tipo.getByRole('option')).toHaveText(opcoesTipoDocumento);
+  await expect(pendente).toBeHidden();
+  await titulo.fill('Ata da reunião');
+  await expect(pendente).toBeVisible();
+  await titulo.clear();
+  await expect(pendente).toBeHidden();
+
+  await titulo.fill('Ata da reunião');
   await markdown.fill('# Enviado');
+  await salvar.click();
+  await expect(tipo).toBeFocused();
+  expect(posts).toBe(0);
+  await tipo.press('ArrowDown');
+  await expect(tipo).toHaveValue('Ata');
+  await titulo.clear();
+  await salvar.click();
+  await expect(titulo).toBeFocused();
+  expect(posts).toBe(0);
+  await titulo.fill('  Ata da reunião  ');
   await salvar.click();
   await inicio.promise;
   await expect(salvar).toBeDisabled();
   await expect(page.getByText('Salvando…', { exact: true })).toBeVisible();
+  const voltar = page.getByRole('link', { name: 'Voltar à Secretaria' });
+  await voltar.click();
+  await expect(page).toHaveURL(/\/documentos\/novo$/);
+  await expect(confirmacaoSaida(page)).toBeHidden();
   await titulo.fill('  Ata revisada  ');
   await markdown.fill('# Depois do envio');
   gravar.resolve();
 
   await expect(page).toHaveURL(/\/ata-234\/editar$/);
   await expect(markdown).toHaveValue('# Depois do envio');
-  await expect(page.getByText('Alterações não salvas', { exact: true })).toBeVisible();
+  await expect(pendente).toBeVisible();
   await exportar.click();
   const dialogo = page.getByRole('dialog', { name: 'Exportar documento' });
   await expect(dialogo.getByText(/última versão salva/)).toBeVisible();
   await expect(dialogo.getByRole('button', { name: 'DOCX' })).toBeVisible();
   await page.keyboard.press('Escape');
 
-  page.once('dialog', dialog => dialog.dismiss());
-  await page.getByRole('link', { name: 'Voltar à Secretaria' }).click();
+  await voltar.click();
+  await confirmacaoSaida(page).getByRole('button', { name: 'Continuar editando' }).click();
   await expect(markdown).toHaveValue('# Depois do envio');
   await salvar.click();
-  await expect(page.getByText('Alterações salvas', { exact: true })).toBeVisible();
+  await inicioEdicao.promise;
+  try {
+    await expect(salvar).toBeDisabled();
+    await markdown.fill('# Durante o PUT');
+  } finally {
+    gravarEdicao.resolve();
+  }
+  await expect(pendente).toBeVisible();
+  await expect(markdown).toHaveValue('# Durante o PUT');
   await expect(titulo).toHaveValue('Ata revisada');
   await expect(tipo).toHaveValue('Ata');
   await exportar.click();
@@ -1100,6 +1140,7 @@ test('editor vazio cria uma vez, leva o rascunho posterior à edição e atualiz
   await expect(dialogo.getByRole('button', { name: 'DOCX' })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await salvar.click();
+  await expect(page.getByText('Alterações salvas', { exact: true })).toBeVisible();
   await expect(page.getByText('Documento salvo.').last()).toBeVisible();
   await expect.poll(() => puts).toBe(2);
   await expect(salvar).toBeEnabled();
@@ -1109,7 +1150,7 @@ test('editor vazio cria uma vez, leva o rascunho posterior à edição e atualiz
   expect(posts).toBe(1);
 });
 
-test('editor mantém o rascunho após falha de rede e conflito e bloqueia gravar após GET 404', async ({ page }) => {
+test('editor novo mantém o rascunho após falha de rede e conflito no POST', async ({ page }) => {
   await preparar(page, [secretaria]);
   const chaves: string[] = [];
   await page.route(acervo, route => {
@@ -1117,18 +1158,10 @@ test('editor mantém o rascunho após falha de rede e conflito e bloqueia gravar
     chaves.push(route.request().headers()['idempotency-key']);
     return chaves.length === 1 ? route.abort('failed') : route.fulfill({ status: 409 });
   });
-  await page.route('**/api/Secretaria/Documentos/inexistente', route => {
-    expect(route.request().method()).toBe('GET');
-    return route.fulfill({ status: 404 });
-  });
-  await page.goto('/secretaria/documentos/inexistente/editar');
-  await expect(page.getByText('Documento não encontrado.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Salvar documento' })).toBeDisabled();
-  expect(chaves).toHaveLength(0);
-
   await page.goto('/secretaria/documentos/novo');
+  await expect(page.getByLabel('Editor Markdown')).toBeEditable();
   await page.getByLabel('Nome do documento').fill('Ata');
-  await page.getByLabel('Tipo de documento').fill('Ata');
+  await page.getByRole('combobox', { name: 'Tipo de documento' }).selectOption('Ata');
   const markdown = page.getByLabel('Editor Markdown');
   await markdown.fill('# Rascunho');
   const salvar = page.getByRole('button', { name: 'Salvar documento' });
@@ -1162,6 +1195,254 @@ const markdownAta = [
 ].join('\n');
 const ata234 = { id: 'ata', titulo: 'Ata da reunião', tipo: 'Ata', markdown: markdownAta, versao: 'v1', formatosExportacao: ['pdf', 'md', 'docx'] };
 const planilha234 = { id: 'planilha', titulo: 'Lista de presença', tipo: 'Planilha', markdown: '| A | B |\n|---|---|\n| 1 | 2 |', versao: 'v1', formatosExportacao: ['pdf', 'md', 'xlsx'] };
+
+for (const [tema, caminho, fundoAviso] of [
+  ['light', 'novo', 'rgb(254, 243, 199)'],
+  ['dark', 'ata/editar', 'rgb(72, 53, 28)'],
+] as const) {
+  test(`editor confirma a saída com rascunho em ${caminho} no tema ${tema}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 800 });
+    await page.addInitScript(valor => localStorage.setItem('app-theme', valor), tema);
+    await preparar(page, [secretaria, 'dashboard.consultar']);
+    await page.route('**/api/Secretaria/Documentos/ata', route => route.fulfill({ json: ata234 }));
+    const rota = `/secretaria/documentos/${caminho}`;
+    await page.goto(rota);
+
+    const markdown = page.getByLabel('Editor Markdown');
+    const voltar = page.getByRole('link', { name: 'Voltar à Secretaria' });
+    const menu = page.locator('aside.sidebar a[href="/dashboard"]');
+    const rascunho = '# Rascunho em edição';
+    await markdown.fill(rascunho);
+    const alvosFundo = [(await markdown.boundingBox())!, (await menu.boundingBox())!];
+    await voltar.click();
+
+    const confirmacao = confirmacaoSaida(page);
+    const continuar = confirmacao.getByRole('button', { name: 'Continuar editando' });
+    const sair = confirmacao.getByRole('button', { name: 'Sair sem salvar' });
+    const mensagem = 'Você tem alterações não salvas neste documento. Se sair agora, elas serão perdidas.';
+    await expect(confirmacao).toHaveAccessibleDescription(mensagem);
+    await expect(confirmacao.getByText(mensagem)).toHaveCSS('background-color', fundoAviso);
+    await expect(continuar).toBeFocused();
+    await expect(page).toHaveURL(rota);
+
+    await page.keyboard.press('Shift+Tab');
+    await expect(sair).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(continuar).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(sair).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(continuar).toBeFocused();
+    await page.locator('#editor-markdown').evaluate((el: HTMLTextAreaElement) => el.focus());
+    await menu.evaluate((el: HTMLElement) => el.focus());
+    await expect(continuar).toBeFocused();
+
+    for (const alvo of alvosFundo) {
+      await page.mouse.click(alvo.x + 5, alvo.y + 5);
+      await expect(confirmacao).toBeVisible();
+      await expect(page).toHaveURL(rota);
+    }
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    await expect(confirmacao).toBeVisible();
+
+    await continuar.press('Enter');
+    await expect(confirmacao).toBeHidden();
+    await expect(voltar).toBeFocused();
+    await expect(markdown).toHaveValue(rascunho);
+    await expect(page).toHaveURL(rota);
+
+    await voltar.click();
+    await expect(continuar).toBeFocused();
+    await sair.click();
+    await expect(page).toHaveURL('/secretaria');
+    await expect(confirmacao).toBeHidden();
+
+    // Outra saída pede uma nova escolha e segue o destino do menu.
+    await page.goBack();
+    await markdown.fill(rascunho);
+    await menu.click();
+    await expect(continuar).toBeFocused();
+    await sair.click();
+    await expect(page).toHaveURL('/dashboard');
+  });
+}
+
+async function verificarEscritaBloqueada(page: Page) {
+  for (const nome of ['Nome do documento', 'Tipo de documento', 'Editor Markdown']) {
+    const campo = page.getByLabel(nome);
+    await expect(campo).toBeDisabled();
+    await campo.press('A');
+    await expect(campo).toHaveValue('');
+  }
+  const ferramentas = page.getByRole('group', { name: 'Formatação Markdown' }).getByRole('button');
+  await expect(ferramentas).toHaveCount(8);
+  for (const botao of await ferramentas.all()) {
+    await expect(botao).toBeDisabled();
+    await botao.evaluate((el: HTMLButtonElement) => el.click());
+  }
+  await expect(page.getByLabel('Editor Markdown')).toHaveValue('');
+  await expect(page.getByRole('button', { name: 'Salvar documento' })).toBeDisabled();
+}
+
+test('editor bloqueia a escrita até receber o detalhe do documento', async ({ page }) => {
+  await preparar(page, [secretaria]);
+  const inicio = Promise.withResolvers<void>();
+  const liberar = Promise.withResolvers<void>();
+  await page.route('**/api/Secretaria/Documentos/ata', async route => {
+    expect(route.request().method()).toBe('GET');
+    inicio.resolve();
+    await liberar.promise;
+    await route.fulfill({ json: ata234 });
+  });
+  await page.goto('/secretaria/documentos/ata/editar');
+  await inicio.promise;
+  const carregando = page.getByText('Carregando documento…', { exact: true });
+  await expect(carregando).toBeVisible();
+  try {
+    await verificarEscritaBloqueada(page);
+  } finally {
+    liberar.resolve();
+  }
+
+  await expect(carregando).toBeHidden();
+  const titulo = page.getByLabel('Nome do documento');
+  const tipo = page.getByRole('combobox', { name: 'Tipo de documento' });
+  const markdown = page.getByLabel('Editor Markdown');
+  await expect(titulo).toHaveValue(ata234.titulo);
+  await expect(tipo).toHaveValue(ata234.tipo);
+  await expect(markdown).toHaveValue(ata234.markdown);
+  await titulo.fill('Ata revisada');
+  await tipo.selectOption('Ficha de cadastro');
+  await markdown.fill('Revisão');
+  await page.getByRole('button', { name: 'Título', exact: true }).click();
+  await expect(markdown).toHaveValue('## Revisão');
+  await expect(page.getByRole('button', { name: 'Salvar documento' })).toBeEnabled();
+});
+
+for (const [status, mensagem] of [
+  [404, 'Documento não encontrado.'],
+  [500, 'Não foi possível carregar o documento.'],
+] as const) {
+  test(`editor bloqueia escrita e gravação após GET ${status}`, async ({ page }) => {
+    await preparar(page, [secretaria]);
+    const gravacoes: string[] = [];
+    page.on('request', request => {
+      if (/^\/api\/Secretaria\/Documentos(\/|$)/.test(new URL(request.url()).pathname)
+          && ['POST', 'PUT'].includes(request.method())) {
+        gravacoes.push(request.method());
+      }
+    });
+    await page.route('**/api/Secretaria/Documentos/inexistente', route => route.fulfill({ status }));
+    await page.goto('/secretaria/documentos/inexistente/editar');
+    await expect(page.locator('app-documento-editor > .erro')).toHaveText(mensagem);
+    await verificarEscritaBloqueada(page);
+    await page.getByRole('button', { name: 'Salvar documento' })
+      .evaluate((el: HTMLButtonElement) => el.click());
+    await page.locator('app-documento-editor form')
+      .evaluate(el => el.dispatchEvent(new Event('submit', { cancelable: true })));
+    await expect(page.locator('app-documento-editor > .erro')).toHaveText(mensagem);
+    await page.getByRole('link', { name: 'Voltar à Secretaria' }).click();
+    await expect(page).toHaveURL(/\/secretaria$/);
+    expect(gravacoes).toEqual([]);
+  });
+}
+
+test('editor mantém o título literal e o tipo antigo ao salvar um documento existente', async ({ page }) => {
+  await preparar(page, [secretaria]);
+  const titulo = 'Novo documento';
+  const tipo = '  Relatório histórico  ';
+  const documento = { ...ata234, titulo, tipo };
+  await page.route('**/api/Secretaria/Documentos/ata', route => route.request().method() === 'GET'
+    ? route.fulfill({ json: documento })
+    : route.fulfill({ json: { versao: 'v2' } }));
+
+  await page.goto('/secretaria/documentos/ata/editar');
+  await expect(page.getByLabel('Nome do documento')).toHaveValue(titulo);
+  const seletor = page.getByRole('combobox', { name: 'Tipo de documento' });
+  await expect(seletor).toHaveValue(tipo);
+  await expect(seletor.getByRole('option')).toHaveText([...opcoesTipoDocumento, tipo.trim()]);
+  await expect(page.getByText('Alterações não salvas', { exact: true })).toBeHidden();
+
+  const gravacao = page.waitForRequest(req => req.method() === 'PUT' && req.url().endsWith('/Documentos/ata'));
+  await page.getByRole('button', { name: 'Salvar documento' }).click();
+  expect((await gravacao).postDataJSON()).toEqual({ titulo, tipo, markdown: documento.markdown, versao: 'v1' });
+  await expect(page.getByText('Documento salvo.', { exact: true })).toBeVisible();
+  await expect(seletor).toHaveValue(tipo);
+});
+
+test('editor recarrega a versão atual ao voltar ao ID criado na mesma rota', async ({ page }) => {
+  await preparar(page, [secretaria]);
+  let ata = { ...ata234, markdown: '# Criação' };
+  const revisao = { titulo: 'Ata atualizada', tipo: 'Autorização de saída', markdown: '# Revisão salva' };
+  const revisaoFinal = '# Revisão final';
+  const gravacoes: { id: string; versao: string; titulo: string; tipo: string; markdown: string }[] = [];
+  await page.route(acervo, route => {
+    const req = route.request();
+    if (req.method() === 'GET') return route.fallback();
+    expect(req.method()).toBe('POST');
+    expect(req.postDataJSON()).toEqual({ titulo: ata.titulo, tipo: ata.tipo, markdown: ata.markdown });
+    return route.fulfill({ status: 201, json: { id: ata.id, versao: ata.versao } });
+  });
+  await page.route('**/api/Secretaria/Documentos/ata', route => {
+    const req = route.request();
+    if (req.method() === 'GET') return route.fulfill({ json: ata });
+    expect(req.method()).toBe('PUT');
+    const { versao, ...conteudo } = req.postDataJSON();
+    gravacoes.push({ id: new URL(req.url()).pathname.split('/').at(-1)!, versao, ...conteudo });
+    ata = { ...ata, ...conteudo, versao: 'v' + (gravacoes.length + 1) };
+    return route.fulfill({ json: { versao: ata.versao } });
+  });
+  await page.route('**/api/Secretaria/Documentos/planilha', route => route.fulfill({ json: planilha234 }));
+
+  await page.goto('/secretaria/documentos/novo');
+  const titulo = page.getByLabel('Nome do documento');
+  const tipo = page.getByRole('combobox', { name: 'Tipo de documento' });
+  const markdown = page.getByLabel('Editor Markdown');
+  const salvar = page.getByRole('button', { name: 'Salvar documento' });
+  const salvo = page.getByText('Alterações salvas', { exact: true });
+  await titulo.fill(ata.titulo);
+  await tipo.selectOption(ata.tipo);
+  await markdown.fill(ata.markdown);
+  await salvar.click();
+  await expect(page).toHaveURL(/\/ata\/editar$/);
+  await expect(confirmacaoSaida(page)).toBeHidden();
+  await expect(salvo).toBeVisible();
+  const editor = await page.locator('app-documento-editor').elementHandle();
+
+  await titulo.fill(revisao.titulo);
+  await tipo.selectOption(revisao.tipo);
+  await markdown.fill(revisao.markdown);
+  await salvar.click();
+  await expect(salvo).toBeVisible();
+  expect(gravacoes).toEqual([{ id: ata.id, versao: 'v1', ...revisao }]);
+
+  const abrirEdicao = async (id: string) => {
+    const link = page.getByRole('link', { name: 'Voltar à Secretaria' });
+    // Reaponta o RouterLink da tela sem desmontar o editor nem recarregar a página.
+    await link.evaluate((el, destino) => {
+      const { ng } = window as typeof window & { ng: { getDirectives(element: Element): RouterLink[] } };
+      const routerLink = ng.getDirectives(el).find(diretiva => 'urlTree' in diretiva)!;
+      routerLink.routerLink = destino;
+    }, `/secretaria/documentos/${id}/editar`);
+    await link.click();
+    await expect(page).toHaveURL(`/secretaria/documentos/${id}/editar`);
+    expect(await editor.evaluate(el => el.isConnected)).toBe(true);
+  };
+  await abrirEdicao(planilha234.id);
+  await expect(markdown).toHaveValue(planilha234.markdown);
+  await expect(tipo).toHaveValue(planilha234.tipo);
+  await abrirEdicao(ata.id);
+  await expect(markdown).toHaveValue(revisao.markdown);
+  await expect(titulo).toHaveValue(revisao.titulo);
+  await expect(tipo).toHaveValue(revisao.tipo);
+
+  await markdown.fill(revisaoFinal);
+  await salvar.click();
+  await expect(salvo).toBeVisible();
+  expect(gravacoes[1]).toEqual({ ...revisao, id: ata.id, versao: 'v2', markdown: revisaoFinal });
+  await expect(confirmacaoSaida(page)).toBeHidden();
+});
 
 for (const [tema, largura] of [['light', 1366], ['dark', 390]] as const) {
   test(`prévia e leitura compartilham o Markdown em ${tema}, ${largura}px`, async ({ page }) => {
@@ -1210,13 +1491,20 @@ for (const [tema, largura] of [['light', 1366], ['dark', 390]] as const) {
     }
     const visualizar = page.getByRole('button', { name: 'Visualizar', exact: true });
     const campo = page.getByLabel('Editor Markdown');
+    const numeros = page.locator('.editor-numeracao');
+    await expect(numeros).toHaveCSS('border-inline-end-width', '0px');
+    await expect(campo).toHaveCSS('border-inline-start-width', '0px');
+    await page.getByRole('button', { name: 'Link', exact: true }).press('Tab');
+    await expect(campo).toBeFocused();
+    await expect(page.locator('.editor-escrita')).toHaveCSS('outline-style', 'solid');
+    await expect(campo).toHaveCSS('outline-style', 'none');
     await campo.evaluate((el: HTMLTextAreaElement) => {
       el.setSelectionRange(3, 8);
       el.scrollTop = 90;
     });
     const posicao = await campo.evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd, el.scrollTop]);
     expect(posicao[2]).toBeGreaterThan(0);
-    await expect.poll(() => page.locator('.editor-numeracao').evaluate(el => el.scrollTop)).toBe(posicao[2]);
+    await expect.poll(() => numeros.evaluate(el => el.scrollTop)).toBe(posicao[2]);
     await expect(visualizar).toHaveAttribute('aria-pressed', 'true');
     await visualizar.press('Space');
     await expect(visualizar).toHaveAttribute('aria-pressed', 'false');
@@ -1314,6 +1602,7 @@ test('conflito no PUT preserva a versão e o rascunho da edição', async ({ pag
     await salvar.click();
     await expect(page.locator('app-documento-editor > .erro')).toContainText('outra sessão');
     await expect(markdown).toHaveValue('# Rascunho em edição');
+    await expect(markdown).toBeEditable();
   }
   expect(versoes).toEqual(['v1', 'v1']);
 });

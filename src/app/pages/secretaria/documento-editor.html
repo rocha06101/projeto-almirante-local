@@ -23,20 +23,26 @@
       id="editor-titulo"
       class="editor-nome"
       aria-label="Nome do documento"
-      placeholder="Nome do documento"
+      placeholder="Novo documento"
       required
+      [disabled]="!podeEditar()"
       [value]="titulo()"
       (input)="titulo.set($any($event.target).value)"
     >
-    <div class="editor-tipo"> 
-  <label for="editor-tipo">Tipo de documento</label>
-  <input
-    id="editor-tipo"
-    required
-    [value]="tipo()"
-    (input)="tipo.set($any($event.target).value)"
-  >
-</div>
+    <div class="editor-tipo">
+      <label for="editor-tipo">Tipo de documento</label>
+      <select #seletorTipo id="editor-tipo" required
+        [disabled]="!podeEditar()"
+        (change)="tipo.set(seletorTipo.value)">
+        <option value="" [selected]="!tipo()" disabled>Selecione o tipo de documento</option>
+        @for (opcao of tiposDocumento; track opcao) {
+          <option [value]="opcao" [selected]="opcao === tipo()">{{ opcao }}</option>
+        }
+        @if (tipoForaDaLista(); as tipoAtual) {
+          <option [value]="tipoAtual" selected>{{ tipoAtual }}</option>
+        }
+      </select>
+    </div>
   </div>
 
   <div class="editor-acoes" role="group" aria-label="Ações do documento">
@@ -86,7 +92,7 @@
   Exportar
 </app-documento-exportacao>
 
-    <app-refresh-button type="submit" [disabled]="carregando() || salvando() || (!!id() && !documentoConfirmado())">
+    <app-refresh-button type="submit" [disabled]="!podeEditar() || salvando()">
       Salvar documento
     </app-refresh-button>
   </div>
@@ -98,6 +104,7 @@
   type="button"
   aria-label="Título"
   title="Título"
+  [disabled]="!podeEditar()"
   (click)="aplicarTitulo(campoMarkdown)"
 >
   H
@@ -106,6 +113,7 @@
   type="button" 
   aria-label="Negrito" 
   title="Negrito"
+  [disabled]="!podeEditar()"
   (click)="aplicarEnfase(campoMarkdown, '**')"
   >
     <strong>B</strong>
@@ -114,21 +122,22 @@
   type="button"
   aria-label="Itálico"
   title="Itálico"
+  [disabled]="!podeEditar()"
   (click)="aplicarEnfase(campoMarkdown, '*')"
 >
   <em>I</em>
 </button>
-  <button type="button" (click)="aplicarLista(campoMarkdown, 'marcadores')" aria-label="Lista com marcadores" title="Lista com marcadores">
+  <button type="button" [disabled]="!podeEditar()" (click)="aplicarLista(campoMarkdown, 'marcadores')" aria-label="Lista com marcadores" title="Lista com marcadores">
   <span aria-hidden="true">• ≡</span>
 </button>
 
-<button type="button" (click)="aplicarLista(campoMarkdown, 'numerada')" aria-label="Lista numerada" title="Lista numerada">
+<button type="button" [disabled]="!podeEditar()" (click)="aplicarLista(campoMarkdown, 'numerada')" aria-label="Lista numerada" title="Lista numerada">
   <span aria-hidden="true">1. ≡</span>
 </button>
 
-  <button type="button" (click)="aplicarCitacao(campoMarkdown)">Citação</button>
-  <button type="button" (click)="aplicarBlocoCodigo(campoMarkdown)">Código</button>
-  <button type="button" (click)="inserirLink(campoMarkdown)">Link</button>
+  <button type="button" [disabled]="!podeEditar()" (click)="aplicarCitacao(campoMarkdown)">Citação</button>
+  <button type="button" [disabled]="!podeEditar()" (click)="aplicarBlocoCodigo(campoMarkdown)">Código</button>
+  <button type="button" [disabled]="!podeEditar()" (click)="inserirLink(campoMarkdown)">Link</button>
   <span class="editor-formato">Markdown (.md)</span>
 </div>
   <div class="editor-paineis">
@@ -149,6 +158,7 @@
     required
     rows="14"
     wrap="off"
+    [disabled]="!podeEditar()"
     [value]="markdown()"
     (input)="markdown.set(campoMarkdown.value)"
     (scroll)="numeracao.scrollTop = campoMarkdown.scrollTop"
@@ -183,3 +193,15 @@
 </div>
  
 </form>
+
+@if (confirmacaoSaida(); as responder) {
+  <app-modal titulo="Sair sem salvar?" descricaoId="editor-confirmacao-saida-mensagem" [dispensavel]="false">
+    <p id="editor-confirmacao-saida-mensagem" class="confirmacao-saida-mensagem">
+      Você tem alterações não salvas neste documento. Se sair agora, elas serão perdidas.
+    </p>
+    <div modal-acoes class="confirmacao-saida-acoes">
+      <button type="button" autofocus (click)="responder(false)">Continuar editando</button>
+      <button type="button" class="confirmacao-saida-sair" (click)="responder(true)">Sair sem salvar</button>
+    </div>
+  </app-modal>
+}

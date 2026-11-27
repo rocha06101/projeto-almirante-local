@@ -1,4 +1,5 @@
-<dialog #dialogo [attr.aria-labelledby]="tituloId" (click)="clicarFundo($event)" (cancel)="cancelar($event)">
+<dialog #dialogo [attr.aria-labelledby]="tituloId" [attr.aria-describedby]="descricaoId()"
+  (click)="clicarFundo($event)" (cancel)="cancelar($event)">
   <div class="painel" cdkTrapFocus>
     <h2 [id]="tituloId">{{ titulo() }}</h2>
     <div class="conteudo">

@@ -8,7 +8,7 @@ import { EventosService } from '../../core/services/eventos';
 import { RouterLink } from '@angular/router';
 import {
   ConteudoDocumento, DocumentoListagem, DocumentosService, LIMITE_ARQUIVO_DOCUMENTO,
-  ModoImportacao, erroImportacaoDocumento,
+  ModoImportacao, TIPOS_DOCUMENTO, erroImportacaoDocumento,
 } from '../../core/services/documentos';
 import { Modal } from '../../shared/components/modal/modal';
 import { RefreshButton } from '../../shared/components/refresh-button/refresh-button';
@@ -37,7 +37,7 @@ export class Secretaria extends UsuariosListagem implements OnInit {
 
   readonly criandoDocumento = signal(false);
   readonly modo = signal<ModoImportacao | null>(null);
-  readonly tiposDocumento = ['Ata', 'Autorização de saída', 'Ficha de cadastro'];
+  readonly tiposDocumento = TIPOS_DOCUMENTO;
   readonly tipo = signal('');
   readonly titulo = signal('');
   readonly arquivo = signal<File | null>(null);

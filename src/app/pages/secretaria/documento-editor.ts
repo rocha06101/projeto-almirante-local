@@ -1,10 +1,13 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, HostListener, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, HostListener, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { EMPTY, Subscription, catchError, finalize, map, switchMap } from 'rxjs';
-import { ConteudoDocumento, Documento, DocumentosService, FormatoExportacao } from '../../core/services/documentos';
+import { EMPTY, Observable, Subscription, catchError, finalize, map, switchMap } from 'rxjs';
+import {
+  ConteudoDocumento, Documento, DocumentosService, FormatoExportacao, TIPOS_DOCUMENTO,
+} from '../../core/services/documentos';
 import { ToastService } from '../../core/services/toast.service';
+import { Modal } from '../../shared/components/modal/modal';
 import { RefreshButton } from '../../shared/components/refresh-button/refresh-button';
 import { DocumentoExportacao } from './documento-exportacao';
 import { DocumentoMarkdown } from './documento-markdown';
@@ -19,7 +22,7 @@ class TransicaoDocumentoCriado {
 
 @Component({
   selector: 'app-documento-editor',
-  imports: [RouterLink, RefreshButton, DocumentoMarkdown, DocumentoExportacao],
+  imports: [RouterLink, RefreshButton, DocumentoMarkdown, DocumentoExportacao, Modal],
   templateUrl: './documento-editor.html',
   styleUrl: './documento-editor.scss',
 })
@@ -29,14 +32,20 @@ export class DocumentoEditor {
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly rota = inject(ActivatedRoute);
+  private readonly campoMarkdown = viewChild<ElementRef<HTMLTextAreaElement>>('campoMarkdown');
   private transicao?: TransicaoDocumentoCriado;
   private consultaFormatos?: Subscription;
   readonly id = signal(this.rota.snapshot.paramMap.get('id'));
   private versao = '';
   private tentativa?: { payload: string; chave: string };
 
-  readonly titulo = signal('Novo documento');
+  readonly titulo = signal('');
   readonly tipo = signal('');
+  readonly tiposDocumento = TIPOS_DOCUMENTO;
+  readonly tipoForaDaLista = computed(() => {
+    const tipo = this.tipo();
+    return TIPOS_DOCUMENTO.includes(tipo) ? '' : tipo;
+  });
   readonly markdown = signal('');
   readonly previaVisivel = signal(true);
 
@@ -48,12 +57,14 @@ export class DocumentoEditor {
   readonly carregando = signal(!!this.id());
   readonly salvando = signal(false);
   readonly documentoConfirmado = signal(false);
+  readonly podeEditar = computed(() => !this.carregando() && (!this.id() || this.documentoConfirmado()));
   readonly erro = signal('');
+  readonly confirmacaoSaida = signal<((sair: boolean) => void) | null>(null);
 
   readonly formatos = signal<FormatoExportacao[] | undefined>(undefined);
   readonly carregandoFormatos = signal(false);
   private readonly ultimaVersaoSalva = signal<ConteudoDocumento>({
-    titulo: 'Novo documento',
+    titulo: '',
     tipo: '',
     markdown: '',
   });
@@ -62,14 +73,16 @@ export class DocumentoEditor {
     const salvo = this.ultimaVersaoSalva();
     const atual = this.conteudoAtual();
     return atual.titulo.trim() !== salvo.titulo.trim()
-      || atual.tipo.trim() !== salvo.tipo.trim()
+      || atual.tipo !== salvo.tipo
       || atual.markdown !== salvo.markdown;
   });
 
   constructor() {
-    const info = this.router.currentNavigation()?.extras.info;
+    let infoInicial = this.router.currentNavigation()?.extras.info;
     this.rota.paramMap.pipe(
       switchMap(params => {
+        const info = infoInicial;
+        infoInicial = undefined;
         const id = params.get('id');
         this.id.set(id);
         this.erro.set('');
@@ -287,20 +300,35 @@ export class DocumentoEditor {
     if (this.temAlteracoesPendentes()) evento.preventDefault();
   }
 
-  podeSair(): boolean {
+  podeSair(): boolean | Observable<boolean> {
     if (this.transicao && this.router.currentNavigation()?.extras.info === this.transicao) return true;
     if (this.salvando()) return false;
-    return !this.temAlteracoesPendentes()
-      || window.confirm('Há alterações não salvas. Deseja sair e descartá-las?');
+    if (!this.temAlteracoesPendentes()) return true;
+
+    return new Observable<boolean>(inscricao => {
+      const campo = this.campoMarkdown()?.nativeElement;
+      if (campo && campo.ownerDocument.activeElement === campo.ownerDocument.body) {
+        campo.focus({ preventScroll: true });
+      }
+
+      const responder = (sair: boolean) => {
+        inscricao.next(sair);
+        inscricao.complete();
+      };
+      this.confirmacaoSaida.set(responder);
+      return () => {
+        if (this.confirmacaoSaida() === responder) this.confirmacaoSaida.set(null);
+      };
+    });
   }
 
   salvar(): void {
     const id = this.id();
-    if (this.salvando() || this.carregando() || this.transicao || (id && !this.versao)) return;
+    if (!this.podeEditar() || this.salvando() || this.transicao) return;
 
     const enviado = this.conteudoAtual();
-    const conteudo = { ...enviado, titulo: enviado.titulo.trim(), tipo: enviado.tipo.trim() };
-    if (!conteudo.titulo || !conteudo.tipo || !conteudo.markdown.trim()) {
+    const conteudo = { ...enviado, titulo: enviado.titulo.trim() };
+    if (!conteudo.titulo || !conteudo.tipo.trim() || !conteudo.markdown.trim()) {
       this.falhaAoSalvar('Informe o título, o tipo e o conteúdo do documento.');
       return;
     }
@@ -320,7 +348,6 @@ export class DocumentoEditor {
         this.id.set(salvoId);
         this.confirmar(salvo);
         if (this.titulo() === enviado.titulo) this.titulo.set(conteudo.titulo);
-        if (this.tipo() === enviado.tipo) this.tipo.set(conteudo.tipo);
         this.tentativa = undefined;
         this.toast.success('Documento salvo.');
 

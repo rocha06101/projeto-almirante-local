@@ -1,3 +1,5 @@
+@use './campos-documento';
+
 :host { display: block; color: var(--theme-text); }
 a { color: var(--theme-link); }
 h1 { margin-block: 1rem; }
@@ -45,7 +47,7 @@ textarea { font-family: monospace; }
 }
 
 .editor-painel textarea {
-  resize: vertical;
+  resize: none;
 }
 
 .editor-previa {
@@ -182,8 +184,7 @@ textarea { font-family: monospace; }
 }
 
 .editor-area textarea:focus-visible {
-  outline: 2px solid var(--theme-link);
-  outline-offset: -2px;
+  outline: none;
 }
 
 @media (max-width: 48rem) {
@@ -213,7 +214,7 @@ textarea { font-family: monospace; }
   .editor-area {
     display: grid;
     grid-template-rows: auto 1fr auto;
-    min-height: 68dvh;
+    min-height: 78dvh;
   }
 }
 
@@ -239,6 +240,11 @@ textarea { font-family: monospace; }
   min-width: 0;
 }
 
+.editor-escrita:has(textarea:focus-visible) {
+  outline: 2px solid var(--theme-link);
+  outline-offset: -2px;
+}
+
 .editor-escrita textarea,
 .editor-numeracao {
   font-family: monospace;
@@ -253,7 +259,6 @@ textarea { font-family: monospace; }
   min-height: 100%;
   overflow: hidden;
   padding-inline-end: 0.5rem;
-  border-inline-end: 1px solid var(--theme-control-border);
   color: var(--theme-text);
   text-align: end;
   user-select: none;
@@ -294,8 +299,10 @@ gap: 0.5rem;
   font-size: 0.875rem;
 }
 
-.editor-tipo input {
-  width: 11rem;
+.editor-tipo select {
+  @include campos-documento.controle;
+  @include campos-documento.estados-select;
+  min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
 }
@@ -323,4 +330,35 @@ gap: 0.5rem;
   .editor-area .editor-previa {
     max-height: max(20rem, 65dvh);
   }
+}
+
+.confirmacao-saida-mensagem {
+  margin: 0;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--theme-warning-surface);
+  color: var(--theme-warning-text);
+}
+
+.confirmacao-saida-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.confirmacao-saida-acoes button {
+  min-height: var(--tap-target);
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--theme-control-border);
+  border-radius: 0.5rem;
+  background: var(--theme-surface);
+  color: var(--theme-text);
+  font-weight: 600;
+}
+
+.confirmacao-saida-acoes .confirmacao-saida-sair {
+  border-color: var(--theme-warning-text);
+  background: var(--theme-warning-surface);
+  color: var(--theme-warning-text);
 }

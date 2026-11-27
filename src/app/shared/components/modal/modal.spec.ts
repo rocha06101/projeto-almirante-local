@@ -6,13 +6,14 @@ import { Modal } from './modal';
 @Component({
   imports: [Modal],
   template: `
-    <app-modal titulo="Preferências" (fechar)="fechamentos = fechamentos + 1">
+    <app-modal titulo="Preferências" [dispensavel]="dispensavel" (fechar)="fechamentos = fechamentos + 1">
       <label>Nome <input></label>
       <button modal-acoes type="button">Salvar</button>
     </app-modal>
   `,
 })
 class ModalHost {
+  dispensavel = true;
   fechamentos = 0;
 }
 
@@ -49,5 +50,19 @@ describe('Modal', () => {
     expect(fixture.componentInstance.fechamentos).toBe(0);
     dialogo.click();
     expect(fixture.componentInstance.fechamentos).toBe(1);
+  });
+
+  it.each([true, false])('trata Escape e clique no fundo com dispensavel=%s', (dispensavel) => {
+    const fixture = TestBed.createComponent(ModalHost);
+    fixture.componentInstance.dispensavel = dispensavel;
+    fixture.detectChanges();
+    const dialogo: HTMLDialogElement = fixture.nativeElement.querySelector('dialog');
+    const escape = new Event('cancel', { cancelable: true });
+
+    dialogo.dispatchEvent(escape);
+    expect(escape.defaultPrevented).toBe(true);
+    expect(fixture.componentInstance.fechamentos).toBe(dispensavel ? 1 : 0);
+    dialogo.click();
+    expect(fixture.componentInstance.fechamentos).toBe(dispensavel ? 2 : 0);
   });
 });
